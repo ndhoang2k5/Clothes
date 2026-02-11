@@ -54,30 +54,20 @@ const Footer: React.FC = () => (
 );
 
 const App: React.FC = () => {
-  // Thay đổi mặc định sang #/admin để đáp ứng yêu cầu "chỉ chạy admin"
-  const [currentHash, setCurrentHash] = useState(window.location.hash || '#/admin');
+  const [currentHash, setCurrentHash] = useState(window.location.hash || '#/');
 
   useEffect(() => {
     const handleHashChange = () => {
-      const newHash = window.location.hash || '#/admin';
-      setCurrentHash(newHash);
+      setCurrentHash(window.location.hash || '#/');
       window.scrollTo(0, 0);
     };
-
     window.addEventListener('hashchange', handleHashChange);
-    
-    // Nếu chưa có hash, tự động chuyển sang trang admin dashboard
-    if (!window.location.hash) {
-      window.location.hash = '#/admin';
-    }
-
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   const routePath = useMemo(() => currentHash.split('?')[0], [currentHash]);
   const isAdmin = useMemo(() => routePath.startsWith('#/admin'), [routePath]);
 
-  // User Router (vẫn giữ lại để có thể chuyển đổi ngược lại nếu cần)
   const renderUserRoute = () => {
     switch (routePath) {
       case '#/': return <HomePage />;
@@ -88,7 +78,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Admin Router
   const renderAdminRoute = () => {
     switch (routePath) {
       case '#/admin/products': return <ProductManagement />;
@@ -117,7 +106,7 @@ const App: React.FC = () => {
         </>
       )}
 
-      {/* Switcher button để quay lại trang chủ khách hàng nếu muốn kiểm tra kết quả CMS */}
+      {/* Dev Switcher - Hidden on production but useful for your current dual-port test */}
       <div className="fixed bottom-6 right-6 z-[999]">
          <a 
           href={isAdmin ? '#/' : '#/admin'} 
@@ -125,17 +114,7 @@ const App: React.FC = () => {
             isAdmin ? 'bg-gray-800 text-white' : 'bg-pink-500 text-white'
           }`}
          >
-           {isAdmin ? (
-             <>
-               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
-               Xem Trang Chủ Khách Hàng
-             </>
-           ) : (
-             <>
-               Quay lại CMS Admin
-               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-             </>
-           )}
+           {isAdmin ? "Xem Shop 🛍️" : "Quản lý ⚙️"}
          </a>
       </div>
     </div>

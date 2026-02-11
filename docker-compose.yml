@@ -41,8 +41,8 @@ services:
         WORKDIR /app
         RUN npm install -g serve
         COPY . .
-        # Simulating a static server for the frontend directory
-        CMD ["serve", "-s", "frontend", "-l", "3000"]
+        # Phục vụ từ gốc để truy cập được shared files
+        CMD ["serve", "-s", ".", "-l", "3000"]
     container_name: unbee_frontend
     ports:
       - "3000:3000"
@@ -57,8 +57,8 @@ services:
         WORKDIR /app
         RUN npm install -g serve
         COPY . .
-        # Simulating a static server for the admin directory
-        CMD ["serve", "-s", "frontend_admin", "-l", "8000"]
+        # Phục vụ từ gốc để truy cập được shared files
+        CMD ["serve", "-s", ".", "-l", "8000"]
     container_name: unbee_admin_ui
     ports:
       - "8000:8000"

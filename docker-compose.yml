@@ -1,0 +1,44 @@
+
+version: '3.8'
+
+services:
+  db:
+    build: ./database
+    container_name: unbee_db
+    environment:
+      POSTGRES_USER: unbee_user
+      POSTGRES_PASSWORD: unbee_password
+      POSTGRES_DB: unbee_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    container_name: unbee_backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://unbee_user:unbee_password@db:5432/unbee_db
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    container_name: unbee_frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+  frontend_admin:
+    build: ./frontend_admin
+    container_name: unbee_admin_ui
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:

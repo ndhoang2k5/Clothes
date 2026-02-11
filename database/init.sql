@@ -1,5 +1,5 @@
 
--- Relational Schema for Unbee - Cleaned and Optimized
+-- Relational Schema for Unbee
 CREATE TABLE categories (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -37,7 +37,6 @@ CREATE TABLE orders (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Sample Data
 INSERT INTO categories (name, slug, icon) VALUES 
 ('Đồ sơ sinh', 'so-sinh', '👶'),
 ('Bé trai', 'be-trai', '👕'),

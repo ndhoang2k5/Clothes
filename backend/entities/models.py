@@ -37,13 +37,3 @@ class ProductVariant(Base):
     stock = Column(Integer, default=0)
     
     product = relationship("Product", back_populates="variants")
-
-class Order(Base):
-    __tablename__ = "orders"
-    id = Column(Integer, primary_key=True, index=True)
-    customer_name = Column(String(255))
-    phone = Column(String(20))
-    address = Column(Text)
-    total_amount = Column(Numeric(12, 2))
-    status = Column(String(50), default="pending") # pending, processing, shipped, delivered, cancelled
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)

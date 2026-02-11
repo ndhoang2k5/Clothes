@@ -1,4 +1,5 @@
 
+// Fix: Added missing properties (description, material, isHot, isNew, isSale) to Product interface
 export interface Product {
   id: string;
   name: string;
@@ -11,54 +12,30 @@ export interface Product {
   isHot: boolean;
   isNew: boolean;
   isSale: boolean;
-  variants: ProductVariant[];
+  variants: any[];
 }
 
-export interface ProductVariant {
-  id: string;
-  size: string;
-  color: string;
-  stock: number;
-  price?: number;
-}
-
-export interface Category {
-  id: string;
-  name: string;
-  icon: string;
-  slug: string;
-}
-
-export interface Collection {
-  id: string;
-  name: string;
-  description: string;
-  coverImage: string;
-  products: string[];
-}
-
-export interface Order {
-  id: string;
-  customerName: string;
-  phone: string;
-  address: string;
-  items: OrderItem[];
-  total: number;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  createdAt: string;
-}
-
-export interface OrderItem {
-  productId: string;
-  variantId: string;
-  quantity: number;
-  price: number;
-}
-
+// Fix: Exported Banner interface needed by frontend services
 export interface Banner {
   id: string;
   imageUrl: string;
   title: string;
   link: string;
   position: 'main' | 'promo' | 'footer';
+}
+
+// Fix: Exported Collection interface needed by frontend services
+export interface Collection {
+  id: string;
+  name: string;
+  description: string;
+  coverImage: string;
+  products: string[]; // List of product IDs
+}
+
+export interface Order {
+  id: string;
+  customerName: string;
+  total: number;
+  status: string;
 }

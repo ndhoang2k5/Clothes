@@ -3,7 +3,7 @@ version: '3.8'
 
 services:
   db:
-    build: ./database
+    image: postgres:15-alpine
     container_name: unbee_db
     environment:
       POSTGRES_USER: unbee_user
@@ -11,32 +11,57 @@ services:
       POSTGRES_DB: unbee_db
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
 
   backend:
-    build: ./backend
+    build: 
+      context: .
+      dockerfile_inline: |
+        FROM python:3.11-slim
+        WORKDIR /app
+        COPY backend/requirements.txt .
+        RUN pip install --no-cache-dir -r requirements.txt
+        COPY . .
+        CMD ["python", "-m", "backend.main"]
     container_name: unbee_backend
     ports:
-      - "8000:8000"
+      - "8888:8000"
     environment:
       DATABASE_URL: postgresql://unbee_user:unbee_password@db:5432/unbee_db
     depends_on:
       - db
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:20-slim
+        WORKDIR /app
+        RUN npm install -g serve
+        COPY . .
+        # Simulating a static server for the frontend directory
+        CMD ["serve", "-s", "frontend", "-l", "3000"]
     container_name: unbee_frontend
     ports:
-      - "3000:80"
+      - "3000:3000"
     depends_on:
       - backend
 
   frontend_admin:
-    build: ./frontend_admin
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM node:20-slim
+        WORKDIR /app
+        RUN npm install -g serve
+        COPY . .
+        # Simulating a static server for the admin directory
+        CMD ["serve", "-s", "frontend_admin", "-l", "8000"]
     container_name: unbee_admin_ui
     ports:
-      - "3001:80"
+      - "8000:8000"
     depends_on:
       - backend
 

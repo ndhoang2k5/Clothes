@@ -1,7 +1,6 @@
 
-import { Product, Banner, Collection } from '../types';
+import { Product } from '../types';
 
-// Mock data as fallback for platform preview
 const MOCK_PRODUCTS: Product[] = [
   {
     id: '1',
@@ -18,10 +17,13 @@ const MOCK_PRODUCTS: Product[] = [
 ];
 
 class UserApiService {
+  // Pointing to port 8888 as mapped in docker-compose
+  private baseUrl = 'http://localhost:8888/api/user';
+
   async getProducts(): Promise<Product[]> {
     try {
-      const res = await fetch('http://localhost:8000/api/products');
-      if (!res.ok) throw new Error('API down');
+      const res = await fetch(`${this.baseUrl}/products`);
+      if (!res.ok) throw new Error('API Error');
       return await res.json();
     } catch {
       return MOCK_PRODUCTS;

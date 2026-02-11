@@ -1,37 +1,33 @@
 
 import React, { useState, useEffect } from 'react';
-import AdminLayout from './admin/AdminLayout';
-import Dashboard from './admin/Dashboard';
-import ProductManagement from './admin/ProductManagement';
-import OrderManagement from './admin/OrderManagement';
-import CollectionManagement from './admin/CollectionManagement';
-import BannerManagement from './admin/BannerManagement';
-import IntroManagement from './admin/IntroManagement';
+import AdminLayout from './components/AdminLayout';
+import Dashboard from './pages/Dashboard';
+import ProductManagement from './pages/ProductManagement';
+import OrderManagement from './pages/OrderManagement';
 
 const AdminApp: React.FC = () => {
-  const [currentHash, setCurrentHash] = useState(window.location.hash || '#/');
+  const [currentHash, setCurrentHash] = useState(window.location.hash || '#/admin');
 
   useEffect(() => {
-    const handleHashChange = () => setCurrentHash(window.location.hash || '#/');
+    const handleHashChange = () => setCurrentHash(window.location.hash || '#/admin');
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   const renderRoute = () => {
     switch (currentHash) {
-      case '#/products': return <ProductManagement />;
-      case '#/orders': return <OrderManagement />;
-      case '#/collections': return <CollectionManagement />;
-      case '#/banners': return <BannerManagement />;
-      case '#/intro': return <IntroManagement />;
-      case '#/':
+      case '#/admin/products': return <ProductManagement />;
+      case '#/admin/orders': return <OrderManagement />;
+      case '#/admin':
       default: return <Dashboard />;
     }
   };
 
   return (
     <AdminLayout>
-      {renderRoute()}
+      <div className="animate-in fade-in duration-500">
+        {renderRoute()}
+      </div>
     </AdminLayout>
   );
 };

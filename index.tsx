@@ -16,18 +16,16 @@ const RootSwitcher: React.FC = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen font-sans">
       {isAdmin ? <AdminApp /> : <App />}
       
-      {/* Dev Navigation Assist */}
-      <div className="fixed bottom-4 right-4 z-[9999] group">
+      {/* Dev Switcher */}
+      <div className="fixed bottom-4 right-4 z-[9999] flex gap-2">
         <button 
-          onClick={() => {
-            window.location.hash = isAdmin ? '#/' : '#/admin';
-          }}
-          className="bg-black/80 backdrop-blur-md text-white px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-2xl border border-white/10 hover:bg-pink-500 transition-all"
+          onClick={() => window.location.hash = isAdmin ? '#/' : '#/admin'}
+          className="bg-black/80 text-white px-4 py-2 rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-pink-500 transition-all shadow-2xl"
         >
-          {isAdmin ? 'Xem giao diện Khách' : 'Vào quản trị (CMS)'}
+          {isAdmin ? 'Xem Shop 🛍️' : 'Vào Admin ⚙️'}
         </button>
       </div>
     </div>

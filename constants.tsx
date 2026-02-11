@@ -1,0 +1,41 @@
+
+import React from 'react';
+
+export const CATEGORIES = [
+  { id: '1', name: 'Đồ sơ sinh', icon: '👶', slug: 'so-sinh' },
+  { id: '2', name: 'Quần áo bé trai', icon: '👕', slug: 'be-trai' },
+  { id: '3', name: 'Quần áo bé gái', icon: '👗', slug: 'be-gai' },
+  { id: '4', name: 'Phụ kiện', icon: '🧢', slug: 'phu-kien' },
+  { id: '5', name: 'Box quà tặng', icon: '🎁', slug: 'qua-tang' },
+  { id: '6', name: 'Combo đi sinh', icon: '👜', slug: 'di-sinh' },
+];
+
+export const TRUST_FEATURES = [
+  {
+    title: 'Chất liệu An Toàn',
+    desc: 'Vải cotton organic mềm mại cho da bé',
+    icon: (
+      <svg className="w-8 h-8 text-pink-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Đổi trả linh hoạt',
+    desc: 'Đổi trả miễn phí trong vòng 7 ngày',
+    icon: (
+      <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      </svg>
+    ),
+  },
+  {
+    title: 'Giao hàng nhanh',
+    desc: 'Ship COD toàn quốc, hỏa tốc nội thành',
+    icon: (
+      <svg className="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+      </svg>
+    ),
+  },
+];

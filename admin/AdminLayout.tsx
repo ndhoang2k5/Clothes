@@ -1,0 +1,115 @@
+
+import React from 'react';
+
+interface AdminLayoutProps {
+  children: React.ReactNode;
+}
+
+const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
+  const currentHash = window.location.hash;
+
+  const NavLink = ({ href, icon, label }: { href: string; icon: React.ReactNode; label: string }) => {
+    const isActive = currentHash === href || (href === '#/admin' && currentHash === '');
+    return (
+      <a 
+        href={href} 
+        className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold transition-all duration-300 ${
+          isActive 
+            ? 'bg-pink-500 text-white shadow-lg shadow-pink-200 translate-x-1' 
+            : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
+        }`}
+      >
+        <span className={`${isActive ? 'text-white' : 'text-gray-400'}`}>{icon}</span>
+        {label}
+      </a>
+    );
+  };
+
+  return (
+    <div className="flex min-h-screen bg-[#F8FAFC]">
+      {/* Sidebar cố định */}
+      <aside className="w-72 bg-white border-r border-gray-100 sticky top-0 h-screen overflow-y-auto hidden lg:flex flex-col">
+        <div className="p-8 border-b border-gray-50 flex items-center gap-3">
+            <div className="w-12 h-12 bg-pink-500 rounded-[1.25rem] flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-pink-100">U</div>
+            <div>
+                <h2 className="font-black text-gray-900 tracking-tight leading-none text-lg">UNBEE CMS</h2>
+                <span className="text-[10px] text-pink-500 font-black uppercase tracking-[0.2em]">Quản trị viên</span>
+            </div>
+        </div>
+        
+        <nav className="p-6 flex-grow space-y-1.5">
+          <NavLink 
+            href="#/admin" 
+            label="Tổng quan" 
+            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>} 
+          />
+          
+          <div className="pt-8 pb-3 px-4 text-[11px] font-black text-gray-400 uppercase tracking-[0.25em]">Hệ thống bán hàng</div>
+          <NavLink 
+            href="#/admin/products" 
+            label="Sản phẩm" 
+            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 11m8 4V21M4 11v10l8 4"/></svg>} 
+          />
+          <NavLink 
+            href="#/admin/orders" 
+            label="Đơn hàng" 
+            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>} 
+          />
+          <NavLink 
+            href="#/admin/collections" 
+            label="Bộ sưu tập" 
+            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>} 
+          />
+          
+          <div className="pt-8 pb-3 px-4 text-[11px] font-black text-gray-400 uppercase tracking-[0.25em]">Nội dung & Giao diện</div>
+          <NavLink 
+            href="#/admin/banners" 
+            label="Banners trang chủ" 
+            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>} 
+          />
+          <NavLink 
+            href="#/admin/intro" 
+            label="Giới thiệu thương hiệu" 
+            icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>} 
+          />
+        </nav>
+
+        <div className="p-6 border-t border-gray-50">
+            <button className="flex items-center gap-3 px-4 py-3 w-full text-red-500 font-bold rounded-2xl hover:bg-red-50 transition-colors">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                Đăng xuất
+            </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-grow flex flex-col h-screen overflow-hidden">
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-10 flex-shrink-0">
+            <div className="flex items-center gap-4">
+                <h1 className="text-xl font-black text-gray-800 tracking-tight">Hệ thống quản trị Unbee</h1>
+            </div>
+            <div className="flex items-center gap-6">
+                <button className="relative p-2.5 bg-gray-50 text-gray-500 rounded-xl hover:bg-gray-100 transition-all">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                    <span className="absolute top-2 right-2 w-2 h-2 bg-pink-500 rounded-full ring-2 ring-white"></span>
+                </button>
+                <div className="h-8 w-px bg-gray-100"></div>
+                <div className="flex items-center gap-3">
+                    <div className="text-right">
+                        <p className="text-sm font-bold text-gray-900 leading-none">Unbee Owner</p>
+                        <p className="text-[10px] text-pink-500 font-black uppercase tracking-widest mt-1">Quản trị tối cao</p>
+                    </div>
+                    <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Unbee" className="w-10 h-10 rounded-[0.75rem] bg-pink-100 p-0.5 border-2 border-white shadow-sm" />
+                </div>
+            </div>
+        </header>
+
+        <main className="flex-grow overflow-y-auto p-10">
+            {children}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default AdminLayout;

@@ -1,0 +1,7 @@
+{
+  "name": "Unbee - Premium Baby Clothing & Accessories",
+  "description": "A comprehensive e-commerce platform for baby clothing, featuring a high-end user interface and a robust admin management dashboard.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

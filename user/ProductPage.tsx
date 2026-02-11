@@ -1,0 +1,186 @@
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { api } from '../services/api';
+import { Product } from '../types';
+import ProductCard from '../components/ProductCard';
+import FilterSidebar from '../components/FilterSidebar';
+import Pagination from '../components/Pagination';
+import { CATEGORIES } from '../constants';
+
+const ITEMS_PER_PAGE = 6;
+
+const ProductPage: React.FC = () => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [filters, setFilters] = useState({
+    sizes: [] as string[],
+    colors: [] as string[],
+    materials: [] as string[],
+    priceRange: [0, 1000000] as [number, number],
+    sort: 'newest'
+  });
+
+  // Get active category from URL
+  const queryParams = new URLSearchParams(window.location.hash.split('?')[1]);
+  const activeCategory = queryParams.get('cat');
+
+  useEffect(() => {
+    setLoading(true);
+    api.getProducts().then(data => {
+      setProducts(data);
+      setLoading(false);
+    });
+  }, []);
+
+  // Reset to page 1 when filters or category change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, activeCategory]);
+
+  // Compute available filter options based on all products
+  const availableOptions = useMemo(() => {
+    const sizes = new Set<string>();
+    const colors = new Set<string>();
+    const materials = new Set<string>();
+    
+    products.forEach(p => {
+      p.variants.forEach(v => {
+        sizes.add(v.size);
+        colors.add(v.color);
+      });
+      if (p.material) materials.add(p.material);
+    });
+
+    return {
+      sizes: Array.from(sizes),
+      colors: Array.from(colors),
+      materials: Array.from(materials)
+    };
+  }, [products]);
+
+  // Apply filtering and sorting
+  const filteredProducts = useMemo(() => {
+    let result = products;
+
+    // Category filter
+    if (activeCategory) {
+      result = result.filter(p => p.category === activeCategory);
+    }
+
+    // Custom filters
+    if (filters.sizes.length > 0) {
+      result = result.filter(p => p.variants.some(v => filters.sizes.includes(v.size)));
+    }
+    if (filters.colors.length > 0) {
+      result = result.filter(p => p.variants.some(v => filters.colors.includes(v.color)));
+    }
+    if (filters.materials.length > 0) {
+      result = result.filter(p => filters.materials.includes(p.material));
+    }
+    result = result.filter(p => {
+      const actualPrice = p.discountPrice || p.price;
+      return actualPrice >= filters.priceRange[0] && actualPrice <= filters.priceRange[1];
+    });
+
+    // Sorting
+    return [...result].sort((a, b) => {
+      const priceA = a.discountPrice || a.price;
+      const priceB = b.discountPrice || b.price;
+      
+      switch (filters.sort) {
+        case 'price-asc': return priceA - priceB;
+        case 'price-desc': return priceB - priceA;
+        case 'bestseller': return (a.isHot ? -1 : 1) - (b.isHot ? -1 : 1);
+        case 'newest': 
+        default: return (a.isNew ? -1 : 1) - (b.isNew ? -1 : 1);
+      }
+    });
+  }, [products, filters, activeCategory]);
+
+  // Paginate filtered results
+  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredProducts.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredProducts, currentPage]);
+
+  const currentCategoryName = CATEGORIES.find(c => c.slug === activeCategory)?.name || 'Tất cả sản phẩm';
+
+  return (
+    <div className="bg-gray-50 min-h-screen">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-100 py-12 mb-10">
+        <div className="max-w-7xl mx-auto px-4">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                <div>
+                    <nav className="flex items-center gap-2 text-sm text-gray-400 font-medium mb-4">
+                        <a href="#/" className="hover:text-pink-500">Trang chủ</a>
+                        <span>/</span>
+                        <span className="text-gray-800 font-bold">{currentCategoryName}</span>
+                    </nav>
+                    <h1 className="text-4xl font-black text-gray-800 tracking-tight">{currentCategoryName}</h1>
+                </div>
+                <div className="bg-pink-50 px-6 py-4 rounded-3xl flex items-center gap-4">
+                    <span className="text-pink-600 font-black text-xl">{filteredProducts.length}</span>
+                    <span className="text-pink-400 font-bold text-sm uppercase tracking-wider">Sản phẩm được tìm thấy</span>
+                </div>
+            </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 pb-20">
+        <div className="flex flex-col lg:flex-row gap-10">
+          {/* Sidebar */}
+          <aside className="w-full lg:w-64 flex-shrink-0">
+            <FilterSidebar 
+              filters={filters} 
+              onFilterChange={setFilters} 
+              availableOptions={availableOptions}
+            />
+          </aside>
+
+          {/* Product Grid */}
+          <div className="flex-grow">
+            {loading ? (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="bg-white rounded-2xl h-[400px] animate-pulse border border-gray-100"></div>
+                ))}
+              </div>
+            ) : paginatedProducts.length > 0 ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  {paginatedProducts.map(product => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+                <Pagination 
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              </>
+            ) : (
+              <div className="bg-white rounded-[2rem] p-20 text-center border border-gray-100 shadow-sm">
+                <div className="w-24 h-24 bg-pink-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-12 h-12 text-pink-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                </div>
+                <h3 className="text-2xl font-black text-gray-800 mb-2">Không tìm thấy sản phẩm</h3>
+                <p className="text-gray-500 mb-8 max-w-sm mx-auto">Chúng tôi không tìm thấy sản phẩm nào khớp với bộ lọc của bạn. Thử thay đổi các tùy chọn nhé!</p>
+                <button 
+                  onClick={() => setFilters({ sizes: [], colors: [], materials: [], priceRange: [0, 1000000], sort: 'newest' })}
+                  className="bg-pink-500 text-white px-8 py-3 rounded-xl font-bold hover:bg-pink-600 transition-all shadow-lg"
+                >
+                  Xóa tất cả bộ lọc
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ProductPage;

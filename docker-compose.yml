@@ -39,10 +39,11 @@ services:
       dockerfile_inline: |
         FROM node:20-slim
         WORKDIR /app
-        RUN npm install -g serve
+        COPY package*.json ./
+        RUN npm install
         COPY . .
-        # Phục vụ từ gốc để truy cập được shared files
-        CMD ["serve", "-s", ".", "-l", "3000"]
+        # Chạy Vite dev server trên cổng 3000
+        CMD ["npx", "vite", "--host", "0.0.0.0", "--port", "3000"]
     container_name: unbee_frontend
     ports:
       - "3000:3000"
@@ -55,10 +56,11 @@ services:
       dockerfile_inline: |
         FROM node:20-slim
         WORKDIR /app
-        RUN npm install -g serve
+        COPY package*.json ./
+        RUN npm install
         COPY . .
-        # Phục vụ từ gốc để truy cập được shared files
-        CMD ["serve", "-s", ".", "-l", "8000"]
+        # Chạy Vite dev server trên cổng 8000 cho Admin
+        CMD ["npx", "vite", "--host", "0.0.0.0", "--port", "8000"]
     container_name: unbee_admin_ui
     ports:
       - "8000:8000"

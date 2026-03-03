@@ -1,5 +1,6 @@
 
-import { Product, Category, Banner, Order, Blog, Collection } from '../types';
+import { Banner, AdminBanner } from '../types';
+import type { Product, Category, Order, Blog, Collection, BannerSlot } from '../types';
 
 // Mock Data initialization
 const INITIAL_PRODUCTS: Product[] = [
@@ -79,6 +80,10 @@ const INITIAL_ORDERS: Order[] = [
 ];
 
 class ApiService {
+  private backendOrigin = 'http://localhost:8888';
+  private adminBaseUrl = `${this.backendOrigin}/api/admin`;
+  private userBaseUrl = `${this.backendOrigin}/api/user`;
+
   private products: Product[] = JSON.parse(localStorage.getItem('unbee_products') || JSON.stringify(INITIAL_PRODUCTS));
   private banners: Banner[] = JSON.parse(localStorage.getItem('unbee_banners') || JSON.stringify(INITIAL_BANNERS));
   private orders: Order[] = JSON.parse(localStorage.getItem('unbee_orders') || JSON.stringify(INITIAL_ORDERS));
@@ -112,16 +117,76 @@ class ApiService {
   }
 
   // Banners
-  async getBanners() { return this.banners; }
-  async updateBanner(banner: Banner) {
-    const idx = this.banners.findIndex(b => b.id === banner.id);
-    if (idx !== -1) this.banners[idx] = banner;
-    else this.banners.push({ ...banner, id: Date.now().toString() });
-    this.save();
+  private toAbsoluteUrl(url: string) {
+    if (!url) return url;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    if (url.startsWith('/')) return `${this.backendOrigin}${url}`;
+    return url;
   }
-  async deleteBanner(id: string) {
-    this.banners = this.banners.filter(b => b.id !== id);
-    this.save();
+
+  async getBanners(): Promise<Banner[]> {
+    // User-facing: fetch active home hero banners from backend, fallback to localstorage mock.
+    try {
+      const res = await fetch(`${this.userBaseUrl}/banners?slot=home_hero`);
+      if (!res.ok) throw new Error('API Error');
+      const data: AdminBanner[] = await res.json();
+      return data.map((b) => ({
+        id: String(b.id),
+        imageUrl: this.toAbsoluteUrl(b.image_url),
+        title: b.title || '',
+        link: b.link_url || '#/products',
+        position: 'main',
+      }));
+    } catch {
+      return this.banners;
+    }
+  }
+
+  async adminListBanners(params?: { slot?: BannerSlot | string; active_only?: boolean }): Promise<AdminBanner[]> {
+    const qs = new URLSearchParams();
+    if (params?.slot) qs.set('slot', params.slot);
+    if (params?.active_only !== undefined) qs.set('active_only', String(params.active_only));
+    const url = `${this.adminBaseUrl}/banners${qs.toString() ? `?${qs.toString()}` : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('API Error');
+    const data: AdminBanner[] = await res.json();
+    return data.map((b) => ({ ...b, image_url: this.toAbsoluteUrl(b.image_url) }));
+  }
+
+  async adminCreateBanner(payload: Omit<AdminBanner, 'id'>): Promise<AdminBanner> {
+    const res = await fetch(`${this.adminBaseUrl}/banners`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('API Error');
+    const b: AdminBanner = await res.json();
+    return { ...b, image_url: this.toAbsoluteUrl(b.image_url) };
+  }
+
+  async adminUpdateBanner(id: number, payload: Partial<Omit<AdminBanner, 'id'>>): Promise<AdminBanner> {
+    const res = await fetch(`${this.adminBaseUrl}/banners/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('API Error');
+    const b: AdminBanner = await res.json();
+    return { ...b, image_url: this.toAbsoluteUrl(b.image_url) };
+  }
+
+  async adminDeleteBanner(id: number): Promise<void> {
+    const res = await fetch(`${this.adminBaseUrl}/banners/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('API Error');
+  }
+
+  async adminUploadImage(file: File): Promise<string> {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch(`${this.adminBaseUrl}/upload-image`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error('Upload failed');
+    const data: { url: string } = await res.json();
+    return this.toAbsoluteUrl(data.url);
   }
 
   // Collections

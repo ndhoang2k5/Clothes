@@ -63,6 +63,25 @@ export interface Banner {
   position: 'main' | 'promo' | 'footer';
 }
 
+export type BannerSlot =
+  | 'home_hero'
+  | 'home_promo'
+  | 'home_category_feature'
+  | 'footer_banner';
+
+export interface AdminBanner {
+  id: number;
+  slot: BannerSlot | (string & {});
+  sort_order: number;
+  image_url: string;
+  title: string | null;
+  subtitle: string | null;
+  link_url: string | null;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Blog {
   id: string;
   title: string;

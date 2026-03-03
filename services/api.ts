@@ -97,23 +97,170 @@ class ApiService {
   }
 
   // Products
-  async getProducts() { return this.products; }
-  async addProduct(product: Product) {
-    const newProduct = { ...product, id: Date.now().toString() };
-    this.products.push(newProduct);
-    this.save();
-    return newProduct;
+  private mapBackendProductToFrontend(p: any): Product {
+    const images: string[] = Array.isArray(p.images) ? p.images.map((i: any) => this.toAbsoluteUrl(i.image_url)).filter(Boolean) : [];
+    const primary = p.primary_image_url ? this.toAbsoluteUrl(p.primary_image_url) : undefined;
+    const allImages = (primary ? [primary, ...images.filter((u) => u !== primary)] : images);
+
+    const variants = Array.isArray(p.variants)
+      ? p.variants.map((v: any) => ({
+          id: String(v.id),
+          size: v.size || '',
+          color: v.color || '',
+          stock: Number(v.stock || 0),
+          price: v.price_override ?? undefined,
+        }))
+      : [];
+
+    return {
+      id: String(p.id),
+      name: p.name || '',
+      description: p.description || '',
+      price: Number(p.base_price || 0),
+      discountPrice: p.discount_price ?? undefined,
+      category: p.category_slug || 'unknown',
+      material: variants[0]?.material || p.material || '',
+      images: allImages.length > 0 ? allImages : ['https://picsum.photos/400/500?product'],
+      isActive: p.is_active ?? true,
+      isHot: !!p.is_hot,
+      isNew: !!p.is_new,
+      isSale: !!p.is_sale,
+      variants,
+    };
   }
-  async updateProduct(product: Product) {
-    const index = this.products.findIndex(p => p.id === product.id);
-    if (index !== -1) {
-      this.products[index] = product;
-      this.save();
+
+  async getCategories(): Promise<Category[]> {
+    try {
+      const res = await fetch(`${this.userBaseUrl}/categories`);
+      if (!res.ok) throw new Error('API Error');
+      const data: any[] = await res.json();
+      return data.map((c) => ({
+        id: String(c.id),
+        name: c.name,
+        icon: c.icon || '',
+        slug: c.slug,
+      }));
+    } catch {
+      return [];
     }
   }
-  async deleteProduct(id: string) {
-    this.products = this.products.filter(p => p.id !== id);
-    this.save();
+
+  async getProducts(): Promise<Product[]> {
+    try {
+      const res = await fetch(`${this.userBaseUrl}/products`);
+      if (!res.ok) throw new Error('API Error');
+      const data: any[] = await res.json();
+      return data.map((p) => this.mapBackendProductToFrontend(p));
+    } catch {
+      return this.products;
+    }
+  }
+
+  async adminListProducts(include_inactive: boolean = true): Promise<Product[]> {
+    const res = await fetch(`${this.adminBaseUrl}/products?include_inactive=${include_inactive ? 'true' : 'false'}`);
+    if (!res.ok) throw new Error('API Error');
+    const data: any[] = await res.json();
+    return data.map((p) => this.mapBackendProductToFrontend(p));
+  }
+
+  async adminListCategories(active_only: boolean = true): Promise<Category[]> {
+    const res = await fetch(`${this.adminBaseUrl}/categories?active_only=${active_only ? 'true' : 'false'}`);
+    if (!res.ok) throw new Error('API Error');
+    const data: any[] = await res.json();
+    return data.map((c) => ({
+      id: String(c.id),
+      name: c.name,
+      icon: c.icon || '',
+      slug: c.slug,
+    }));
+  }
+
+  async adminCreateProduct(frontendProduct: Omit<Product, 'id'> & { id?: string }): Promise<Product> {
+    const categories = await this.adminListCategories(true);
+    const categoryId = categories.find((c) => c.slug === frontendProduct.category)?.id;
+
+    const payload: any = {
+      category_id: categoryId ? Number(categoryId) : null,
+      name: frontendProduct.name,
+      description: frontendProduct.description,
+      base_price: frontendProduct.price,
+      discount_price: frontendProduct.discountPrice ?? null,
+      is_active: frontendProduct.isActive ?? true,
+      is_hot: frontendProduct.isHot,
+      is_new: frontendProduct.isNew,
+      is_sale: frontendProduct.isSale,
+      images: frontendProduct.images?.filter(Boolean) || [],
+      variants: (frontendProduct.variants || []).map((v) => ({
+        size: v.size,
+        color: v.color,
+        stock: v.stock,
+        price_override: v.price ?? null,
+      })),
+    };
+    const res = await fetch(`${this.adminBaseUrl}/products`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('API Error');
+    const created = await res.json();
+    return this.mapBackendProductToFrontend(created);
+  }
+
+  async adminUpdateProduct(productId: string, patch: Partial<Product>): Promise<Product> {
+    const payload: any = {};
+    if (patch.name !== undefined) payload.name = patch.name;
+    if (patch.description !== undefined) payload.description = patch.description;
+    if (patch.price !== undefined) payload.base_price = patch.price;
+    if (patch.discountPrice !== undefined) payload.discount_price = patch.discountPrice ?? null;
+    if (patch.isActive !== undefined) payload.is_active = patch.isActive;
+    if (patch.isHot !== undefined) payload.is_hot = patch.isHot;
+    if (patch.isNew !== undefined) payload.is_new = patch.isNew;
+    if (patch.isSale !== undefined) payload.is_sale = patch.isSale;
+    // category update: resolve slug -> id
+    if (patch.category !== undefined) {
+      const categories = await this.adminListCategories(true);
+      const categoryId = categories.find((c) => c.slug === patch.category)?.id;
+      payload.category_id = categoryId ? Number(categoryId) : null;
+    }
+    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('API Error');
+    const updated = await res.json();
+    return this.mapBackendProductToFrontend(updated);
+  }
+
+  async adminDeleteProduct(productId: string): Promise<void> {
+    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('API Error');
+  }
+
+  async adminAddVariant(productId: string, data: { size: string; color: string; stock: number; price?: number }) {
+    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}/variants`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        size: data.size,
+        color: data.color,
+        stock: data.stock,
+        price_override: data.price ?? null,
+      }),
+    });
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
+  }
+
+  async adminAttachProductImage(productId: string, image_url: string, is_primary: boolean = false) {
+    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}/images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_url, is_primary }),
+    });
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
   }
 
   // Banners
@@ -140,6 +287,16 @@ class ApiService {
     } catch {
       return this.banners;
     }
+  }
+
+  async userListBannersBySlot(slot: BannerSlot): Promise<AdminBanner[]> {
+    const res = await fetch(`${this.userBaseUrl}/banners?slot=${encodeURIComponent(slot)}`);
+    if (!res.ok) throw new Error('API Error');
+    const data: AdminBanner[] = await res.json();
+    return data
+      .filter((b) => b.is_active)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+      .map((b) => ({ ...b, image_url: this.toAbsoluteUrl(b.image_url) }));
   }
 
   async adminListBanners(params?: { slot?: BannerSlot | string; active_only?: boolean }): Promise<AdminBanner[]> {

@@ -33,13 +33,27 @@ def serialize_variant(variant) -> dict:
         "is_active": getattr(variant, "is_active", True),
         "created_at": _dt(getattr(variant, "created_at", None)),
         "updated_at": _dt(getattr(variant, "updated_at", None)),
+        "images": [
+            {
+                "id": img.id,
+                "image_url": img.image_url,
+                "alt_text": getattr(img, "alt_text", None),
+                "sort_order": getattr(img, "sort_order", 0),
+                "is_primary": getattr(img, "is_primary", False),
+            }
+            for img in sorted(getattr(variant, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
+        ],
     }
 
 
 def serialize_product(product) -> dict:
+    imgs = sorted(getattr(product, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
+    primary = next((i for i in imgs if getattr(i, "is_primary", False)), None) or (imgs[0] if imgs else None)
+
     return {
         "id": product.id,
         "category_id": product.category_id,
+        "category_slug": getattr(getattr(product, "category", None), "slug", None),
         "name": product.name,
         "slug": getattr(product, "slug", None),
         "description": product.description,
@@ -53,6 +67,17 @@ def serialize_product(product) -> dict:
         "is_sale": getattr(product, "is_sale", False),
         "created_at": _dt(getattr(product, "created_at", None)),
         "updated_at": _dt(getattr(product, "updated_at", None)),
+        "primary_image_url": primary.image_url if primary else None,
+        "images": [
+            {
+                "id": img.id,
+                "image_url": img.image_url,
+                "alt_text": getattr(img, "alt_text", None),
+                "sort_order": getattr(img, "sort_order", 0),
+                "is_primary": getattr(img, "is_primary", False),
+            }
+            for img in imgs
+        ],
         "variants": [serialize_variant(v) for v in getattr(product, "variants", [])],
     }
 
@@ -103,5 +128,21 @@ def serialize_banner(banner) -> dict:
         "is_active": banner.is_active,
         "created_at": _dt(getattr(banner, "created_at", None)),
         "updated_at": _dt(getattr(banner, "updated_at", None)),
+    }
+
+
+def serialize_category(category) -> dict:
+    return {
+        "id": category.id,
+        "parent_id": getattr(category, "parent_id", None),
+        "name": category.name,
+        "slug": category.slug,
+        "icon": getattr(category, "icon", None),
+        "image_url": getattr(category, "image_url", None),
+        "description": getattr(category, "description", None),
+        "is_active": getattr(category, "is_active", True),
+        "sort_order": getattr(category, "sort_order", 0),
+        "created_at": _dt(getattr(category, "created_at", None)),
+        "updated_at": _dt(getattr(category, "updated_at", None)),
     }
 

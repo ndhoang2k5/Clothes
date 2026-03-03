@@ -42,6 +42,7 @@ class Product(Base):
     
     category = relationship("Category", back_populates="products")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
+    images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
 
 class ProductVariant(Base):
     __tablename__ = "product_variants"
@@ -59,6 +60,33 @@ class ProductVariant(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
     
     product = relationship("Product", back_populates="variants")
+    images = relationship("ProductVariantImage", back_populates="variant", cascade="all, delete-orphan")
+
+
+class ProductImage(Base):
+    __tablename__ = "product_images"
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False, index=True)
+    image_url = Column(Text, nullable=False)
+    alt_text = Column(Text)
+    sort_order = Column(Integer, default=0)
+    is_primary = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    product = relationship("Product", back_populates="images")
+
+
+class ProductVariantImage(Base):
+    __tablename__ = "product_variant_images"
+    id = Column(Integer, primary_key=True, index=True)
+    variant_id = Column(Integer, ForeignKey("product_variants.id"), nullable=False, index=True)
+    image_url = Column(Text, nullable=False)
+    alt_text = Column(Text)
+    sort_order = Column(Integer, default=0)
+    is_primary = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    variant = relationship("ProductVariant", back_populates="images")
 
 class Order(Base):
     __tablename__ = "orders"

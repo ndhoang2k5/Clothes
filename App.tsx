@@ -1,16 +1,9 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Navbar from './user/Navbar';
 import HomePage from './user/HomePage';
 import ProductPage from './user/ProductPage';
 import CollectionPage from './user/CollectionPage';
-import AdminLayout from './admin/AdminLayout';
-import Dashboard from './admin/Dashboard';
-import ProductManagement from './admin/ProductManagement';
-import OrderManagement from './admin/OrderManagement';
-import CollectionManagement from './admin/CollectionManagement';
-import BannerManagement from './admin/BannerManagement';
-import IntroManagement from './admin/IntroManagement';
 
 const Footer: React.FC = () => (
   <footer className="bg-gray-900 text-white pt-20 pb-10">
@@ -65,58 +58,28 @@ const App: React.FC = () => {
     return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
-  const routePath = useMemo(() => currentHash.split('?')[0], [currentHash]);
-  const isAdmin = useMemo(() => routePath.startsWith('#/admin'), [routePath]);
-
-  const renderUserRoute = () => {
-    switch (routePath) {
-      case '#/': return <HomePage />;
+  const renderRoute = () => {
+    const path = currentHash.split('?')[0];
+    switch (path) {
       case '#/products': return <ProductPage />;
       case '#/collections': return <CollectionPage />;
-      case '#/about': return <div className="max-w-7xl mx-auto px-4 py-20"><h2 className="text-4xl font-black mb-8">Về Unbee</h2></div>;
+      case '#/about': return (
+        <div className="max-w-7xl mx-auto px-4 py-20">
+          <h2 className="text-4xl font-black mb-8">Về Unbee</h2>
+        </div>
+      );
+      case '#/':
       default: return <HomePage />;
     }
   };
 
-  const renderAdminRoute = () => {
-    switch (routePath) {
-      case '#/admin/products': return <ProductManagement />;
-      case '#/admin/orders': return <OrderManagement />;
-      case '#/admin/collections': return <CollectionManagement />;
-      case '#/admin/banners': return <BannerManagement />;
-      case '#/admin/intro': return <IntroManagement />;
-      case '#/admin':
-      default: return <Dashboard />;
-    }
-  };
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isAdmin ? (
-        <AdminLayout>
-            {renderAdminRoute()}
-        </AdminLayout>
-      ) : (
-        <>
-          <Navbar />
-          <main className="min-h-[80vh]">
-            {renderUserRoute()}
-          </main>
-          <Footer />
-        </>
-      )}
-
-      {/* Dev Switcher - Hidden on production but useful for your current dual-port test */}
-      <div className="fixed bottom-6 right-6 z-[999]">
-         <a 
-          href={isAdmin ? '#/' : '#/admin'} 
-          className={`flex items-center gap-2 px-6 py-4 rounded-full text-xs font-black shadow-2xl transition-all border border-white/20 hover:scale-105 active:scale-95 ${
-            isAdmin ? 'bg-gray-800 text-white' : 'bg-pink-500 text-white'
-          }`}
-         >
-           {isAdmin ? "Xem Shop 🛍️" : "Quản lý ⚙️"}
-         </a>
-      </div>
+    <div className="flex flex-col min-h-screen bg-gray-50">
+      <Navbar />
+      <main className="flex-grow min-h-[80vh]">
+        {renderRoute()}
+      </main>
+      <Footer />
     </div>
   );
 };

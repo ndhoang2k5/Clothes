@@ -8,6 +8,7 @@ export interface Product {
   category: string;
   material: string;
   images: string[];
+  isActive?: boolean;
   isHot: boolean;
   isNew: boolean;
   isSale: boolean;

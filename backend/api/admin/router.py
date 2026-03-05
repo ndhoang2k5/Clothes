@@ -91,6 +91,41 @@ def delete_product_image(image_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Image not found")
     return {"ok": True}
 
+
+@router.get("/products/{product_id}/combo-items")
+def list_combo_items(product_id: int, db: Session = Depends(get_db)):
+    items = AdminService.list_combo_items(db, product_id)
+    if items is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return items
+
+
+@router.post("/products/{product_id}/combo-items")
+def add_combo_item(product_id: int, data: dict, db: Session = Depends(get_db)):
+    variant_id = int(data.get("component_variant_id"))
+    quantity = int(data.get("quantity") or 1)
+    items = AdminService.add_combo_item(db, product_id, variant_id, quantity)
+    if items is None:
+        raise HTTPException(status_code=400, detail="Invalid combo or variant")
+    return items
+
+
+@router.put("/products/{product_id}/combo-items/{variant_id}")
+def update_combo_item(product_id: int, variant_id: int, data: dict, db: Session = Depends(get_db)):
+    quantity = int(data.get("quantity") or 1)
+    items = AdminService.update_combo_item(db, product_id, variant_id, quantity)
+    if items is None:
+        raise HTTPException(status_code=404, detail="Combo item not found")
+    return items
+
+
+@router.delete("/products/{product_id}/combo-items/{variant_id}")
+def delete_combo_item(product_id: int, variant_id: int, db: Session = Depends(get_db)):
+    ok = AdminService.delete_combo_item(db, product_id, variant_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Combo item not found")
+    return {"ok": True}
+
 @router.post("/variants/{variant_id}/images")
 def add_variant_image(variant_id: int, data: dict, db: Session = Depends(get_db)):
     img = AdminService.add_variant_image(db, variant_id, data)

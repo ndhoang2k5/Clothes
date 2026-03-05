@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS products (
     is_hot BOOLEAN NOT NULL DEFAULT FALSE,
     is_new BOOLEAN NOT NULL DEFAULT TRUE,
     is_sale BOOLEAN NOT NULL DEFAULT FALSE,
+    external_source TEXT,
+    external_product_id TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT chk_products_discount_price CHECK (discount_price IS NULL OR discount_price <= base_price)
@@ -213,7 +215,9 @@ VALUES
     ('Đồ sơ sinh', 'so-sinh', '👶', 1),
     ('Quần áo bé trai', 'be-trai', '👕', 2),
     ('Quần áo bé gái', 'be-gai', '👗', 3),
-    ('Phụ kiện', 'phu-kien', '🧢', 4)
+    ('Phụ kiện', 'phu-kien', '🧢', 4),
+    ('Box quà tặng', 'qua-tang', '🎁', 5),
+    ('Combo đi sinh', 'di-sinh', '👜', 6)
 ON CONFLICT (slug) DO NOTHING;
 
 COMMIT;

@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Product } from '../types';
 
 interface ProductCardProps {
@@ -8,11 +7,33 @@ interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
+  const [hovered, setHovered] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (!hovered || product.images.length <= 1) return;
+    const id = window.setInterval(() => {
+      setImageIndex((prev) => (prev + 1) % product.images.length);
+    }, 1200);
+    return () => window.clearInterval(id);
+  }, [hovered, product.images.length]);
+
+  useEffect(() => {
+    setImageIndex(0);
+  }, [product.id]);
+
   return (
-    <div className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full border border-gray-100">
+    <div
+      className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full border border-gray-100"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        setImageIndex(0);
+      }}
+    >
       <div className="relative aspect-[4/5] overflow-hidden">
         <img
-          src={product.images[0]}
+          src={product.images[imageIndex] || product.images[0]}
           alt={product.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
@@ -36,3 +57,4 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
   );
 };
 export default ProductCard;
+

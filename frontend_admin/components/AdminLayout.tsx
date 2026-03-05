@@ -30,6 +30,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         <NavLink href="#/admin" label="Tổng quan" icon="📊" />
         <NavLink href="#/admin/products" label="Sản phẩm" icon="📦" />
         <NavLink href="#/admin/orders" label="Đơn hàng" icon="🛒" />
+        <NavLink href="#/admin/collections" label="Bộ sưu tập" icon="🎨" />
+        <NavLink href="#/admin/banners" label="Banners" icon="🖼️" />
+        <NavLink href="#/admin/intro" label="Giới thiệu thương hiệu" icon="📖" />
       </aside>
       <div className="flex-grow p-10">
         <header className="mb-10 flex justify-between items-center">

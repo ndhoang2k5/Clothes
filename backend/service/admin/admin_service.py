@@ -42,16 +42,7 @@ class AdminService:
 
         if images or variants:
             db.commit()
-            product = (
-                db.query(models.Product)
-                .options(
-                    selectinload(models.Product.images),
-                    selectinload(models.Product.variants).selectinload(models.ProductVariant.images),
-                    selectinload(models.Product.category),
-                )
-                .filter(models.Product.id == product.id)
-                .first()
-            )
+            product = AdminService.get_product(db, product.id)
         return serialize_product(product)
 
     @staticmethod
@@ -60,6 +51,7 @@ class AdminService:
             selectinload(models.Product.images),
             selectinload(models.Product.variants).selectinload(models.ProductVariant.images),
             selectinload(models.Product.category),
+            selectinload(models.Product.combo_components).selectinload(models.ComboItem.component_variant),
         )
         if not include_inactive:
             query = query.filter(models.Product.is_active == True)  # noqa: E712
@@ -74,6 +66,7 @@ class AdminService:
                 selectinload(models.Product.images),
                 selectinload(models.Product.variants).selectinload(models.ProductVariant.images),
                 selectinload(models.Product.category),
+                selectinload(models.Product.combo_components).selectinload(models.ComboItem.component_variant),
             )
             .filter(models.Product.id == product_id)
             .first()
@@ -100,6 +93,126 @@ class AdminService:
             return False
         db.delete(product)
         db.commit()
+        return True
+
+    # --- Combo items helpers ---
+    @staticmethod
+    def _recalculate_combo_price(db: Session, combo_product_id: int):
+        combo = (
+            db.query(models.Product)
+            .options(selectinload(models.Product.combo_components).selectinload(models.ComboItem.component_variant))
+            .filter(models.Product.id == combo_product_id)
+            .first()
+        )
+        if not combo:
+            return
+        if combo.kind != "combo":
+            return
+        total = 0
+        for ci in combo.combo_components:
+            v = ci.component_variant
+            if not v or not v.product:
+                continue
+            unit_price = v.price_override if getattr(v, "price_override", None) is not None else v.product.base_price
+            total += float(unit_price) * int(ci.quantity or 1)
+        combo.base_price = total
+        db.commit()
+
+    @staticmethod
+    def list_combo_items(db: Session, combo_product_id: int):
+        combo = (
+            db.query(models.Product)
+            .options(selectinload(models.Product.combo_components).selectinload(models.ComboItem.component_variant))
+            .filter(models.Product.id == combo_product_id)
+            .first()
+        )
+        if not combo:
+            return None
+        from ..serializers import serialize_variant
+
+        items = []
+        for ci in combo.combo_components:
+            v = ci.component_variant
+            items.append(
+                {
+                    "combo_product_id": ci.combo_product_id,
+                    "component_variant_id": ci.component_variant_id,
+                    "quantity": ci.quantity,
+                    "variant": serialize_variant(v) if v else None,
+                    "product": {
+                        "id": v.product.id,
+                        "name": v.product.name,
+                    }
+                    if v and v.product
+                    else None,
+                }
+            )
+        return items
+
+    @staticmethod
+    def add_combo_item(db: Session, combo_product_id: int, component_variant_id: int, quantity: int = 1):
+        combo = db.query(models.Product).filter(models.Product.id == combo_product_id).first()
+        if not combo:
+            return None
+        if combo.kind != "combo":
+            return None
+        variant = db.query(models.ProductVariant).filter(models.ProductVariant.id == component_variant_id).first()
+        if not variant:
+            return None
+        existing = (
+            db.query(models.ComboItem)
+            .filter(
+                models.ComboItem.combo_product_id == combo_product_id,
+                models.ComboItem.component_variant_id == component_variant_id,
+            )
+            .first()
+        )
+        if existing:
+            existing.quantity = quantity
+        else:
+            db.add(
+                models.ComboItem(
+                    combo_product_id=combo_product_id,
+                    component_variant_id=component_variant_id,
+                    quantity=quantity,
+                )
+            )
+        db.commit()
+        AdminService._recalculate_combo_price(db, combo_product_id)
+        return AdminService.list_combo_items(db, combo_product_id)
+
+    @staticmethod
+    def update_combo_item(db: Session, combo_product_id: int, component_variant_id: int, quantity: int):
+        item = (
+            db.query(models.ComboItem)
+            .filter(
+                models.ComboItem.combo_product_id == combo_product_id,
+                models.ComboItem.component_variant_id == component_variant_id,
+            )
+            .first()
+        )
+        if not item:
+            return None
+        item.quantity = quantity
+        db.commit()
+        AdminService._recalculate_combo_price(db, combo_product_id)
+        return AdminService.list_combo_items(db, combo_product_id)
+
+    @staticmethod
+    def delete_combo_item(db: Session, combo_product_id: int, component_variant_id: int) -> bool:
+        item = (
+            db.query(models.ComboItem)
+            .filter(
+                models.ComboItem.combo_product_id == combo_product_id,
+                models.ComboItem.component_variant_id == component_variant_id,
+            )
+            .first()
+        )
+        if not item:
+            return False
+        db.delete(item)
+        db.commit()
+        AdminService._recalculate_combo_price(db, combo_product_id)
         return True
 
     @staticmethod

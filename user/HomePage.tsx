@@ -23,6 +23,7 @@ const HomePage: React.FC = () => {
   const [categoryBanners, setCategoryBanners] = useState<AdminBanner[]>([]);
   const [footerBanners, setFooterBanners] = useState<AdminBanner[]>([]);
   const [heroIndex, setHeroIndex] = useState(0);
+  const [activeFeaturedTab, setActiveFeaturedTab] = useState<'new' | 'hot' | 'accessory' | 'all'>('new');
 
   const currentHero = useMemo(() => heroBanners[heroIndex] || null, [heroBanners, heroIndex]);
 
@@ -155,22 +156,107 @@ const HomePage: React.FC = () => {
 
       {/* Featured Products */}
       <section className="max-w-7xl mx-auto px-4 py-10">
-        <div className="flex justify-between items-end mb-10">
-          <div>
-            <h2 className="text-3xl font-black text-gray-800 mb-2">Sản phẩm Bán Chạy 🔥</h2>
-            <p className="text-gray-500">Những món đồ được hàng ngàn mẹ bỉm tin dùng</p>
+        <div className="mb-8 text-center">
+          <h2 className="text-3xl md:text-4xl font-black text-gray-800 tracking-wide mb-4">
+            SẢN PHẨM NỔI BẬT
+          </h2>
+          <div className="inline-flex bg-gray-100 rounded-full px-2 py-1 text-sm font-semibold text-gray-500">
+            <button
+              onClick={() => setActiveFeaturedTab('new')}
+              className={`px-4 py-2 rounded-full transition-colors ${
+                activeFeaturedTab === 'new' ? 'text-pink-600' : 'hover:text-pink-500'
+              }`}
+            >
+              Hàng mới
+            </button>
+            <button
+              onClick={() => setActiveFeaturedTab('hot')}
+              className={`px-4 py-2 rounded-full transition-colors ${
+                activeFeaturedTab === 'hot' ? 'text-pink-600' : 'hover:text-pink-500'
+              }`}
+            >
+              Hot sales
+            </button>
+            <button
+              onClick={() => setActiveFeaturedTab('accessory')}
+              className={`px-4 py-2 rounded-full transition-colors ${
+                activeFeaturedTab === 'accessory' ? 'text-pink-600' : 'hover:text-pink-500'
+              }`}
+            >
+              Phụ kiện
+            </button>
+            <button
+              onClick={() => setActiveFeaturedTab('all')}
+              className={`px-4 py-2 rounded-full transition-colors ${
+                activeFeaturedTab === 'all' ? 'text-pink-600' : 'hover:text-pink-500'
+              }`}
+            >
+              Xem thêm
+            </button>
           </div>
-          <a href="#/products" className="text-pink-500 font-bold flex items-center gap-1 hover:underline">
-            Xem tất cả <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
-          </a>
         </div>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-          {products.filter(p => p.isHot).map(product => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+
+        {(() => {
+          let list = products;
+          if (activeFeaturedTab === 'new') {
+            list = products.filter((p) => p.isNew);
+          } else if (activeFeaturedTab === 'hot') {
+            list = products.filter((p) => p.isHot);
+          } else if (activeFeaturedTab === 'accessory') {
+            list = products.filter((p) => p.category === 'phu-kien');
+          }
+
+          return (
+            <div className="max-w-7xl mx-auto">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                {list.slice(0, 8).map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </section>
+
+      {/* Box quà tặng */}
+      {products.some((p) => p.category === 'qua-tang') && (
+        <section className="max-w-7xl mx-auto px-4 py-10">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-black text-gray-800">Box quà tặng</h2>
+            <a href="#/products?cat=qua-tang" className="text-sm font-bold text-pink-500 hover:underline">
+              Xem tất cả
+            </a>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {products
+              .filter((p) => p.category === 'qua-tang')
+              .slice(0, 4)
+              .map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+          </div>
+        </section>
+      )}
+
+      {/* Combo đi sinh */}
+      {products.some((p) => p.category === 'di-sinh') && (
+        <section className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-2xl font-black text-gray-800">Combo đi sinh</h2>
+            <a href="#/products?cat=di-sinh" className="text-sm font-bold text-pink-500 hover:underline">
+              Xem tất cả
+            </a>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {products
+              .filter((p) => p.category === 'di-sinh')
+              .slice(0, 4)
+              .map((p) => (
+                <ProductCard key={p.id} product={p} />
+              ))}
+          </div>
+        </section>
+      )}
 
       {/* Promo Banner */}
       <section className="max-w-7xl mx-auto px-4 py-16">

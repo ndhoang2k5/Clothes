@@ -4,6 +4,9 @@ import AdminLayout from './components/AdminLayout';
 import Dashboard from './pages/Dashboard';
 import ProductManagement from './pages/ProductManagement';
 import OrderManagement from './pages/OrderManagement';
+import CollectionManagement from './pages/CollectionManagement';
+import BannerManagement from './pages/BannerManagement';
+import IntroManagement from './pages/IntroManagement';
 
 const AdminApp: React.FC = () => {
   const [currentHash, setCurrentHash] = useState(window.location.hash || '#/admin');
@@ -18,6 +21,9 @@ const AdminApp: React.FC = () => {
     switch (currentHash) {
       case '#/admin/products': return <ProductManagement />;
       case '#/admin/orders': return <OrderManagement />;
+      case '#/admin/collections': return <CollectionManagement />;
+      case '#/admin/banners': return <BannerManagement />;
+      case '#/admin/intro': return <IntroManagement />;
       case '#/admin':
       default: return <Dashboard />;
     }

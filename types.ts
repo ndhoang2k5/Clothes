@@ -13,6 +13,8 @@ export interface Product {
   isNew: boolean;
   isSale: boolean;
   variants: ProductVariant[];
+  kind?: 'single' | 'combo';
+  comboItems?: ComboItem[];
 }
 
 export interface ProductVariant {
@@ -21,6 +23,15 @@ export interface ProductVariant {
   color: string;
   stock: number;
   price?: number; // Override base price if specific
+}
+
+export interface ComboItem {
+  combo_product_id: number | string;
+  component_variant_id: number | string;
+  quantity: number;
+  // Optional extra info for displaying combo contents
+  variantLabel?: string;
+  productName?: string;
 }
 
 export interface Category {

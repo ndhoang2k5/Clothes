@@ -43,6 +43,12 @@ class Product(Base):
     category = relationship("Category", back_populates="products")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
+    combo_components = relationship(
+        "ComboItem",
+        foreign_keys="ComboItem.combo_product_id",
+        back_populates="combo_product",
+        cascade="all, delete-orphan",
+    )
 
 class ProductVariant(Base):
     __tablename__ = "product_variants"
@@ -87,6 +93,16 @@ class ProductVariantImage(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     variant = relationship("ProductVariant", back_populates="images")
+
+
+class ComboItem(Base):
+    __tablename__ = "combo_items"
+    combo_product_id = Column(Integer, ForeignKey("products.id"), primary_key=True)
+    component_variant_id = Column(Integer, ForeignKey("product_variants.id"), primary_key=True)
+    quantity = Column(Integer, nullable=False, default=1)
+
+    combo_product = relationship("Product", foreign_keys=[combo_product_id], back_populates="combo_components")
+    component_variant = relationship("ProductVariant")
 
 class Order(Base):
     __tablename__ = "orders"

@@ -17,6 +17,7 @@ export interface Product {
   primary_image_url: string | null;
   images: ProductImage[];
   variants: ProductVariant[];
+  combo_items?: ComboItem[];
 }
 
 export interface ProductImage {
@@ -44,6 +45,12 @@ export interface ProductVariant {
     sort_order: number;
     is_primary: boolean;
   }>;
+}
+
+export interface ComboItem {
+  combo_product_id: number;
+  component_variant_id: number;
+  quantity: number;
 }
 
 export interface Category {

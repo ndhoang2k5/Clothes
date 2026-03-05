@@ -4,6 +4,7 @@ import Navbar from './user/Navbar';
 import HomePage from './user/HomePage';
 import ProductPage from './user/ProductPage';
 import CollectionPage from './user/CollectionPage';
+import ProductDetailPage from './user/ProductDetailPage';
 
 const Footer: React.FC = () => (
   <footer className="bg-gray-900 text-white pt-20 pb-10">
@@ -59,17 +60,27 @@ const App: React.FC = () => {
   }, []);
 
   const renderRoute = () => {
-    const path = currentHash.split('?')[0];
+    const [path] = currentHash.split('?');
+
+    if (path.startsWith('#/product/')) {
+      const id = path.split('/')[2] || '';
+      return <ProductDetailPage productId={id} />;
+    }
+
     switch (path) {
-      case '#/products': return <ProductPage />;
-      case '#/collections': return <CollectionPage />;
-      case '#/about': return (
-        <div className="max-w-7xl mx-auto px-4 py-20">
-          <h2 className="text-4xl font-black mb-8">Về Unbee</h2>
-        </div>
-      );
+      case '#/products':
+        return <ProductPage />;
+      case '#/collections':
+        return <CollectionPage />;
+      case '#/about':
+        return (
+          <div className="max-w-7xl mx-auto px-4 py-20">
+            <h2 className="text-4xl font-black mb-8">Về Unbee</h2>
+          </div>
+        );
       case '#/':
-      default: return <HomePage />;
+      default:
+        return <HomePage />;
     }
   };
 

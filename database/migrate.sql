@@ -31,6 +31,8 @@ ALTER TABLE products
     ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'single',
     ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
     ADD COLUMN IF NOT EXISTS is_sale BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS external_source TEXT,
+    ADD COLUMN IF NOT EXISTS external_product_id TEXT,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 DO $$
@@ -183,7 +185,9 @@ VALUES
     ('Đồ sơ sinh', 'so-sinh', '👶', 1),
     ('Quần áo bé trai', 'be-trai', '👕', 2),
     ('Quần áo bé gái', 'be-gai', '👗', 3),
-    ('Phụ kiện', 'phu-kien', '🧢', 4)
+    ('Phụ kiện', 'phu-kien', '🧢', 4),
+    ('Box quà tặng', 'qua-tang', '🎁', 5),
+    ('Combo đi sinh', 'di-sinh', '👜', 6)
 ON CONFLICT (slug) DO NOTHING;
 
 COMMIT;

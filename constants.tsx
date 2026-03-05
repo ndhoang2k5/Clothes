@@ -2,12 +2,66 @@
 import React from 'react';
 
 export const CATEGORIES = [
-  { id: '1', name: 'Đồ sơ sinh', icon: '👶', slug: 'so-sinh' },
-  { id: '2', name: 'Quần áo bé trai', icon: '👕', slug: 'be-trai' },
-  { id: '3', name: 'Quần áo bé gái', icon: '👗', slug: 'be-gai' },
-  { id: '4', name: 'Phụ kiện', icon: '🧢', slug: 'phu-kien' },
-  { id: '5', name: 'Box quà tặng', icon: '🎁', slug: 'qua-tang' },
-  { id: '6', name: 'Combo đi sinh', icon: '👜', slug: 'di-sinh' },
+  {
+    id: '1',
+    name: 'Đồ sơ sinh',
+    slug: 'so-sinh',
+    icon: (
+      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-100 to-pink-100 flex items-center justify-center">
+        <span className="text-2xl">👶</span>
+      </div>
+    ),
+  },
+  {
+    id: '2',
+    name: 'Quần áo bé trai',
+    slug: 'be-trai',
+    icon: (
+      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-100 flex items-center justify-center">
+        <span className="text-2xl">🧒</span>
+      </div>
+    ),
+  },
+  {
+    id: '3',
+    name: 'Quần áo bé gái',
+    slug: 'be-gai',
+    icon: (
+      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center">
+        <span className="text-2xl">👧</span>
+      </div>
+    ),
+  },
+  {
+    id: '4',
+    name: 'Phụ kiện',
+    slug: 'phu-kien',
+    icon: (
+      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-100 to-sky-100 flex items-center justify-center">
+        <span className="text-2xl">🎀</span>
+      </div>
+    ),
+  },
+  {
+    id: '5',
+    name: 'Box quà tặng',
+    slug: 'qua-tang',
+    icon: (
+      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
+        <span className="text-2xl">🎁</span>
+      </div>
+    ),
+  },
+  {
+    id: '6',
+    name: 'Combo đi sinh',
+    slug: 'di-sinh',
+    icon: (
+      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
+        <span className="text-2xl">👜</span>
+      </div>
+    ),
+  },
 ];
 
 export const TRUST_FEATURES = [

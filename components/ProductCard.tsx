@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Product } from '../types';
 
 interface ProductCardProps {
@@ -8,11 +7,34 @@ interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
+  const [hovered, setHovered] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
+
+  useEffect(() => {
+    if (!hovered || product.images.length <= 1) return;
+    const id = window.setInterval(() => {
+      setImageIndex((prev) => (prev + 1) % product.images.length);
+    }, 1200);
+    return () => window.clearInterval(id);
+  }, [hovered, product.images.length]);
+
+  useEffect(() => {
+    setImageIndex(0);
+  }, [product.id]);
+
   return (
-    <div className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full border border-gray-100">
+    <a
+      href={`#/product/${product.id}`}
+      className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full border border-gray-100"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => {
+        setHovered(false);
+        setImageIndex(0);
+      }}
+    >
       <div className="relative aspect-[4/5] overflow-hidden">
         <img
-          src={product.images[0]}
+          src={product.images[imageIndex] || product.images[0]}
           alt={product.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
         />
@@ -26,16 +48,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
             Hot
           </span>
         )}
-        <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-            <button className="bg-white p-2 rounded-full shadow-lg hover:bg-pink-50 transition-colors">
-                <svg className="w-6 h-6 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-            </button>
-        </div>
       </div>
-      
+
       <div className="p-4 flex flex-col flex-grow">
         <h3 className="text-gray-800 font-semibold mb-2 group-hover:text-pink-500 transition-colors truncate">
           {product.name}
@@ -50,9 +64,12 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
             </span>
           )}
         </div>
-        
+
         <button
-          onClick={() => onAddToCart?.(product)}
+          onClick={(e) => {
+            e.preventDefault();
+            onAddToCart?.(product);
+          }}
           className="mt-auto w-full bg-pink-50 text-pink-600 font-bold py-2.5 rounded-xl hover:bg-pink-500 hover:text-white transition-all duration-300 flex items-center justify-center gap-2"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -61,8 +78,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
           Thêm giỏ hàng
         </button>
       </div>
-    </div>
+    </a>
   );
 };
 
 export default ProductCard;
+

@@ -126,6 +126,7 @@ class ApiService {
       isNew: !!p.is_new,
       isSale: !!p.is_sale,
       variants,
+      kind: p.kind as 'single' | 'combo' | undefined,
     };
   }
 
@@ -154,6 +155,36 @@ class ApiService {
     } catch {
       return this.products;
     }
+  }
+
+  async getProductDetail(id: string): Promise<Product> {
+    try {
+      const res = await fetch(`${this.userBaseUrl}/products/${Number(id)}`);
+      if (!res.ok) throw new Error('API Error');
+      const data: any = await res.json();
+      const product = this.mapBackendProductToFrontend(data);
+      // attach raw combo_items if present; detail page may enrich further
+      if (Array.isArray(data.combo_items)) {
+        product.comboItems = data.combo_items.map((ci: any) => ({
+          combo_product_id: ci.combo_product_id,
+          component_variant_id: ci.component_variant_id,
+          quantity: ci.quantity,
+        }));
+      }
+      return product;
+    } catch {
+      const fallback = this.products.find((p) => p.id === id);
+      if (!fallback) {
+        throw new Error('Product not found');
+      }
+      return fallback;
+    }
+  }
+
+  async getComboItems(productId: string) {
+    const res = await fetch(`${this.userBaseUrl}/products/${Number(productId)}/combo-items`);
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
   }
 
   async adminListProducts(include_inactive: boolean = true): Promise<Product[]> {

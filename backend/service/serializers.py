@@ -79,6 +79,14 @@ def serialize_product(product) -> dict:
             for img in imgs
         ],
         "variants": [serialize_variant(v) for v in getattr(product, "variants", [])],
+        "combo_items": [
+            {
+                "combo_product_id": getattr(ci, "combo_product_id", None),
+                "component_variant_id": getattr(ci, "component_variant_id", None),
+                "quantity": getattr(ci, "quantity", 1),
+            }
+            for ci in getattr(product, "combo_components", []) or []
+        ],
     }
 
 

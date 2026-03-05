@@ -25,6 +25,14 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     return serialize_product(product)
 
 
+@router.get("/products/{product_id}/combo-items")
+def get_product_combo_items(product_id: int, db: Session = Depends(get_db)):
+    items = AdminService.list_combo_items(db, product_id)
+    if items is None:
+        raise HTTPException(status_code=404, detail="Product not found or not combo")
+    return items
+
+
 @router.get("/banners")
 def get_banners(slot: str | None = None, db: Session = Depends(get_db)):
     # User-facing banners: only active banners

@@ -105,6 +105,40 @@ class AdminApiService {
     const data: { url: string } = await res.json();
     return data.url;
   }
+
+  async listComboItems(productId: number) {
+    const res = await fetch(`${this.baseUrl}/products/${productId}/combo-items`);
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
+  }
+
+  async addComboItem(productId: number, component_variant_id: number, quantity: number) {
+    const res = await fetch(`${this.baseUrl}/products/${productId}/combo-items`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ component_variant_id, quantity }),
+    });
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
+  }
+
+  async updateComboItem(productId: number, component_variant_id: number, quantity: number) {
+    const res = await fetch(`${this.baseUrl}/products/${productId}/combo-items/${component_variant_id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity }),
+    });
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
+  }
+
+  async deleteComboItem(productId: number, component_variant_id: number) {
+    const res = await fetch(`${this.baseUrl}/products/${productId}/combo-items/${component_variant_id}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
+  }
 }
 
 export const api = new AdminApiService();

@@ -32,12 +32,24 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
         setImageIndex(0);
       }}
     >
-      <div className="relative aspect-[4/5] overflow-hidden">
-        <img
-          src={product.images[imageIndex] || product.images[0]}
-          alt={product.name}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-        />
+      <div className="relative aspect-[3/4] md:aspect-[4/5] overflow-hidden">
+        <div className="w-full h-full">
+          <div
+            className="flex h-full w-full transition-transform duration-500 ease-in-out group-hover:scale-110"
+            style={{ transform: `translateX(-${imageIndex * 100}%)` }}
+          >
+            {(product.images.length > 0 ? product.images : ['https://picsum.photos/600/800?product']).map(
+              (src, idx) => (
+                <img
+                  key={idx}
+                  src={src}
+                  alt={product.name}
+                  className="w-full h-full object-cover flex-shrink-0"
+                />
+              ),
+            )}
+          </div>
+        </div>
         {product.isSale && (
           <span className="absolute top-3 left-3 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full uppercase">
             Sale
@@ -51,15 +63,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
       </div>
 
       <div className="p-4 flex flex-col flex-grow">
-        <h3 className="text-gray-800 font-semibold mb-2 group-hover:text-pink-500 transition-colors truncate">
+        <h3 className="text-gray-800 font-semibold mb-1 group-hover:text-pink-500 transition-colors line-clamp-2">
           {product.name}
         </h3>
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-pink-500 font-bold text-lg">
+        <div className="flex items-center gap-1.5 mb-3">
+          <span className="text-pink-500 font-bold text-base md:text-lg">
             {product.discountPrice ? product.discountPrice.toLocaleString() : product.price.toLocaleString()}đ
           </span>
           {product.discountPrice && (
-            <span className="text-gray-400 text-sm line-through">
+            <span className="text-gray-400 text-xs md:text-sm line-through">
               {product.price.toLocaleString()}đ
             </span>
           )}

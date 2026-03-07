@@ -119,6 +119,16 @@ const ProductManagement: React.FC = () => {
       ? selectedComboProductIdsFromCombo.length
       : selectedComboProductIds.length;
 
+  // Tổng giá box/combo: khi tạo = tổng giá sản phẩm đã chọn, khi sửa = giá từ server
+  const comboTotalPrice = useMemo(() => {
+    if (editing?.kind === 'combo') return editing.base_price ?? 0;
+    return selectedComboProductIds.reduce((sum, pid) => {
+      const p = products.find((x) => String(x.id) === pid);
+      if (!p) return sum;
+      return sum + Math.round(p.discount_price ?? p.base_price);
+    }, 0);
+  }, [editing?.kind, editing?.base_price, selectedComboProductIds, products]);
+
   const toggleProductForCombo = async (productId: string) => {
     if (editing?.kind === 'combo') {
       const p = products.find((x) => String(x.id) === productId);
@@ -678,6 +688,137 @@ const ProductManagement: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Layout giống Bộ sưu tập: Tên, Mô tả ngắn, URL ảnh bìa, Tổng giá, Thanh khuyến mãi */}
+              {isComboCategory(form.category_id) ? (
+                <>
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-widest">Tên box quà / Combo</label>
+                      <input
+                        type="text"
+                        className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-pink-500"
+                        value={form.name}
+                        onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+                        placeholder="VD: Box quà sơ sinh cao cấp"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-widest">Mô tả ngắn</label>
+                      <textarea
+                        className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-pink-500 h-32 resize-none"
+                        value={form.description}
+                        onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+                        placeholder="Mô tả ngắn về box quà / combo"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-widest">URL ảnh bìa</label>
+                      <div className="flex gap-3">
+                        <input
+                          type="text"
+                          className="flex-1 bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-pink-500"
+                          value={imageUrlDraft || (editing?.images?.[0]?.image_url ?? '')}
+                          onChange={(e) => setImageUrlDraft(e.target.value)}
+                          placeholder="https://..."
+                        />
+                        <label className="px-4 py-3 bg-gray-900 text-white rounded-2xl font-bold cursor-pointer hover:bg-gray-800 self-center whitespace-nowrap">
+                          {uploading ? 'Đang up...' : 'Upload'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) void handleUploadAndSet(f);
+                              e.currentTarget.value = '';
+                            }}
+                            disabled={uploading}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    <div className="bg-pink-50 border border-pink-100 rounded-2xl px-6 py-4">
+                      <div className="text-sm font-bold text-gray-600 uppercase tracking-widest mb-1">Tổng giá (từ sản phẩm đã chọn)</div>
+                      <div className="text-2xl font-black text-pink-600">{comboTotalPrice.toLocaleString()}đ</div>
+                      {selectedComboCount === 0 && (
+                        <p className="text-xs text-gray-500 mt-1">Chọn sản phẩm bên phải để tính giá.</p>
+                      )}
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                      <div className="text-sm font-bold text-amber-800 mb-3 uppercase tracking-widest">Tạo khuyến mãi</div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-bold text-gray-600 mb-1">Giá khuyến mãi (đ) – tuỳ chọn</label>
+                          <input
+                            type="number"
+                            min={0}
+                            className="w-full bg-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500 font-bold border border-amber-100"
+                            value={form.discount_price ?? ''}
+                            onChange={(e) => setForm((s) => ({ ...s, discount_price: e.target.value === '' ? null : Number(e.target.value) }))}
+                            placeholder={comboTotalPrice > 0 ? `VD: ${Math.round(comboTotalPrice * 0.9).toLocaleString()}` : ''}
+                          />
+                        </div>
+                        <p className="text-xs text-gray-500">Để trống nếu không giảm giá. Khi có giá KM, khách sẽ thấy giá này thay vì tổng giá.</p>
+                        <div className="flex flex-wrap gap-3 pt-2">
+                          <label className="flex items-center gap-2 bg-white rounded-xl px-4 py-2 border border-amber-100 font-bold text-gray-700">
+                            <input type="checkbox" checked={form.is_active} onChange={(e) => setForm((s) => ({ ...s, is_active: e.target.checked }))} className="w-4 h-4 accent-pink-500" />
+                            Active
+                          </label>
+                          <label className="flex items-center gap-2 bg-white rounded-xl px-4 py-2 border border-amber-100 font-bold text-gray-700">
+                            <input type="checkbox" checked={form.is_sale} onChange={(e) => setForm((s) => ({ ...s, is_sale: e.target.checked }))} className="w-4 h-4 accent-pink-500" />
+                            Sale
+                          </label>
+                          <label className="flex items-center gap-2 bg-white rounded-xl px-4 py-2 border border-amber-100 font-bold text-gray-700">
+                            <input type="checkbox" checked={form.is_hot} onChange={(e) => setForm((s) => ({ ...s, is_hot: e.target.checked }))} className="w-4 h-4 accent-pink-500" />
+                            Hot
+                          </label>
+                          <label className="flex items-center gap-2 bg-white rounded-xl px-4 py-2 border border-amber-100 font-bold text-gray-700">
+                            <input type="checkbox" checked={form.is_new} onChange={(e) => setForm((s) => ({ ...s, is_new: e.target.checked }))} className="w-4 h-4 accent-pink-500" />
+                            New
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-4 uppercase tracking-widest">Chọn sản phẩm ({selectedComboCount})</label>
+                    <div className="bg-gray-50 rounded-[2rem] p-4 h-[400px] overflow-y-auto space-y-2 border border-gray-100">
+                      {productsAvailableForCombo.length === 0 ? (
+                        <p className="text-sm text-gray-500 py-4">Chưa có sản phẩm đơn nào (có size/màu) trong hệ thống. Hãy thêm sản phẩm đơn trước.</p>
+                      ) : (
+                        productsAvailableForCombo.map((p) => (
+                          <div
+                            key={p.id}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => void toggleProductForCombo(String(p.id))}
+                            onKeyDown={(e) => e.key === 'Enter' && void toggleProductForCombo(String(p.id))}
+                            className={`flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all ${
+                              isProductSelectedForCombo(String(p.id)) ? 'bg-pink-100 border border-pink-200' : 'bg-white border border-transparent hover:border-gray-200'
+                            }`}
+                          >
+                            <img
+                              src={absUrl(p.primary_image_url || p.images?.[0]?.image_url) || 'https://picsum.photos/80/80'}
+                              className="w-10 h-10 rounded-lg object-cover bg-gray-100"
+                              alt=""
+                            />
+                            <div className="flex-grow min-w-0">
+                              <p className="text-sm font-bold text-gray-800 truncate">{p.name}</p>
+                              <p className="text-xs text-gray-400">{Math.round(p.discount_price ?? p.base_price).toLocaleString()}đ</p>
+                            </div>
+                            {isProductSelectedForCombo(String(p.id)) && (
+                              <svg className="w-5 h-5 text-pink-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
+                              </svg>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -726,27 +867,10 @@ const ProductManagement: React.FC = () => {
                     <label className="block text-xs font-black text-gray-400 uppercase mb-2">Giá gốc</label>
                     <input
                       type="number"
-                      className={`w-full rounded-xl px-4 py-3 outline-none font-bold ${
-                        isComboCategory(form.category_id)
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'bg-gray-50 focus:ring-2 focus:ring-pink-500'
-                      }`}
+                      className="w-full rounded-xl px-4 py-3 outline-none font-bold bg-gray-50 focus:ring-2 focus:ring-pink-500"
                       value={form.base_price}
-                      onChange={(e) =>
-                        setForm((s) => ({
-                          ...s,
-                          base_price: isComboCategory(form.category_id)
-                            ? s.base_price
-                            : Number(e.target.value),
-                        }))
-                      }
-                      readOnly={isComboCategory(form.category_id)}
+                      onChange={(e) => setForm((s) => ({ ...s, base_price: Number(e.target.value) }))}
                     />
-                    {isComboCategory(form.category_id) && (
-                      <p className="mt-1 text-[11px] text-gray-400">
-                        Giá sẽ được tự động tính theo tổng giá các sản phẩm thành phần trong combo.
-                      </p>
-                    )}
                   </div>
                   <div>
                     <label className="block text-xs font-black text-gray-400 uppercase mb-2">Giá khuyến mãi (tuỳ chọn)</label>
@@ -899,54 +1023,6 @@ const ProductManagement: React.FC = () => {
                         </div>
                       )}
                 </div>
-
-                {isComboCategory(form.category_id) && (
-                  <div className="bg-gray-50 rounded-2xl p-5">
-                    <label className="block text-sm font-bold text-gray-700 mb-4 uppercase tracking-widest">
-                      Chọn sản phẩm ({selectedComboCount})
-                    </label>
-                    <p className="text-xs text-gray-500 mb-3">
-                      Bấm vào từng sản phẩm để thêm/bỏ khỏi Box quà / Combo. Giá sẽ tự động tính theo tổng sản phẩm thành phần.
-                    </p>
-                    <div className="bg-gray-50 rounded-[2rem] p-4 h-[320px] overflow-y-auto space-y-2 border border-gray-100">
-                      {productsAvailableForCombo.length === 0 ? (
-                        <p className="text-sm text-gray-500 py-4">Chưa có sản phẩm đơn nào (có size/màu) để chọn.</p>
-                      ) : (
-                        productsAvailableForCombo.map((p) => (
-                          <div
-                            key={p.id}
-                            role="button"
-                            tabIndex={0}
-                            onClick={() => void toggleProductForCombo(String(p.id))}
-                            onKeyDown={(e) => e.key === 'Enter' && void toggleProductForCombo(String(p.id))}
-                            className={`flex items-center gap-4 p-3 rounded-2xl cursor-pointer transition-all ${
-                              isProductSelectedForCombo(String(p.id))
-                                ? 'bg-pink-100 border border-pink-200'
-                                : 'bg-white border border-transparent hover:border-gray-200'
-                            }`}
-                          >
-                            <img
-                              src={absUrl(p.primary_image_url || p.images?.[0]?.image_url) || 'https://picsum.photos/80/80'}
-                              className="w-10 h-10 rounded-lg object-cover bg-gray-100"
-                              alt=""
-                            />
-                            <div className="flex-grow min-w-0">
-                              <p className="text-sm font-bold text-gray-800 truncate">{p.name}</p>
-                              <p className="text-xs text-gray-400">
-                                {Math.round(p.discount_price ?? p.base_price).toLocaleString()}đ
-                              </p>
-                            </div>
-                            {isProductSelectedForCombo(String(p.id)) && (
-                              <svg className="w-5 h-5 text-pink-500 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />
-                              </svg>
-                            )}
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {!isComboCategory(form.category_id) && (
                 <div className="bg-gray-50 rounded-2xl p-5">
@@ -1185,6 +1261,9 @@ const ProductManagement: React.FC = () => {
                 )}
 
             </div>
+                </>
+              )}
+
             </div>
 
             {error && (

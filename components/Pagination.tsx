@@ -10,7 +10,30 @@ interface PaginationProps {
 const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPageChange }) => {
   if (totalPages <= 1) return null;
 
-  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  const createPageItems = () => {
+    const items: (number | 'ellipsis')[] = [];
+    const maxVisible = 5; // số trang xung quanh current
+
+    if (totalPages <= maxVisible + 2) {
+      for (let i = 1; i <= totalPages; i += 1) items.push(i);
+      return items;
+    }
+
+    const start = Math.max(2, currentPage - 1);
+    const end = Math.min(totalPages - 1, currentPage + 1);
+
+    items.push(1);
+    if (start > 2) items.push('ellipsis');
+
+    for (let i = start; i <= end; i += 1) items.push(i);
+
+    if (end < totalPages - 1) items.push('ellipsis');
+    items.push(totalPages);
+
+    return items;
+  };
+
+  const pageItems = createPageItems();
 
   return (
     <div className="flex items-center justify-center gap-2 mt-12">
@@ -24,19 +47,25 @@ const Pagination: React.FC<PaginationProps> = ({ currentPage, totalPages, onPage
         </svg>
       </button>
 
-      {pages.map((page) => (
-        <button
-          key={page}
-          onClick={() => onPageChange(page)}
-          className={`w-10 h-10 rounded-xl font-bold transition-all ${
-            currentPage === page
-              ? 'bg-pink-500 text-white shadow-lg shadow-pink-200'
-              : 'bg-white border border-gray-100 text-gray-500 hover:border-pink-200 hover:text-pink-500'
-          }`}
-        >
-          {page}
-        </button>
-      ))}
+      {pageItems.map((item, index) =>
+        item === 'ellipsis' ? (
+          <span key={`e-${index}`} className="px-2 text-gray-400 select-none">
+            ...
+          </span>
+        ) : (
+          <button
+            key={item}
+            onClick={() => onPageChange(item)}
+            className={`w-9 h-9 md:w-10 md:h-10 rounded-xl text-sm md:text-base font-bold transition-all ${
+              currentPage === item
+                ? 'bg-pink-500 text-white shadow-lg shadow-pink-200'
+                : 'bg-white border border-gray-100 text-gray-500 hover:border-pink-200 hover:text-pink-500'
+            }`}
+          >
+            {item}
+          </button>
+        ),
+      )}
 
       <button
         onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}

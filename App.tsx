@@ -1,10 +1,29 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Component } from 'react';
 import Navbar from './user/Navbar';
 import HomePage from './user/HomePage';
 import ProductPage from './user/ProductPage';
 import CollectionPage from './user/CollectionPage';
 import ProductDetailPage from './user/ProductDetailPage';
+
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; message?: string }> {
+  state = { hasError: false, message: '' };
+  static getDerivedStateFromError(error: unknown) {
+    return { hasError: true, message: error instanceof Error ? error.message : String(error) };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+          <h2 className="text-2xl font-black text-gray-800 mb-2">Đã xảy ra lỗi</h2>
+          <p className="text-gray-500 mb-4">{this.state.message}</p>
+          <a href="#/" className="text-pink-500 font-bold hover:underline">Về trang chủ</a>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const Footer: React.FC = () => (
   <footer className="bg-gray-900 text-white pt-20 pb-10">
@@ -64,7 +83,11 @@ const App: React.FC = () => {
 
     if (path.startsWith('#/product/')) {
       const id = path.split('/')[2] || '';
-      return <ProductDetailPage productId={id} />;
+      return (
+        <ErrorBoundary>
+          <ProductDetailPage productId={id} />
+        </ErrorBoundary>
+      );
     }
 
     switch (path) {

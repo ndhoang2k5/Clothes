@@ -7,7 +7,7 @@ import FilterSidebar from '../components/FilterSidebar';
 import Pagination from '../components/Pagination';
 import { CATEGORIES } from '../constants';
 
-const ITEMS_PER_PAGE = 6;
+const ITEMS_PER_PAGE = 12;
 
 const ProductPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -33,9 +33,16 @@ const ProductPage: React.FC = () => {
     });
   }, []);
 
-  // Reset to page 1 when filters or category change
+  // Reset to page 1 when filters or category change and scroll user back to top of list
   useEffect(() => {
     setCurrentPage(1);
+    try {
+      const el = document.getElementById('product-list-top');
+      const top = el ? el.offsetTop - 80 : 0;
+      window.scrollTo({ top, behavior: 'smooth' });
+    } catch {
+      // ignore scroll errors (SSR / tests)
+    }
   }, [filters, activeCategory]);
 
   // Compute available filter options based on all products
@@ -110,7 +117,7 @@ const ProductPage: React.FC = () => {
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 py-12 mb-10">
+      <div className="bg-white border-b border-gray-100 py-10 md:py-12 mb-8 md:mb-10">
         <div className="max-w-7xl mx-auto px-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
@@ -129,10 +136,10 @@ const ProductPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 pb-20">
-        <div className="flex flex-col lg:flex-row gap-10">
+      <div id="product-list-top" className="max-w-7xl mx-auto px-4 pb-20">
+        <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
           {/* Sidebar */}
-          <aside className="w-full lg:w-64 flex-shrink-0">
+          <aside className="w-full lg:basis-[20%] lg:max-w-[240px] xl:max-w-[260px] flex-shrink-0">
             <FilterSidebar 
               filters={filters} 
               onFilterChange={setFilters} 
@@ -141,16 +148,16 @@ const ProductPage: React.FC = () => {
           </aside>
 
           {/* Product Grid */}
-          <div className="flex-grow">
+          <div className="flex-1 min-w-0">
             {loading ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
                 {[1, 2, 3, 4, 5, 6].map(i => (
-                  <div key={i} className="bg-white rounded-2xl h-[400px] animate-pulse border border-gray-100"></div>
+                  <div key={i} className="bg-white rounded-2xl h-[260px] md:h-[320px] animate-pulse border border-gray-100"></div>
                 ))}
               </div>
             ) : paginatedProducts.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   {paginatedProducts.map(product => (
                     <ProductCard key={product.id} product={product} />
                   ))}

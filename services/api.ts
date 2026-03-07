@@ -80,9 +80,16 @@ const INITIAL_ORDERS: Order[] = [
 ];
 
 class ApiService {
-  private backendOrigin = 'http://localhost:8888';
-  private adminBaseUrl = `${this.backendOrigin}/api/admin`;
-  private userBaseUrl = `${this.backendOrigin}/api/user`;
+  /** Backend port: khớp với docker-compose backend ports "8888:8000" (host:container) */
+  private readonly backendPort = 8888;
+  private getBackendOrigin(): string {
+    if (typeof window !== 'undefined') {
+      return `${window.location.protocol}//${window.location.hostname}:${this.backendPort}`;
+    }
+    return `http://localhost:${this.backendPort}`;
+  }
+  private get adminBaseUrl() { return `${this.getBackendOrigin()}/api/admin`; }
+  private get userBaseUrl() { return `${this.getBackendOrigin()}/api/user`; }
 
   private products: Product[] = JSON.parse(localStorage.getItem('unbee_products') || JSON.stringify(INITIAL_PRODUCTS));
   private banners: Banner[] = JSON.parse(localStorage.getItem('unbee_banners') || JSON.stringify(INITIAL_BANNERS));
@@ -294,12 +301,19 @@ class ApiService {
     return res.json();
   }
 
-  // Banners
+  // Banners & images: luôn trả về URL tuyệt đối để ảnh upload hiển thị đúng bên user
   private toAbsoluteUrl(url: string) {
-    if (!url) return url;
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    if (url.startsWith('/')) return `${this.backendOrigin}${url}`;
-    return url;
+    if (!url || typeof url !== 'string') return url || '';
+    const u = String(url).trim();
+    if (u.startsWith('http://') || u.startsWith('https://')) return u;
+    const origin = this.getBackendOrigin();
+    return `${origin}${u.startsWith('/') ? u : `/${u}`}`;
+  }
+
+  /** Dùng cho ảnh banner trên trang user: path hoặc full URL → luôn trả full URL. */
+  getImageUrl(pathOrUrl: string | null | undefined): string {
+    if (pathOrUrl == null || String(pathOrUrl).trim() === '') return '';
+    return this.toAbsoluteUrl(String(pathOrUrl).trim());
   }
 
   async getBanners(): Promise<Banner[]> {
@@ -327,7 +341,10 @@ class ApiService {
     return data
       .filter((b) => b.is_active)
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      .map((b) => ({ ...b, image_url: this.toAbsoluteUrl(b.image_url) }));
+      .map((b) => {
+        const pathOrUrl = (b as { image_url?: string }).image_url ?? (b as { imageUrl?: string }).imageUrl ?? '';
+        return { ...b, image_url: this.toAbsoluteUrl(pathOrUrl) };
+      });
   }
 
   async adminListBanners(params?: { slot?: BannerSlot | string; active_only?: boolean }): Promise<AdminBanner[]> {

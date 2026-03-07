@@ -124,12 +124,40 @@ def serialize_order(order) -> dict:
     }
 
 
+def _normalize_banner_image_url(url: Any) -> str:
+    """Chuẩn hóa URL thành path (dùng khi lưu DB)."""
+    if not url or not isinstance(url, str):
+        return ""
+    u = url.strip()
+    if u.startswith("http://") or u.startswith("https://"):
+        try:
+            from urllib.parse import urlparse
+            u = urlparse(u).path or u
+        except Exception:
+            pass
+    return u if u.startswith("/") else f"/{u}"
+
+
+def _banner_image_url_for_response(url: Any) -> str:
+    """Trả về path (/static/uploads/...) cho client; nếu không chuẩn thì vẫn trả giá trị gốc (path/URL) để ảnh vẫn có thể hiển thị."""
+    if url is None:
+        return ""
+    raw = (url.strip() if isinstance(url, str) else str(url)).strip()
+    if not raw:
+        return ""
+    path = _normalize_banner_image_url(raw)
+    if path and "/static/uploads/" in path:
+        return path
+    return raw
+
+
 def serialize_banner(banner) -> dict:
+    raw_image = getattr(banner, "image_url", None) or ""
     return {
         "id": banner.id,
         "slot": banner.slot,
         "sort_order": banner.sort_order,
-        "image_url": banner.image_url,
+        "image_url": _banner_image_url_for_response(raw_image),
         "title": banner.title,
         "subtitle": getattr(banner, "subtitle", None),
         "link_url": banner.link_url,

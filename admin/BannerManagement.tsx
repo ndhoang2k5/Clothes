@@ -4,11 +4,13 @@ import { api } from '../services/api';
 import type { AdminBanner, BannerSlot } from '../types';
 
 const SLOT_OPTIONS: Array<{ value: BannerSlot; label: string; desc: string }> = [
-  { value: 'home_hero', label: 'Home Hero', desc: 'Ảnh bìa lớn đầu trang chủ' },
-  { value: 'home_promo', label: 'Home Promo', desc: 'Banner khuyến mãi' },
-  { value: 'home_category_feature', label: 'Home Category Feature', desc: 'Banner/ảnh cho danh mục nổi bật' },
-  { value: 'footer_banner', label: 'Footer Banner', desc: 'Banner cuối trang' },
+  { value: 'home_hero', label: 'Ảnh bìa trang chủ', desc: 'Ảnh bìa lớn đầu trang (carousel)' },
+  { value: 'home_promo', label: 'Banner khuyến mãi', desc: 'Banner ưu đãi giữa trang' },
+  { value: 'home_category_feature', label: 'Danh mục nổi bật', desc: 'Banner/ảnh cho danh mục nổi bật' },
+  { value: 'footer_banner', label: 'Banner chân trang', desc: 'Banner cuối trang' },
 ];
+
+const getSlotLabel = (value: string) => SLOT_OPTIONS.find((o) => o.value === value)?.label ?? value;
 
 const BannerManagement: React.FC = () => {
   const [slot, setSlot] = useState<BannerSlot>('home_hero');
@@ -87,11 +89,21 @@ const BannerManagement: React.FC = () => {
     setError(null);
   };
 
+  const toImagePath = (url: string) => {
+    if (!url?.trim()) return url || '';
+    const u = url.trim();
+    if (u.startsWith('http://') || u.startsWith('https://')) {
+      try { return new URL(u).pathname; } catch { return u; }
+    }
+    return u.startsWith('/') ? u : `/${u}`;
+  };
+
   const handleSave = async () => {
-    if (!form.image_url) {
+    if (!form.image_url?.trim()) {
       setError('Bạn cần upload hoặc nhập URL ảnh.');
       return;
     }
+    const imagePath = toImagePath(form.image_url);
     setSaving(true);
     setError(null);
     try {
@@ -99,7 +111,7 @@ const BannerManagement: React.FC = () => {
         await api.adminUpdateBanner(editing.id, {
           slot: form.slot,
           sort_order: form.sort_order,
-          image_url: form.image_url,
+          image_url: imagePath,
           title: form.title || null,
           subtitle: form.subtitle || null,
           link_url: form.link_url || null,
@@ -109,7 +121,7 @@ const BannerManagement: React.FC = () => {
         await api.adminCreateBanner({
           slot: form.slot,
           sort_order: form.sort_order,
-          image_url: form.image_url,
+          image_url: imagePath,
           title: form.title || null,
           subtitle: form.subtitle || null,
           link_url: form.link_url || null,
@@ -133,6 +145,16 @@ const BannerManagement: React.FC = () => {
       await fetchBanners();
     } catch (e: any) {
       setError(e?.message || 'Xóa banner thất bại');
+    }
+  };
+
+  const handleToggleActive = async (b: AdminBanner) => {
+    setError(null);
+    try {
+      await api.adminUpdateBanner(b.id, { is_active: !b.is_active });
+      await fetchBanners();
+    } catch (e: any) {
+      setError(e?.message || 'Đổi trạng thái thất bại');
     }
   };
 
@@ -169,7 +191,7 @@ const BannerManagement: React.FC = () => {
       <div className="bg-white border border-gray-100 rounded-[2rem] p-6 mb-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-end">
           <div>
-            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Slot</label>
+            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Vị trí banner</label>
             <select
               className="w-full bg-gray-50 rounded-2xl px-4 py-3 font-bold outline-none focus:ring-2 focus:ring-pink-500"
               value={slot}
@@ -182,17 +204,24 @@ const BannerManagement: React.FC = () => {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-3">
-            <input
-              id="activeOnly"
-              type="checkbox"
-              checked={activeOnly}
-              onChange={(e) => setActiveOnly(e.target.checked)}
-              className="w-5 h-5 accent-pink-500"
-            />
-            <label htmlFor="activeOnly" className="font-bold text-gray-700">
-              Chỉ hiển thị banner đang bật (is_active)
-            </label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-gray-500 uppercase tracking-wider mr-1">Trạng thái:</span>
+            <div className="inline-flex p-1 bg-gray-100 rounded-xl">
+              <button
+                type="button"
+                onClick={() => setActiveOnly(false)}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${!activeOnly ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Tất cả
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveOnly(true)}
+                className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeOnly ? 'bg-white text-pink-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+              >
+                Chỉ đang hiển thị
+              </button>
+            </div>
           </div>
           <div className="text-sm text-gray-500 lg:text-right">
             {loading ? 'Đang tải...' : `Có ${banners.length} banner`}
@@ -218,16 +247,14 @@ const BannerManagement: React.FC = () => {
               <div className="flex-grow w-full">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-gray-100 text-gray-700 rounded">
-                    {b.slot}
+                    {getSlotLabel(String(b.slot))}
                   </span>
                   <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-pink-100 text-pink-600 rounded">
-                    sort {b.sort_order}
+                    Thứ tự {b.sort_order}
                   </span>
-                  {!b.is_active && (
-                    <span className="text-[10px] font-black uppercase px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded">
-                      tắt
-                    </span>
-                  )}
+                  <span className={`text-[10px] font-bold uppercase px-2.5 py-1 rounded-full ${b.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'}`}>
+                    {b.is_active ? 'Đang hiển thị' : 'Đang ẩn'}
+                  </span>
                   <h3 className="font-black text-gray-900">{b.title || '(Không tiêu đề)'}</h3>
                 </div>
                 {b.subtitle && <p className="text-sm text-gray-500 mb-1">{b.subtitle}</p>}
@@ -236,7 +263,25 @@ const BannerManagement: React.FC = () => {
                   <p className="text-xs text-pink-500 font-bold mt-1 truncate">Link: {b.link_url}</p>
                 )}
               </div>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex p-0.5 bg-gray-100 rounded-xl mr-2">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(b)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${b.is_active ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                    title={b.is_active ? 'Tắt hiển thị' : 'Bật hiển thị'}
+                  >
+                    Bật
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(b)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-bold transition-all ${!b.is_active ? 'bg-gray-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                    title={!b.is_active ? 'Bật hiển thị' : 'Ẩn banner'}
+                  >
+                    Tắt
+                  </button>
+                </div>
                 <button
                   onClick={() => openEdit(b)}
                   className="p-3 text-gray-500 hover:text-pink-500 hover:bg-pink-50 rounded-xl transition-all"
@@ -270,7 +315,7 @@ const BannerManagement: React.FC = () => {
             <h3 className="text-2xl font-black mb-6">{editing ? 'Sửa Banner' : 'Tạo Banner'}</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Slot</label>
+                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Vị trí hiển thị</label>
                 <select
                   className="w-full bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500 font-bold"
                   value={form.slot}
@@ -278,32 +323,37 @@ const BannerManagement: React.FC = () => {
                 >
                   {SLOT_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>
-                      {o.label}
+                      {o.label} — {o.desc}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase mb-2">Sort order</label>
-                  <input
-                    type="number"
-                    className="w-full bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500 font-bold"
-                    value={form.sort_order}
-                    onChange={(e) => setForm((s) => ({ ...s, sort_order: Number(e.target.value) }))}
-                  />
-                </div>
-                <div className="flex items-center gap-3 pt-6">
-                  <input
-                    id="isActive"
-                    type="checkbox"
-                    checked={form.is_active}
-                    onChange={(e) => setForm((s) => ({ ...s, is_active: e.target.checked }))}
-                    className="w-5 h-5 accent-pink-500"
-                  />
-                  <label htmlFor="isActive" className="font-bold text-gray-700">
-                    Đang bật
-                  </label>
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Thứ tự (sort)</label>
+                <input
+                  type="number"
+                  className="w-full bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500 font-bold"
+                  value={form.sort_order}
+                  onChange={(e) => setForm((s) => ({ ...s, sort_order: Number(e.target.value) }))}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Trạng thái hiển thị</label>
+                <div className="inline-flex p-1 bg-gray-100 rounded-xl w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setForm((s) => ({ ...s, is_active: true }))}
+                    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${form.is_active ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                  >
+                    Đang hiển thị
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm((s) => ({ ...s, is_active: false }))}
+                    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${!form.is_active ? 'bg-gray-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                  >
+                    Đang ẩn
+                  </button>
                 </div>
               </div>
               <div>

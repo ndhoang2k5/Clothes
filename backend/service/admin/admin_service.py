@@ -2,6 +2,7 @@
 from sqlalchemy.orm import Session
 from ...entities import models
 from ..serializers import serialize_banner, serialize_order, serialize_product, serialize_category
+from ..serializers import _normalize_banner_image_url
 from sqlalchemy.orm import selectinload
 
 class AdminService:
@@ -308,7 +309,10 @@ class AdminService:
 
     @staticmethod
     def create_banner(db: Session, data: dict):
-        banner = models.Banner(**data)
+        payload = dict(data)
+        if "image_url" in payload and payload["image_url"]:
+            payload["image_url"] = _normalize_banner_image_url(payload["image_url"])
+        banner = models.Banner(**payload)
         db.add(banner)
         db.commit()
         db.refresh(banner)
@@ -321,6 +325,8 @@ class AdminService:
             return None
         for k, v in data.items():
             if hasattr(banner, k):
+                if k == "image_url" and v:
+                    v = _normalize_banner_image_url(v)
                 setattr(banner, k, v)
         banner.updated_at = __import__("datetime").datetime.utcnow()
         db.commit()

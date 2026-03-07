@@ -1,5 +1,5 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
 import type { AdminBanner, BannerSlot, Product } from '../types';
 import { CATEGORIES, TRUST_FEATURES } from '../constants';
@@ -16,30 +16,41 @@ const FALLBACK_HERO: AdminBanner = {
   is_active: true,
 };
 
+const BACKEND_PORT = 8888;
+const PROMO_PLACEHOLDER_SVG = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="400" viewBox="0 0 800 400"><rect fill="%23fce7f3" width="800" height="400"/><text fill="%239ca3af" x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-size="18">Ưu đãi</text></svg>');
+
+function buildPromoImageUrl(pathOrUrl: string | undefined | null): string {
+  if (!pathOrUrl || !String(pathOrUrl).trim()) return '';
+  const s = String(pathOrUrl).trim();
+  if (s.startsWith('http://') || s.startsWith('https://')) return s;
+  const origin = typeof window !== 'undefined'
+    ? `${window.location.protocol}//${window.location.hostname}:${BACKEND_PORT}`
+    : `http://localhost:${BACKEND_PORT}`;
+  return `${origin}${s.startsWith('/') ? '' : '/'}${s}`;
+}
+
 const HomePage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [heroBanners, setHeroBanners] = useState<AdminBanner[]>([]);
   const [promoBanners, setPromoBanners] = useState<AdminBanner[]>([]);
   const [categoryBanners, setCategoryBanners] = useState<AdminBanner[]>([]);
-  const [footerBanners, setFooterBanners] = useState<AdminBanner[]>([]);
   const [heroIndex, setHeroIndex] = useState(0);
+  const [promoIndex, setPromoIndex] = useState(0);
   const [activeFeaturedTab, setActiveFeaturedTab] = useState<'new' | 'hot' | 'accessory' | 'all'>('new');
-
-  const currentHero = useMemo(() => heroBanners[heroIndex] || null, [heroBanners, heroIndex]);
 
   useEffect(() => {
     api.getProducts().then(setProducts);
 
     const load = async () => {
-      const slots: BannerSlot[] = ['home_hero', 'home_promo', 'home_category_feature', 'footer_banner'];
-      const [hero, promo, cat, footer] = await Promise.all(
+      const slots: BannerSlot[] = ['home_hero', 'home_promo', 'home_category_feature'];
+      const [hero, promo, cat] = await Promise.all(
         slots.map((s) => api.userListBannersBySlot(s).catch(() => []))
       );
       setHeroBanners(hero.length > 0 ? hero : [FALLBACK_HERO]);
       setPromoBanners(promo);
       setCategoryBanners(cat);
-      setFooterBanners(footer);
       setHeroIndex(0);
+      setPromoIndex(0);
     };
     void load();
   }, []);
@@ -52,44 +63,56 @@ const HomePage: React.FC = () => {
     return () => window.clearInterval(t);
   }, [heroBanners.length]);
 
+  useEffect(() => {
+    if (promoBanners.length <= 1) return;
+    const t = window.setInterval(() => {
+      setPromoIndex((i) => (i + 1) % promoBanners.length);
+    }, 6000);
+    return () => window.clearInterval(t);
+  }, [promoBanners.length]);
+
   return (
     <div className="pb-20">
-      {/* Hero Slider */}
+      {/* Hero Slider — carousel mượt */}
       <section className="relative h-[400px] md:h-[600px] bg-pink-50 overflow-hidden">
-        {currentHero && (
-          <div className="absolute inset-0">
-            <img 
-              src={currentHero.image_url} 
-              alt={currentHero.title || 'Unbee'}
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-transparent flex items-center px-12 md:px-32">
-              <div className="max-w-md">
-                <h1 className="text-4xl md:text-6xl font-black text-gray-800 mb-4">{currentHero.title || 'Unbee Baby'}</h1>
-                <p className="text-gray-700 text-lg mb-8">
-                  {currentHero.subtitle || 'Mềm mại như vòng tay mẹ, an toàn cho làn da nhạy cảm của bé yêu.'}
-                </p>
-                <a
-                  href={currentHero.link_url || '#/products'}
-                  className="inline-flex bg-pink-500 text-white px-8 py-4 rounded-full font-bold shadow-lg hover:bg-pink-600 transition-all"
-                >
-                  Mua ngay
-                </a>
+        <div
+          className="flex h-full transition-transform duration-500 ease-out"
+          style={{ width: `${heroBanners.length * 100}%`, transform: `translateX(-${heroIndex * (100 / heroBanners.length)}%)` }}
+        >
+          {heroBanners.map((slide, i) => (
+            <div key={slide.id ?? i} className="flex-shrink-0 h-full relative" style={{ width: `${100 / heroBanners.length}%` }}>
+              <img
+                src={slide.image_url}
+                alt={slide.title || 'Unbee'}
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-white/40 to-transparent flex items-center px-12 md:px-32">
+                <div className="max-w-md">
+                  <h1 className="text-4xl md:text-6xl font-black text-gray-800 mb-4">{slide.title || 'Unbee Baby'}</h1>
+                  <p className="text-gray-700 text-lg mb-8">
+                    {slide.subtitle || 'Mềm mại như vòng tay mẹ, an toàn cho làn da nhạy cảm của bé yêu.'}
+                  </p>
+                  <a
+                    href={slide.link_url || '#/products'}
+                    className="inline-flex bg-pink-500 text-white px-8 py-4 rounded-full font-bold shadow-lg hover:bg-pink-600 transition-all"
+                  >
+                    Mua ngay
+                  </a>
+                </div>
               </div>
             </div>
-
-            {heroBanners.length > 1 && (
-              <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
-                {heroBanners.map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setHeroIndex(i)}
-                    className={`h-2.5 rounded-full transition-all ${i === heroIndex ? 'w-10 bg-pink-500' : 'w-2.5 bg-white/70 hover:bg-white'}`}
-                    aria-label={`Hero ${i + 1}`}
-                  />
-                ))}
-              </div>
-            )}
+          ))}
+        </div>
+        {heroBanners.length > 1 && (
+          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+            {heroBanners.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setHeroIndex(i)}
+                className={`h-2.5 rounded-full transition-all duration-300 ${i === heroIndex ? 'w-10 bg-pink-500' : 'w-2.5 bg-white/70 hover:bg-white'}`}
+                aria-label={`Ảnh ${i + 1}`}
+              />
+            ))}
           </div>
         )}
       </section>
@@ -258,31 +281,73 @@ const HomePage: React.FC = () => {
         </section>
       )}
 
-      {/* Promo Banner */}
+      {/* Promo Banner — một ô, lần lượt đổi ảnh; không click */}
       <section className="max-w-7xl mx-auto px-4 py-16">
         {promoBanners.length > 0 ? (
-          <div className="rounded-[2rem] overflow-hidden relative border border-gray-100">
-            <img src={promoBanners[0].image_url} className="absolute inset-0 w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-r from-black/60 to-black/10" />
-            <div className="relative p-8 md:p-16 flex flex-col md:flex-row items-center gap-8">
-              <div className="text-white max-w-lg">
-                <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4 inline-block">
-                  Ưu đãi
-                </span>
-                <h2 className="text-4xl md:text-5xl font-black mb-4">
-                  {promoBanners[0].title || 'Ưu đãi hôm nay'}
-                </h2>
-                <p className="text-white/90 mb-8">
-                  {promoBanners[0].subtitle || 'Khuyến mãi đang diễn ra — bấm để xem ngay.'}
-                </p>
-                <a
-                  href={promoBanners[0].link_url || '#/products'}
-                  className="inline-flex bg-white text-gray-900 px-8 py-4 rounded-full font-bold shadow-xl hover:scale-105 transition-transform"
-                >
-                  Xem ưu đãi
-                </a>
-              </div>
+          <div className="rounded-[2rem] overflow-hidden relative border border-gray-100 select-none h-[240px] md:h-[280px]">
+            <div
+              className="flex h-full transition-transform duration-500 ease-out"
+              style={{ width: `${promoBanners.length * 100}%`, transform: `translateX(-${promoIndex * (100 / promoBanners.length)}%)` }}
+            >
+              {promoBanners.map((b, i) => {
+                const raw = (b as { image_url?: string; imageUrl?: string }).image_url ?? (b as { image_url?: string; imageUrl?: string }).imageUrl;
+                const imageUrl = buildPromoImageUrl(raw ?? undefined);
+                return (
+                  <div
+                    key={b.id ?? i}
+                    className="flex-shrink-0 relative h-full"
+                    style={{
+                      width: `${100 / promoBanners.length}%`,
+                      background: imageUrl ? 'transparent' : 'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 40%, #f9a8d4 100%)',
+                    }}
+                  >
+                    <img
+                      key={imageUrl || `placeholder-${b.id ?? i}`}
+                      src={imageUrl || PROMO_PLACEHOLDER_SVG}
+                      alt={b.title || 'Ưu đãi'}
+                      className="absolute inset-0 w-full h-full object-cover"
+                      style={{ zIndex: 0 }}
+                      loading="eager"
+                      decoding="async"
+                      onError={(e) => {
+                        const el = e.target as HTMLImageElement;
+                        if (el.src !== PROMO_PLACEHOLDER_SVG) el.src = PROMO_PLACEHOLDER_SVG;
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-r from-black/25 to-transparent pointer-events-none" style={{ zIndex: 1 }} />
+                    <div className="absolute inset-0 flex flex-col md:flex-row items-center gap-8 p-8 md:p-16 pointer-events-none" style={{ zIndex: 2 }}>
+                      <div className="text-white max-w-lg">
+                        <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4 inline-block">
+                          Ưu đãi
+                        </span>
+                        <h2 className="text-4xl md:text-5xl font-black mb-4">
+                          {b.title || 'Ưu đãi hôm nay'}
+                        </h2>
+                        <p className="text-white/90 mb-8">
+                          {b.subtitle || 'Khuyến mãi đang diễn ra.'}
+                        </p>
+                        <span className="inline-flex bg-white/90 text-gray-900 px-8 py-4 rounded-full font-bold shadow-xl cursor-default">
+                          Xem ưu đãi
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            {promoBanners.length > 1 && (
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                {promoBanners.map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => setPromoIndex(i)}
+                    className={`h-2.5 rounded-full transition-all duration-300 ${i === promoIndex ? 'w-10 bg-white' : 'w-2.5 bg-white/50 hover:bg-white/80'}`}
+                    aria-label={`Ưu đãi ${i + 1}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-gradient-to-r from-pink-400 to-rose-300 rounded-[2rem] p-8 md:p-16 flex flex-col md:flex-row items-center gap-8 overflow-hidden relative">
@@ -298,18 +363,6 @@ const HomePage: React.FC = () => {
           </div>
         )}
       </section>
-
-      {/* Footer Banner */}
-      {footerBanners.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 pb-8">
-          <a
-            href={footerBanners[0].link_url || '#/products'}
-            className="block rounded-[2rem] overflow-hidden border border-gray-100 hover:shadow-xl transition-all"
-          >
-            <img src={footerBanners[0].image_url} className="w-full h-44 md:h-56 object-cover" />
-          </a>
-        </section>
-      )}
 
       {/* Blog Teaser */}
       <section className="max-w-7xl mx-auto px-4 py-20 bg-white rounded-[3rem]">

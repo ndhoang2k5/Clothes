@@ -13,8 +13,13 @@ def list_categories(db: Session = Depends(get_db)):
     return AdminService.list_categories(db, active_only=True)
 
 @router.get("/products")
-def get_products(category: str = None, db: Session = Depends(get_db)):
-    return UserProductService.get_active_products(db, category)
+def get_products(
+    category: str | None = None,
+    page: int = 1,
+    per_page: int = 24,
+    db: Session = Depends(get_db),
+):
+    return UserProductService.get_active_products(db, category, page=page, per_page=per_page)
 
 @router.get("/products/{product_id}")
 def get_product(product_id: int, db: Session = Depends(get_db)):
@@ -37,3 +42,18 @@ def get_product_combo_items(product_id: int, db: Session = Depends(get_db)):
 def get_banners(slot: str | None = None, db: Session = Depends(get_db)):
     # User-facing banners: only active banners
     return AdminService.list_banners(db, slot=slot, active_only=True)
+
+
+@router.get("/collections")
+def get_collections(db: Session = Depends(get_db)):
+    """Danh sách bộ sưu tập hiển thị cho user (chỉ active)."""
+    return AdminService.list_collections(db, include_inactive=False)
+
+
+@router.get("/blogs")
+def get_blogs(category: str | None = None, limit: int = 3, db: Session = Depends(get_db)):
+    """Blog / tips cho user – chỉ bài đã publish."""
+    items = AdminService.list_blogs(db, category=category, published_only=True)
+    if limit and limit > 0:
+        items = items[: limit]
+    return items

@@ -66,7 +66,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
         <h3 className="text-gray-800 font-semibold mb-1 group-hover:text-pink-500 transition-colors line-clamp-2">
           {product.name}
         </h3>
-        <div className="flex items-center gap-1.5 mb-3">
+        <div className="flex items-center gap-1.5 mb-2">
           <span className="text-pink-500 font-bold text-base md:text-lg">
             {product.discountPrice ? product.discountPrice.toLocaleString() : product.price.toLocaleString()}đ
           </span>
@@ -76,6 +76,30 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, onAddToCart }) => {
             </span>
           )}
         </div>
+        {(product.variants?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-3 text-xs text-gray-500">
+            {(() => {
+              const sizes = [...new Set((product.variants || []).map(v => v.size).filter(Boolean))];
+              const totalStock = (product.variants || []).reduce((s, v) => s + (v.stock ?? 0), 0);
+              if (sizes.length > 0) {
+                return (
+                  <>
+                    <span>Size: {sizes.slice(0, 3).join(', ')}{sizes.length > 3 ? ` +${sizes.length - 3}` : ''}</span>
+                    <span className="text-gray-300">·</span>
+                    <span className={totalStock > 0 ? 'text-green-600 font-medium' : 'text-gray-400'}>
+                      {totalStock > 0 ? `Còn ${totalStock}` : 'Hết hàng'}
+                    </span>
+                  </>
+                );
+              }
+              return (
+                <span className={totalStock > 0 ? 'text-green-600 font-medium' : 'text-gray-400'}>
+                  {totalStock > 0 ? `Còn ${totalStock}` : 'Hết hàng'}
+                </span>
+              );
+            })()}
+          </div>
+        )}
 
         <button
           onClick={(e) => {

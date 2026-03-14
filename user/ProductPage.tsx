@@ -7,12 +7,13 @@ import FilterSidebar from '../components/FilterSidebar';
 import Pagination from '../components/Pagination';
 import { CATEGORIES } from '../constants';
 
-const ITEMS_PER_PAGE = 12;
+const SERVER_PER_PAGE = 24;
 
 const ProductPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
   const [filters, setFilters] = useState({
     sizes: [] as string[],
     colors: [] as string[],
@@ -26,12 +27,25 @@ const ProductPage: React.FC = () => {
   const activeCategory = queryParams.get('cat');
 
   useEffect(() => {
-    setLoading(true);
-    api.getProducts().then(data => {
-      setProducts(data);
-      setLoading(false);
-    });
-  }, []);
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const r = await api.getProductsPage({ category: activeCategory, page: currentPage, per_page: SERVER_PER_PAGE, useCache: true });
+        if (cancelled) return;
+        setProducts(r.items);
+        setServerTotal(r.total);
+      } catch {
+        if (!cancelled) setProducts([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCategory, currentPage]);
 
   // Reset to page 1 when filters or category change and scroll user back to top of list
   useEffect(() => {
@@ -45,24 +59,24 @@ const ProductPage: React.FC = () => {
     }
   }, [filters, activeCategory]);
 
-  // Compute available filter options based on all products
+  // Compute available filter options from actual product variants (dynamic)
   const availableOptions = useMemo(() => {
     const sizes = new Set<string>();
     const colors = new Set<string>();
     const materials = new Set<string>();
-    
+
     products.forEach(p => {
-      p.variants.forEach(v => {
-        sizes.add(v.size);
-        colors.add(v.color);
+      (p.variants || []).forEach(v => {
+        if (v.size && String(v.size).trim()) sizes.add(String(v.size).trim());
+        if (v.color && String(v.color).trim()) colors.add(String(v.color).trim());
       });
-      if (p.material) materials.add(p.material);
+      if (p.material && String(p.material).trim()) materials.add(String(p.material).trim());
     });
 
     return {
-      sizes: Array.from(sizes),
-      colors: Array.from(colors),
-      materials: Array.from(materials)
+      sizes: Array.from(sizes).sort(),
+      colors: Array.from(colors).sort(),
+      materials: Array.from(materials).sort()
     };
   }, [products]);
 
@@ -70,17 +84,12 @@ const ProductPage: React.FC = () => {
   const filteredProducts = useMemo(() => {
     let result = products;
 
-    // Category filter
-    if (activeCategory) {
-      result = result.filter(p => p.category === activeCategory);
-    }
-
     // Custom filters
     if (filters.sizes.length > 0) {
-      result = result.filter(p => p.variants.some(v => filters.sizes.includes(v.size)));
+      result = result.filter(p => (p.variants || []).some(v => v.size && filters.sizes.includes(v.size)));
     }
     if (filters.colors.length > 0) {
-      result = result.filter(p => p.variants.some(v => filters.colors.includes(v.color)));
+      result = result.filter(p => (p.variants || []).some(v => v.color && filters.colors.includes(v.color)));
     }
     if (filters.materials.length > 0) {
       result = result.filter(p => filters.materials.includes(p.material));
@@ -105,12 +114,10 @@ const ProductPage: React.FC = () => {
     });
   }, [products, filters, activeCategory]);
 
-  // Paginate filtered results
-  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
-  const paginatedProducts = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredProducts.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredProducts, currentPage]);
+  const totalPages = useMemo(() => {
+    if (serverTotal == null) return 1;
+    return Math.max(1, Math.ceil(serverTotal / SERVER_PER_PAGE));
+  }, [serverTotal]);
 
   const currentCategoryName = CATEGORIES.find(c => c.slug === activeCategory)?.name || 'Tất cả sản phẩm';
 
@@ -129,7 +136,7 @@ const ProductPage: React.FC = () => {
                     <h1 className="text-4xl font-black text-gray-800 tracking-tight">{currentCategoryName}</h1>
                 </div>
                 <div className="bg-pink-50 px-6 py-4 rounded-3xl flex items-center gap-4">
-                    <span className="text-pink-600 font-black text-xl">{filteredProducts.length}</span>
+                    <span className="text-pink-600 font-black text-xl">{serverTotal ?? filteredProducts.length}</span>
                     <span className="text-pink-400 font-bold text-sm uppercase tracking-wider">Sản phẩm được tìm thấy</span>
                 </div>
             </div>
@@ -155,10 +162,10 @@ const ProductPage: React.FC = () => {
                   <div key={i} className="bg-white rounded-2xl h-[260px] md:h-[320px] animate-pulse border border-gray-100"></div>
                 ))}
               </div>
-            ) : paginatedProducts.length > 0 ? (
+            ) : filteredProducts.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  {paginatedProducts.map(product => (
+                  {filteredProducts.map(product => (
                     <ProductCard key={product.id} product={product} />
                   ))}
                 </div>

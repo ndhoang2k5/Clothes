@@ -52,10 +52,12 @@ ALTER TABLE product_variants
     ADD COLUMN IF NOT EXISTS discount_price_override NUMERIC(12, 2),
     ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
     ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ADD COLUMN IF NOT EXISTS external_sku_id TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants (product_id);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_product_variants_sku ON product_variants (sku);
+CREATE INDEX IF NOT EXISTS idx_product_variants_external_sku ON product_variants (external_sku_id) WHERE external_sku_id IS NOT NULL;
 
 ALTER TABLE orders
     ADD COLUMN IF NOT EXISTS order_code VARCHAR(32),
@@ -187,7 +189,8 @@ VALUES
     ('Quần áo bé gái', 'be-gai', '👗', 3),
     ('Phụ kiện', 'phu-kien', '🧢', 4),
     ('Box quà tặng', 'qua-tang', '🎁', 5),
-    ('Combo đi sinh', 'di-sinh', '👜', 6)
+    ('Combo đi sinh', 'di-sinh', '👜', 6),
+    ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 7)
 ON CONFLICT (slug) DO NOTHING;
 
 COMMIT;

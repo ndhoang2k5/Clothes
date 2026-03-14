@@ -71,6 +71,11 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
     () => variants.find((v) => String(v.id) === String(selectedVariantId)) ?? null,
     [variants, selectedVariantId],
   );
+  const totalStock = useMemo(
+    () => variants.reduce((sum, v: any) => sum + (v?.stock ?? 0), 0),
+    [variants],
+  );
+  const isOutOfStock = totalStock <= 0;
   const uniqueSizes = useMemo(
     () => [...new Set(variants.map((v) => (v && v.size) || '').filter(Boolean))],
     [variants],
@@ -84,12 +89,24 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
   const showVariantPicker = isSingleProduct && variants.length > 0 && (uniqueSizes.length > 0 || uniqueColors.length > 0);
   const showSingleProductActions = isSingleProduct;
 
-  const galleryImages =
-    product && product.images && product.images.length > 0
-      ? product.images
-      : ['https://picsum.photos/800/1000?product'];
+  const galleryImages = useMemo(() => {
+    const baseImages =
+      product && product.images && product.images.length > 0
+        ? product.images
+        : ['https://picsum.photos/800/1000?product'];
+    const vImg = (selectedVariant as any)?.image as string | undefined;
+    if (vImg) {
+      return [vImg, ...baseImages.filter((u) => u !== vImg)];
+    }
+    return baseImages;
+  }, [product, selectedVariant]);
   const clampedImageIndex =
     galleryImages.length > 0 ? Math.min(selectedImageIndex, galleryImages.length - 1) : 0;
+
+  // Khi đổi variant, quay về ảnh đầu tiên
+  React.useEffect(() => {
+    setSelectedImageIndex(0);
+  }, [selectedVariantId]);
 
   const handleAddToCart = () => {
     if (!product) return;
@@ -231,6 +248,9 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
               </span>
             )}
           </div>
+          {isOutOfStock && (
+            <div className="text-sm font-bold text-red-500">Đã hết hàng</div>
+          )}
           {product.description && (
             <p className="text-gray-600 leading-relaxed whitespace-pre-line">{product.description}</p>
           )}
@@ -315,7 +335,16 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
                   )}
                   {selectedVariant && (
                     <p className="text-sm text-gray-500">
-                      Còn lại: <span className="font-bold text-gray-800">{selectedVariant.stock}</span> sản phẩm
+                      {selectedVariant.stock > 0 ? (
+                        <>
+                          Còn lại:{' '}
+                          <span className="font-bold text-gray-800">{selectedVariant.stock}</span> sản phẩm
+                        </>
+                      ) : (
+                        <span className="font-bold text-red-500">
+                          Size / màu này đã hết hàng
+                        </span>
+                      )}
                     </p>
                   )}
                 </>
@@ -339,7 +368,13 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
                 <button
                   type="button"
                   onClick={handleAddToCart}
-                  disabled={showVariantPicker && (!selectedVariantId || (selectedVariant && selectedVariant.stock < quantity))}
+                  disabled={
+                    !!(
+                      isOutOfStock ||
+                      (showVariantPicker &&
+                        (!selectedVariantId || (selectedVariant && selectedVariant.stock < quantity)))
+                    )
+                  }
                   className="px-8 py-3 rounded-2xl bg-pink-500 text-white font-black hover:bg-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Thêm vào giỏ

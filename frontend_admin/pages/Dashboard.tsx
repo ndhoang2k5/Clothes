@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
-import { Order, Product } from '../types';
+import { api } from '../../services/api';
+import { Order } from '../../types';
 
 const Dashboard: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);

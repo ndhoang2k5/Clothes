@@ -46,6 +46,47 @@ def serialize_variant(variant) -> dict:
     }
 
 
+def serialize_variant_list_item(variant) -> dict:
+    """Lightweight variant for product listing (no images / timestamps)."""
+    return {
+        "id": variant.id,
+        "product_id": variant.product_id,
+        "sku": getattr(variant, "sku", None),
+        "size": getattr(variant, "size", None),
+        "color": getattr(variant, "color", None),
+        "stock": getattr(variant, "stock", 0),
+        "price_override": _num(getattr(variant, "price_override", None)),
+        "discount_price_override": _num(getattr(variant, "discount_price_override", None)),
+        "is_active": getattr(variant, "is_active", True),
+    }
+
+
+def serialize_product_list_item(product) -> dict:
+    """Lightweight product for listing pages (small payload)."""
+    imgs = sorted(getattr(product, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
+    primary = next((i for i in imgs if getattr(i, "is_primary", False)), None) or (imgs[0] if imgs else None)
+    return {
+        "id": product.id,
+        "category_id": product.category_id,
+        "category_slug": getattr(getattr(product, "category", None), "slug", None),
+        "name": product.name,
+        "slug": getattr(product, "slug", None),
+        "base_price": _num(product.base_price),
+        "discount_price": _num(product.discount_price),
+        "currency": getattr(product, "currency", "VND"),
+        "kind": getattr(product, "kind", "single"),
+        "is_active": getattr(product, "is_active", True),
+        "is_hot": getattr(product, "is_hot", False),
+        "is_new": getattr(product, "is_new", False),
+        "is_sale": getattr(product, "is_sale", False),
+        "updated_at": _dt(getattr(product, "updated_at", None)),
+        "primary_image_url": primary.image_url if primary else None,
+        # cung cấp thêm một ít ảnh cho hiệu ứng hover (tối đa 4 ảnh)
+        "image_urls": [img.image_url for img in imgs[:4]],
+        "variants": [serialize_variant_list_item(v) for v in getattr(product, "variants", [])],
+    }
+
+
 def serialize_product(product) -> dict:
     imgs = sorted(getattr(product, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
     primary = next((i for i in imgs if getattr(i, "is_primary", False)), None) or (imgs[0] if imgs else None)
@@ -180,5 +221,65 @@ def serialize_category(category) -> dict:
         "sort_order": getattr(category, "sort_order", 0),
         "created_at": _dt(getattr(category, "created_at", None)),
         "updated_at": _dt(getattr(category, "updated_at", None)),
+    }
+
+
+def serialize_collection(collection) -> dict:
+    items = sorted(getattr(collection, "items", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.product_id))
+    return {
+        "id": collection.id,
+        "name": collection.name,
+        "slug": getattr(collection, "slug", None),
+        "description": getattr(collection, "description", None),
+        "cover_image": getattr(collection, "cover_image", None),
+        "is_active": getattr(collection, "is_active", True),
+        "sort_order": getattr(collection, "sort_order", 0),
+        "product_ids": [it.product_id for it in items],
+        "created_at": _dt(getattr(collection, "created_at", None)),
+        "updated_at": _dt(getattr(collection, "updated_at", None)),
+    }
+
+
+def serialize_product_picker_item(product) -> dict:
+    imgs = sorted(getattr(product, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
+    primary = next((i for i in imgs if getattr(i, "is_primary", False)), None) or (imgs[0] if imgs else None)
+    variants = getattr(product, "variants", []) or []
+    total_stock = 0
+    for v in variants:
+        try:
+            total_stock += int(getattr(v, "stock", 0) or 0)
+        except Exception:
+            pass
+    sku = None
+    if variants:
+        sku = getattr(variants[0], "sku", None)
+    return {
+        "id": product.id,
+        "name": product.name,
+        "slug": getattr(product, "slug", None),
+        "base_price": _num(getattr(product, "base_price", None)),
+        "discount_price": _num(getattr(product, "discount_price", None)),
+        "currency": getattr(product, "currency", "VND"),
+        "primary_image_url": primary.image_url if primary else None,
+        "sku": sku,
+        "total_stock": total_stock,
+        "is_active": getattr(product, "is_active", True),
+        "kind": getattr(product, "kind", "single"),
+    }
+
+
+def serialize_blog(blog) -> dict:
+    return {
+        "id": blog.id,
+        "title": blog.title,
+        "slug": getattr(blog, "slug", None),
+        "content": getattr(blog, "content", ""),
+        "thumbnail": getattr(blog, "thumbnail", None),
+        "author": getattr(blog, "author", None),
+        "category": getattr(blog, "category", None),
+        "is_published": getattr(blog, "is_published", False),
+        "published_at": _dt(getattr(blog, "published_at", None)),
+        "created_at": _dt(getattr(blog, "created_at", None)),
+        "updated_at": _dt(getattr(blog, "updated_at", None)),
     }
 

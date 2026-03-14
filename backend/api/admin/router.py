@@ -2,6 +2,7 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from ...service.admin.admin_service import AdminService
+from ...service.salework_sync import sync_salework
 from ...database_config import get_db
 from pathlib import Path
 import uuid
@@ -17,8 +18,29 @@ def list_categories(active_only: bool = True, db: Session = Depends(get_db)):
     return AdminService.list_categories(db, active_only=active_only)
 
 @router.get("/products")
-def list_products(include_inactive: bool = True, db: Session = Depends(get_db)):
-    return AdminService.list_products(db, include_inactive=include_inactive)
+def list_products(
+    include_inactive: bool = True,
+    q: str | None = None,
+    page: int = 1,
+    per_page: int = 30,
+    db: Session = Depends(get_db),
+):
+    """Paginated list. Omit page/per_page or set per_page=0 to get all (can be slow)."""
+    return AdminService.list_products(
+        db, include_inactive=include_inactive, q=q, page=page, per_page=per_page
+    )
+
+
+@router.get("/products/picker")
+def list_products_picker(
+    q: str | None = None,
+    page: int = 1,
+    per_page: int = 30,
+    include_inactive: bool = True,
+    db: Session = Depends(get_db),
+):
+    """Lightweight products list for pickers (collections/combo)."""
+    return AdminService.list_products_picker(db, q=q, page=page, per_page=per_page, include_inactive=include_inactive)
 
 @router.get("/products/{product_id}")
 def get_product(product_id: int, db: Session = Depends(get_db)):
@@ -46,6 +68,30 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     if not ok:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"ok": True}
+
+
+@router.post("/products/merge")
+def merge_products(data: dict, db: Session = Depends(get_db)):
+    """Gộp nhiều sản phẩm thành 1. Body: product_ids[], name, category_id, description?, variant_assignments: [{ variant_id, size?, color? }]"""
+    merged = AdminService.merge_products(db, data)
+    if not merged:
+        raise HTTPException(status_code=400, detail="Merge failed (invalid product_ids or variant_assignments)")
+    from ...service.serializers import serialize_product
+    return serialize_product(merged)
+
+
+@router.post("/salework/sync")
+def salework_sync(db: Session = Depends(get_db)):
+    """Gọi API Salework, đồng bộ sản phẩm theo mã SKU (code)."""
+    result = sync_salework(db)
+    return result
+
+
+@router.get("/salework/status")
+def salework_status():
+    """Trạng thái đồng bộ Salework (last_sync có thể mở rộng sau)."""
+    return {"last_sync_at": None, "message": "Gọi POST /api/admin/salework/sync để đồng bộ."}
+
 
 @router.post("/products/{product_id}/variants")
 def add_variant(product_id: int, data: dict, db: Session = Depends(get_db)):
@@ -148,6 +194,43 @@ def delete_variant_image(image_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
+@router.get("/collections")
+def list_collections(include_inactive: bool = True, db: Session = Depends(get_db)):
+    return AdminService.list_collections(db, include_inactive=include_inactive)
+
+
+@router.get("/collections/{collection_id}")
+def get_collection(collection_id: int, db: Session = Depends(get_db)):
+    col = AdminService.get_collection(db, collection_id)
+    if not col:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    from ...service.serializers import serialize_collection
+    return serialize_collection(col)
+
+
+@router.post("/collections")
+def create_collection(data: dict, db: Session = Depends(get_db)):
+    created = AdminService.create_collection(db, data)
+    if not created:
+        raise HTTPException(status_code=400, detail="Invalid collection payload")
+    return created
+
+
+@router.put("/collections/{collection_id}")
+def update_collection(collection_id: int, data: dict, db: Session = Depends(get_db)):
+    updated = AdminService.update_collection(db, collection_id, data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return updated
+
+
+@router.delete("/collections/{collection_id}")
+def delete_collection(collection_id: int, db: Session = Depends(get_db)):
+    ok = AdminService.delete_collection(db, collection_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Collection not found")
+    return {"ok": True}
+
 @router.get("/banners")
 def list_banners(slot: str | None = None, active_only: bool = True, db: Session = Depends(get_db)):
     return AdminService.list_banners(db, slot=slot, active_only=active_only)
@@ -193,3 +276,32 @@ def upload_image(file: UploadFile = File(...)):
         f.write(file.file.read())
 
     return {"url": f"/static/uploads/{name}"}
+
+
+@router.get("/blogs")
+def list_blogs(category: str | None = None, db: Session = Depends(get_db)):
+    return AdminService.list_blogs(db, category=category, published_only=False)
+
+
+@router.post("/blogs")
+def create_blog(data: dict, db: Session = Depends(get_db)):
+    created = AdminService.create_blog(db, data)
+    if not created:
+        raise HTTPException(status_code=400, detail="Invalid blog payload")
+    return created
+
+
+@router.put("/blogs/{blog_id}")
+def update_blog(blog_id: int, data: dict, db: Session = Depends(get_db)):
+    updated = AdminService.update_blog(db, blog_id, data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    return updated
+
+
+@router.delete("/blogs/{blog_id}")
+def delete_blog(blog_id: int, db: Session = Depends(get_db)):
+    ok = AdminService.delete_blog(db, blog_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Blog not found")
+    return {"ok": True}

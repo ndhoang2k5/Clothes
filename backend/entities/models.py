@@ -37,9 +37,11 @@ class Product(Base):
     is_hot = Column(Boolean, default=False)
     is_new = Column(Boolean, default=True)
     is_sale = Column(Boolean, default=False)
+    external_source = Column(String(64))  # e.g. "salework" for sync
+    external_product_id = Column(String(128))  # external system id/code
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
-    
+
     category = relationship("Category", back_populates="products")
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
@@ -55,6 +57,7 @@ class ProductVariant(Base):
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"))
     sku = Column(String(64), unique=True, index=True)
+    external_sku_id = Column(String(128))  # Salework _id for sync
     size = Column(String(50))
     color = Column(String(50))
     material = Column(String(80))
@@ -104,6 +107,30 @@ class ComboItem(Base):
     combo_product = relationship("Product", foreign_keys=[combo_product_id], back_populates="combo_components")
     component_variant = relationship("ProductVariant")
 
+class Collection(Base):
+    __tablename__ = "collections"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    slug = Column(String(120), unique=True, index=True, nullable=False)
+    description = Column(Text)
+    cover_image = Column(Text)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    items = relationship("CollectionProduct", back_populates="collection", cascade="all, delete-orphan")
+
+
+class CollectionProduct(Base):
+    __tablename__ = "collection_products"
+    collection_id = Column(Integer, ForeignKey("collections.id"), primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id"), primary_key=True)
+    sort_order = Column(Integer, default=0)
+
+    collection = relationship("Collection", back_populates="items")
+    product = relationship("Product")
+
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
@@ -147,5 +174,20 @@ class Banner(Base):
     subtitle = Column(Text)
     link_url = Column(Text)
     is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class Blog(Base):
+    __tablename__ = "blogs"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    slug = Column(String(255), unique=True, nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    thumbnail = Column(Text)
+    author = Column(String(100))
+    category = Column(String(50))
+    is_published = Column(Boolean, default=False)
+    published_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)

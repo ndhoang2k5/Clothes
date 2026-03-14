@@ -22,7 +22,10 @@ export interface ProductVariant {
   size: string;
   color: string;
   stock: number;
+  sku?: string;
   price?: number; // Override base price if specific
+  image?: string; // Primary image for this variant (if any)
+  imageId?: string; // optional: variant-specific image mapping id
 }
 
 export interface ComboItem {
@@ -101,5 +104,5 @@ export interface Blog {
   thumbnail: string;
   author: string;
   createdAt: string;
-  category: 'news' | 'tips' | 'charity';
+  category: 'news' | 'tips' | 'charity' | 'intro';
 }

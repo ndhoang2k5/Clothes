@@ -1,7 +1,15 @@
 
 from sqlalchemy.orm import Session
 from ...entities import models
-from ..serializers import serialize_banner, serialize_order, serialize_product, serialize_category
+from ..serializers import (
+    serialize_banner,
+    serialize_order,
+    serialize_product,
+    serialize_category,
+    serialize_collection,
+    serialize_product_picker_item,
+    serialize_blog,
+)
 from ..serializers import _normalize_banner_image_url
 from sqlalchemy.orm import selectinload
 
@@ -47,7 +55,7 @@ class AdminService:
         return serialize_product(product)
 
     @staticmethod
-    def list_products(db: Session, include_inactive: bool = True):
+    def list_products(db: Session, include_inactive: bool = True, q: str | None = None, page: int = 1, per_page: int = 30):
         query = db.query(models.Product).options(
             selectinload(models.Product.images),
             selectinload(models.Product.variants).selectinload(models.ProductVariant.images),
@@ -56,8 +64,173 @@ class AdminService:
         )
         if not include_inactive:
             query = query.filter(models.Product.is_active == True)  # noqa: E712
+        if q and str(q).strip():
+            term = f"%{str(q).strip()}%"
+            query = (
+                query.outerjoin(models.ProductVariant, models.ProductVariant.product_id == models.Product.id)
+                .filter(
+                    (models.Product.name.ilike(term))
+                    | (models.Product.slug.ilike(term))
+                    | (models.ProductVariant.sku.ilike(term))
+                )
+                .distinct()
+            )
         query = query.order_by(models.Product.updated_at.desc(), models.Product.id.desc())
-        return [serialize_product(p) for p in query.all()]
+
+        total = query.count()
+        if per_page and per_page > 0:
+            page = max(1, page)
+            offset = (page - 1) * per_page
+            items = query.limit(per_page).offset(offset).all()
+            return {
+                "items": [serialize_product(p) for p in items],
+                "total": total,
+                "page": page,
+                "per_page": per_page,
+            }
+        return {
+            "items": [serialize_product(p) for p in query.all()],
+            "total": total,
+            "page": 1,
+            "per_page": 0,
+        }
+
+    @staticmethod
+    def list_products_picker(
+        db: Session,
+        q: str | None = None,
+        page: int = 1,
+        per_page: int = 30,
+        include_inactive: bool = True,
+    ):
+        query = db.query(models.Product).options(
+            selectinload(models.Product.images),
+            selectinload(models.Product.variants),
+        )
+        if not include_inactive:
+            query = query.filter(models.Product.is_active == True)  # noqa: E712
+        if q and str(q).strip():
+            term = f"%{str(q).strip()}%"
+            query = (
+                query.outerjoin(models.ProductVariant, models.ProductVariant.product_id == models.Product.id)
+                .filter(
+                    (models.Product.name.ilike(term))
+                    | (models.Product.slug.ilike(term))
+                    | (models.ProductVariant.sku.ilike(term))
+                )
+                .distinct()
+            )
+        query = query.order_by(models.Product.updated_at.desc(), models.Product.id.desc())
+        total = query.count()
+        page = max(1, int(page or 1))
+        per_page = max(1, min(200, int(per_page or 30)))
+        offset = (page - 1) * per_page
+        items = query.limit(per_page).offset(offset).all()
+        return {
+            "items": [serialize_product_picker_item(p) for p in items],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
+
+    # --- Collections ---
+    @staticmethod
+    def list_collections(db: Session, include_inactive: bool = True):
+        query = db.query(models.Collection).options(selectinload(models.Collection.items))
+        if not include_inactive:
+            query = query.filter(models.Collection.is_active == True)  # noqa: E712
+        query = query.order_by(models.Collection.sort_order.asc(), models.Collection.updated_at.desc(), models.Collection.id.desc())
+        return [serialize_collection(c) for c in query.all()]
+
+    @staticmethod
+    def get_collection(db: Session, collection_id: int):
+        return (
+            db.query(models.Collection)
+            .options(selectinload(models.Collection.items))
+            .filter(models.Collection.id == collection_id)
+            .first()
+        )
+
+    @staticmethod
+    def _slugify_collection(name: str) -> str:
+        import re
+
+        base = re.sub(r"[^\w\s-]", "", (name or "bst")[:120])
+        base = re.sub(r"[-\s]+", "-", base).strip("-").lower() or "bst"
+        return base
+
+    @staticmethod
+    def create_collection(db: Session, data: dict):
+        name = (data.get("name") or "").strip()
+        if not name:
+            return None
+        slug = (data.get("slug") or "").strip()
+        if not slug:
+            slug = AdminService._slugify_collection(name)
+        # ensure unique slug
+        base = slug
+        n = 0
+        while db.query(models.Collection).filter(models.Collection.slug == slug).first():
+            n += 1
+            slug = f"{base}-{n}"
+
+        col = models.Collection(
+            name=name,
+            slug=slug,
+            description=data.get("description"),
+            cover_image=data.get("cover_image"),
+            is_active=bool(data.get("is_active", True)),
+            sort_order=int(data.get("sort_order") or 0),
+        )
+        db.add(col)
+        db.flush()
+
+        product_ids = data.get("product_ids") or data.get("products") or []
+        try:
+            product_ids = [int(x) for x in product_ids]
+        except Exception:
+            product_ids = []
+        for idx, pid in enumerate(product_ids):
+            db.add(models.CollectionProduct(collection_id=col.id, product_id=pid, sort_order=idx))
+
+        db.commit()
+        db.refresh(col)
+        col = AdminService.get_collection(db, col.id)
+        return serialize_collection(col) if col else None
+
+    @staticmethod
+    def update_collection(db: Session, collection_id: int, data: dict):
+        col = db.query(models.Collection).filter(models.Collection.id == collection_id).first()
+        if not col:
+            return None
+        for k in ["name", "description", "cover_image", "is_active", "sort_order", "slug"]:
+            if k in data and hasattr(col, k):
+                setattr(col, k, data.get(k))
+        col.updated_at = __import__("datetime").datetime.utcnow()
+
+        if "product_ids" in data or "products" in data:
+            product_ids = data.get("product_ids") or data.get("products") or []
+            try:
+                product_ids = [int(x) for x in product_ids]
+            except Exception:
+                product_ids = []
+            # Replace items
+            db.query(models.CollectionProduct).filter(models.CollectionProduct.collection_id == collection_id).delete()
+            for idx, pid in enumerate(product_ids):
+                db.add(models.CollectionProduct(collection_id=collection_id, product_id=pid, sort_order=idx))
+
+        db.commit()
+        col = AdminService.get_collection(db, collection_id)
+        return serialize_collection(col) if col else None
+
+    @staticmethod
+    def delete_collection(db: Session, collection_id: int) -> bool:
+        col = db.query(models.Collection).filter(models.Collection.id == collection_id).first()
+        if not col:
+            return False
+        db.delete(col)
+        db.commit()
+        return True
 
     @staticmethod
     def get_product(db: Session, product_id: int):
@@ -95,6 +268,119 @@ class AdminService:
         db.delete(product)
         db.commit()
         return True
+
+    @staticmethod
+    def merge_products(db: Session, data: dict):
+        """
+        Gộp nhiều sản phẩm thành 1. Body:
+        - product_ids: list[int]
+        - name: str
+        - category_id: int
+        - description: str | None
+        - variant_assignments: list[{ variant_id: int, size?: str, color?: str }]
+        """
+        product_ids = data.get("product_ids") or []
+        name = (data.get("name") or "").strip()
+        category_id = data.get("category_id")
+        description = data.get("description")
+        variant_assignments = {int(x["variant_id"]): x for x in (data.get("variant_assignments") or []) if x.get("variant_id") is not None}
+
+        if not name or not product_ids:
+            return None
+        product_ids = list(set(int(x) for x in product_ids))
+
+        # Load products and collect all variants
+        products = (
+            db.query(models.Product)
+            .options(selectinload(models.Product.variants), selectinload(models.Product.images))
+            .filter(models.Product.id.in_(product_ids))
+            .all()
+        )
+        if len(products) != len(product_ids):
+            return None
+
+        all_variants = []
+        for p in products:
+            for v in p.variants:
+                all_variants.append(v)
+        if not all_variants:
+            return None
+
+        # Unique slug
+        import re
+        slug_base = re.sub(r"[^\w\s-]", "", (name or "sp")[:200])
+        slug_base = re.sub(r"[-\s]+", "-", slug_base).strip("-").lower() or "sp"
+        slug = slug_base
+        n = 0
+        while db.query(models.Product).filter(models.Product.slug == slug).first():
+            n += 1
+            slug = f"{slug_base}-{n}"
+
+        # Base price from first variant
+        first_v = all_variants[0]
+        base_price = float(first_v.price_override or 0) or (first_v.product and float(first_v.product.base_price) or 0)
+
+        new_product = models.Product(
+            category_id=category_id,
+            name=name,
+            slug=slug,
+            description=description or None,
+            base_price=base_price,
+            discount_price=None,
+            currency="VND",
+            kind="single",
+            is_active=True,
+            is_hot=False,
+            is_new=True,
+            is_sale=False,
+        )
+        db.add(new_product)
+        db.flush()
+
+        # Move variants to new product and set size/color
+        for v in all_variants:
+            # IMPORTANT: use relationship assignment to avoid delete-orphan
+            # when deleting old products in the same session.
+            v.product = new_product
+            assign = variant_assignments.get(v.id)
+            if assign:
+                if "size" in assign:
+                    v.size = assign["size"]
+                if "color" in assign:
+                    v.color = assign["color"]
+
+        # Copy images from all source products so the merged product has full gallery,
+        # but tránh trùng ảnh theo URL.
+        seen_urls = set()
+        unique_images = []
+        for p in products:
+            for img in p.images or []:
+                url = (img.image_url or "").strip()
+                if not url:
+                    continue
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
+                unique_images.append(img)
+
+        if unique_images:
+            for idx, img in enumerate(unique_images):
+                db.add(
+                    models.ProductImage(
+                        product_id=new_product.id,
+                        image_url=img.image_url,
+                        alt_text=getattr(img, "alt_text", None),
+                        sort_order=idx,
+                        is_primary=(idx == 0),
+                    )
+                )
+
+        # Delete old products (variants already moved)
+        for p in products:
+            db.delete(p)
+        db.commit()
+        db.refresh(new_product)
+        return AdminService.get_product(db, new_product.id)
 
     # --- Combo items helpers ---
     @staticmethod
@@ -339,5 +625,94 @@ class AdminService:
         if not banner:
             return False
         db.delete(banner)
+        db.commit()
+        return True
+
+    # --- Blogs / Intro / Tips ---
+    @staticmethod
+    def list_blogs(db: Session, category: str | None = None, published_only: bool = False):
+        query = db.query(models.Blog)
+        if category:
+            query = query.filter(models.Blog.category == category)
+        if published_only:
+            query = query.filter(models.Blog.is_published == True)  # noqa: E712
+        query = query.order_by(models.Blog.published_at.desc().nullslast(), models.Blog.created_at.desc())
+        return [serialize_blog(b) for b in query.all()]
+
+    @staticmethod
+    def get_blog(db: Session, blog_id: int):
+        return db.query(models.Blog).filter(models.Blog.id == blog_id).first()
+
+    @staticmethod
+    def _slugify_blog(title: str) -> str:
+        import re
+
+        base = re.sub(r"[^\w\s-]", "", (title or "bai-viet")[:200])
+        base = re.sub(r"[-\s]+", "-", base).strip("-").lower() or "bai-viet"
+        return base
+
+    @staticmethod
+    def create_blog(db: Session, data: dict):
+        title = (data.get("title") or "").strip()
+        if not title:
+            return None
+        slug = (data.get("slug") or "").strip() or AdminService._slugify_blog(title)
+        # ensure unique slug
+        base = slug
+        n = 0
+        while db.query(models.Blog).filter(models.Blog.slug == slug).first():
+            n += 1
+            slug = f"{base}-{n}"
+
+        category = (data.get("category") or "").strip() or None
+        blog = models.Blog(
+            title=title,
+            slug=slug,
+            content=data.get("content") or "",
+            thumbnail=data.get("thumbnail"),
+            author=data.get("author"),
+            category=category,
+            is_published=bool(data.get("is_published", False)),
+        )
+        if blog.is_published and not getattr(blog, "published_at", None):
+            blog.published_at = __import__("datetime").datetime.utcnow()
+        db.add(blog)
+        db.commit()
+        db.refresh(blog)
+        return serialize_blog(blog)
+
+    @staticmethod
+    def update_blog(db: Session, blog_id: int, data: dict):
+        blog = db.query(models.Blog).filter(models.Blog.id == blog_id).first()
+        if not blog:
+            return None
+        if "title" in data and data["title"]:
+            blog.title = data["title"]
+        if "slug" in data and data["slug"]:
+            blog.slug = data["slug"]
+        if "content" in data:
+            blog.content = data["content"] or ""
+        if "thumbnail" in data:
+            blog.thumbnail = data["thumbnail"]
+        if "author" in data:
+            blog.author = data["author"]
+        if "category" in data:
+            blog.category = data["category"]
+        if "is_published" in data:
+            is_pub = bool(data["is_published"])
+            if is_pub and not blog.is_published and not blog.published_at:
+                blog.published_at = __import__("datetime").datetime.utcnow()
+            blog.is_published = is_pub
+        blog.updated_at = __import__("datetime").datetime.utcnow()
+        db.commit()
+        db.refresh(blog)
+        return serialize_blog(blog)
+
+    @staticmethod
+    def delete_blog(db: Session, blog_id: int) -> bool:
+        blog = db.query(models.Blog).filter(models.Blog.id == blog_id).first()
+        if not blog:
+            return False
+        db.delete(blog)
         db.commit()
         return True

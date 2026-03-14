@@ -105,18 +105,50 @@ class ApiService {
 
   // Products
   private mapBackendProductToFrontend(p: any): Product {
-    const images: string[] = Array.isArray(p.images) ? p.images.map((i: any) => this.toAbsoluteUrl(i.image_url)).filter(Boolean) : [];
+    const imageObjs: any[] = Array.isArray(p.images) ? p.images : [];
+    const fromObjUrls: string[] = imageObjs.map((i: any) => i?.image_url).filter(Boolean);
+    const fromListUrls: string[] = Array.isArray(p.image_urls) ? p.image_urls.filter((x: any) => !!x) : [];
+    const merged = [...fromListUrls, ...fromObjUrls];
+    const uniqueUrls = Array.from(new Set(merged));
+    const images: string[] = uniqueUrls.map((u) => this.toAbsoluteUrl(u)).filter(Boolean);
     const primary = p.primary_image_url ? this.toAbsoluteUrl(p.primary_image_url) : undefined;
     const allImages = (primary ? [primary, ...images.filter((u) => u !== primary)] : images);
 
     const variants = Array.isArray(p.variants)
-      ? p.variants.map((v: any) => ({
-          id: String(v.id),
-          size: v.size || '',
-          color: v.color || '',
-          stock: Number(v.stock || 0),
-          price: v.price_override ?? undefined,
-        }))
+      ? p.variants.map((v: any) => {
+          let variantImage: string | undefined;
+          // 1) Ưu tiên ảnh riêng của variant (nếu có)
+          if (Array.isArray(v.images) && v.images.length > 0) {
+            const primaryImg = v.images.find((img: any) => img.is_primary) ?? v.images[0];
+            if (primaryImg?.image_url) {
+              variantImage = this.toAbsoluteUrl(primaryImg.image_url);
+            }
+          }
+          // 2) Fallback: đoán ảnh theo màu từ ảnh product
+          if (!variantImage && v.color && imageObjs.length > 0) {
+            const colorTokens = String(v.color)
+              .toLowerCase()
+              .split(/\s+/)
+              .filter(Boolean);
+            const found = imageObjs.find((img: any) => {
+              const text = String(img.alt_text || img.image_url || '')
+                .toLowerCase();
+              return colorTokens.every((tk) => text.includes(tk));
+            });
+            if (found?.image_url) {
+              variantImage = this.toAbsoluteUrl(found.image_url);
+            }
+          }
+          return {
+            id: String(v.id),
+            size: v.size || '',
+            color: v.color || '',
+            stock: Number(v.stock || 0),
+            sku: v.sku || '',
+            price: v.price_override ?? undefined,
+            image: variantImage,
+          };
+        })
       : [];
 
     return {
@@ -137,6 +169,11 @@ class ApiService {
     };
   }
 
+  private productListCache = new Map<
+    string,
+    { items: Product[]; total: number; page: number; per_page: number; fetchedAt: number }
+  >();
+
   async getCategories(): Promise<Category[]> {
     try {
       const res = await fetch(`${this.userBaseUrl}/categories`);
@@ -153,12 +190,39 @@ class ApiService {
     }
   }
 
+  async getProductsPage(params?: { category?: string | null; page?: number; per_page?: number; useCache?: boolean }) {
+    const category = params?.category ?? null;
+    const page = params?.page ?? 1;
+    const per_page = params?.per_page ?? 24;
+    const useCache = params?.useCache ?? true;
+    const key = `${category || 'all'}|${page}|${per_page}`;
+
+    if (useCache) {
+      const cached = this.productListCache.get(key);
+      if (cached && Date.now() - cached.fetchedAt < 2 * 60 * 1000) {
+        return { ...cached, fromCache: true as const };
+      }
+    }
+
+    const qs = new URLSearchParams();
+    if (category) qs.set('category', category);
+    qs.set('page', String(page));
+    qs.set('per_page', String(per_page));
+
+    const res = await fetch(`${this.userBaseUrl}/products?${qs.toString()}`);
+    if (!res.ok) throw new Error('API Error');
+    const data: any = await res.json(); // { items, total, page, per_page }
+    const items = Array.isArray(data.items) ? data.items.map((p: any) => this.mapBackendProductToFrontend(p)) : [];
+    const payload = { items, total: Number(data.total || 0), page: Number(data.page || page), per_page: Number(data.per_page || per_page), fetchedAt: Date.now() };
+    this.productListCache.set(key, payload);
+    return { ...payload, fromCache: false as const };
+  }
+
+  /** Backward-compat: returns first page only (fast). */
   async getProducts(): Promise<Product[]> {
     try {
-      const res = await fetch(`${this.userBaseUrl}/products`);
-      if (!res.ok) throw new Error('API Error');
-      const data: any[] = await res.json();
-      return data.map((p) => this.mapBackendProductToFrontend(p));
+      const r = await this.getProductsPage({ page: 1, per_page: 24, useCache: true });
+      return r.items;
     } catch {
       return this.products;
     }
@@ -167,6 +231,7 @@ class ApiService {
   async getProductDetail(id: string): Promise<Product> {
     try {
       const res = await fetch(`${this.userBaseUrl}/products/${Number(id)}`);
+      if (res.status === 404) throw new Error('Product not found');
       if (!res.ok) throw new Error('API Error');
       const data: any = await res.json();
       const product = this.mapBackendProductToFrontend(data);
@@ -179,7 +244,12 @@ class ApiService {
         }));
       }
       return product;
-    } catch {
+    } catch (e: any) {
+      // Only fallback to local mock data if backend is unreachable.
+      // If backend says 404, don't return stale localStorage product.
+      if (String(e?.message || '').toLowerCase().includes('not found')) {
+        throw e;
+      }
       const fallback = this.products.find((p) => p.id === id);
       if (!fallback) {
         throw new Error('Product not found');
@@ -195,10 +265,100 @@ class ApiService {
   }
 
   async adminListProducts(include_inactive: boolean = true): Promise<Product[]> {
-    const res = await fetch(`${this.adminBaseUrl}/products?include_inactive=${include_inactive ? 'true' : 'false'}`);
+    const res = await fetch(
+      `${this.adminBaseUrl}/products?include_inactive=${include_inactive ? 'true' : 'false'}`
+    );
     if (!res.ok) throw new Error('API Error');
-    const data: any[] = await res.json();
-    return data.map((p) => this.mapBackendProductToFrontend(p));
+    const data: any = await res.json();
+    const items: any[] = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
+    return items.map((p) => this.mapBackendProductToFrontend(p));
+  }
+
+  async adminListProductsPage(params?: {
+    include_inactive?: boolean;
+    q?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<{ items: Product[]; total: number; page: number; per_page: number }> {
+    const qs = new URLSearchParams();
+    qs.set('include_inactive', params?.include_inactive === false ? 'false' : 'true');
+    if (params?.q) qs.set('q', params.q);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.per_page) qs.set('per_page', String(params.per_page));
+    const res = await fetch(`${this.adminBaseUrl}/products?${qs.toString()}`);
+    if (!res.ok) throw new Error('API Error');
+    const data: any = await res.json();
+    const items: any[] = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
+    return {
+      items: items.map((p) => this.mapBackendProductToFrontend(p)),
+      total: Number(data.total ?? items.length ?? 0),
+      page: Number(data.page ?? params?.page ?? 1),
+      per_page: Number(data.per_page ?? params?.per_page ?? items.length ?? 50),
+    };
+  }
+
+  async adminSaleworkSync(): Promise<{ synced: number; created_products: number; updated_variants: number; errors: string[] }> {
+    const res = await fetch(`${this.adminBaseUrl}/salework/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) throw new Error('Không thể đồng bộ Salework');
+    const data = await res.json();
+    return {
+      synced: Number(data.synced || data.synced_count || 0),
+      created_products: Number(data.created_products || 0),
+      updated_variants: Number(data.updated_variants || 0),
+      errors: Array.isArray(data.errors) ? data.errors.map(String) : [],
+    };
+  }
+
+  async adminGetProductsPicker(params: { q?: string; page?: number; per_page?: number; include_inactive?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params.q) qs.set('q', params.q);
+    if (params.page) qs.set('page', String(params.page));
+    if (params.per_page) qs.set('per_page', String(params.per_page));
+    if (params.include_inactive !== undefined) {
+      qs.set('include_inactive', params.include_inactive ? 'true' : 'false');
+    }
+    const res = await fetch(`${this.adminBaseUrl}/products/picker?${qs.toString()}`);
+    if (!res.ok) throw new Error('API Error');
+    const data: any = await res.json();
+    const items = Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [];
+    return {
+      items: items.map((p: any) => this.mapBackendProductToFrontend(p)),
+      total: Number(data.total ?? items.length ?? 0),
+      page: Number(data.page ?? params.page ?? 1),
+      per_page: Number(data.per_page ?? params.per_page ?? 30),
+    };
+  }
+
+  async adminMergeProducts(payload: {
+    productIds: string[];
+    name: string;
+    categoryId: number | null;
+    description?: string;
+    variantAssignments: { variantId: string; size?: string; color?: string }[];
+  }): Promise<Product> {
+    const body: any = {
+      product_ids: payload.productIds.map((id) => Number(id)),
+      name: payload.name,
+      category_id: payload.categoryId,
+      description: payload.description ?? null,
+      variant_assignments: payload.variantAssignments.map((va) => ({
+        variant_id: Number(va.variantId),
+        size: va.size ?? null,
+        color: va.color ?? null,
+      })),
+    };
+    const res = await fetch(`${this.adminBaseUrl}/products/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('Gộp sản phẩm thất bại');
+    const data = await res.json();
+    return this.mapBackendProductToFrontend(data);
   }
 
   async adminListCategories(active_only: boolean = true): Promise<Category[]> {
@@ -289,6 +449,70 @@ class ApiService {
     });
     if (!res.ok) throw new Error('API Error');
     return res.json();
+  }
+
+  async adminUpdateVariant(variantId: string, data: { size?: string; color?: string; stock?: number; price?: number }) {
+    const body: any = {};
+    if (data.size !== undefined) body.size = data.size;
+    if (data.color !== undefined) body.color = data.color;
+    if (data.stock !== undefined) body.stock = data.stock;
+    if (data.price !== undefined) body.price_override = data.price ?? null;
+    const res = await fetch(`${this.adminBaseUrl}/variants/${Number(variantId)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
+  }
+
+  async adminDeleteVariant(variantId: string): Promise<void> {
+    const res = await fetch(`${this.adminBaseUrl}/variants/${Number(variantId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('API Error');
+  }
+
+  async adminGetProduct(productId: string): Promise<Product> {
+    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}`);
+    if (!res.ok) throw new Error('API Error');
+    const data: any = await res.json();
+    return this.mapBackendProductToFrontend(data);
+  }
+
+  async adminGetProductRaw(productId: string): Promise<any> {
+    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}`);
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
+  }
+
+  async adminDeleteProductImage(imageId: string): Promise<void> {
+    const res = await fetch(`${this.adminBaseUrl}/product-images/${Number(imageId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('API Error');
+  }
+
+  async adminAddVariantImage(
+    variantId: string,
+    image_url: string,
+    is_primary: boolean = false,
+    alt_text?: string,
+  ) {
+    const res = await fetch(`${this.adminBaseUrl}/variants/${Number(variantId)}/images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_url, is_primary, alt_text: alt_text ?? null }),
+    });
+    if (!res.ok) throw new Error('API Error');
+    return res.json();
+  }
+
+  async adminDeleteVariantImage(imageId: string): Promise<void> {
+    const res = await fetch(`${this.adminBaseUrl}/variant-images/${Number(imageId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('API Error');
   }
 
   async adminAttachProductImage(productId: string, image_url: string, is_primary: boolean = false) {
@@ -395,7 +619,27 @@ class ApiService {
   }
 
   // Collections
-  async getCollections() { return this.collections; }
+  async getCollections(): Promise<Collection[]> {
+    try {
+      const res = await fetch(`${this.userBaseUrl}/collections`);
+      if (!res.ok) throw new Error('API Error');
+      const data: any[] = await res.json();
+      const mapped: Collection[] = data.map((c) => ({
+        id: String(c.id),
+        name: c.name,
+        description: c.description ?? '',
+        coverImage: this.toAbsoluteUrl(c.cover_image || c.coverImage || ''),
+        products: (c.product_ids || c.products || []).map((pid: any) => String(pid)),
+      }));
+      // cache to localStorage for faster subsequent loads
+      this.collections = mapped;
+      this.save();
+      return mapped;
+    } catch {
+      // fallback to local cache if backend not available
+      return this.collections;
+    }
+  }
   async addCollection(collection: Collection) {
     const newCol = { ...collection, id: Date.now().toString() };
     this.collections.push(newCol);
@@ -412,6 +656,129 @@ class ApiService {
   async deleteCollection(id: string) {
     this.collections = this.collections.filter(c => c.id !== id);
     this.save();
+  }
+
+  // Blogs / Intro / Tips
+  async adminListBlogs(params?: { category?: string }): Promise<Blog[]> {
+    const qs = new URLSearchParams();
+    if (params?.category) qs.set('category', params.category);
+    const url = `${this.adminBaseUrl}/blogs${qs.toString() ? `?${qs.toString()}` : ''}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('API Error');
+    const data: any[] = await res.json();
+    return data.map((b) => ({
+      id: String(b.id),
+      title: b.title || '',
+      content: b.content || '',
+      thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
+      author: b.author || '',
+      createdAt: b.created_at || b.published_at || '',
+      category: (b.category || 'tips') as Blog['category'],
+    }));
+  }
+
+  async adminCreateBlog(payload: {
+    title: string;
+    slug?: string;
+    content: string;
+    thumbnail?: string;
+    author?: string;
+    category?: string;
+    is_published?: boolean;
+  }): Promise<Blog> {
+    const res = await fetch(`${this.adminBaseUrl}/blogs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('API Error');
+    const b: any = await res.json();
+    return {
+      id: String(b.id),
+      title: b.title || '',
+      content: b.content || '',
+      thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
+      author: b.author || '',
+      createdAt: b.created_at || b.published_at || '',
+      category: (b.category || 'tips') as Blog['category'],
+    };
+  }
+
+  async adminUpdateBlog(
+    id: number,
+    payload: Partial<{
+      title: string;
+      slug: string;
+      content: string;
+      thumbnail: string;
+      author: string;
+      category: string;
+      is_published: boolean;
+    }>,
+  ): Promise<Blog> {
+    const res = await fetch(`${this.adminBaseUrl}/blogs/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('API Error');
+    const b: any = await res.json();
+    return {
+      id: String(b.id),
+      title: b.title || '',
+      content: b.content || '',
+      thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
+      author: b.author || '',
+      createdAt: b.created_at || b.published_at || '',
+      category: (b.category || 'tips') as Blog['category'],
+    };
+  }
+
+  async adminDeleteBlog(id: number): Promise<void> {
+    const res = await fetch(`${this.adminBaseUrl}/blogs/${id}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('API Error');
+  }
+
+  async getTips(limit: number = 3): Promise<Blog[]> {
+    try {
+      const qs = new URLSearchParams({ category: 'tips', limit: String(limit) });
+      const res = await fetch(`${this.userBaseUrl}/blogs?${qs.toString()}`);
+      if (!res.ok) throw new Error('API Error');
+      const data: any[] = await res.json();
+      return data.map((b) => ({
+        id: String(b.id),
+        title: b.title || '',
+        content: b.content || '',
+        thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
+        author: b.author || '',
+        createdAt: b.created_at || b.published_at || '',
+        category: (b.category || 'tips') as Blog['category'],
+      }));
+    } catch {
+      return [];
+    }
+  }
+
+  async getIntro(): Promise<Blog | null> {
+    try {
+      const qs = new URLSearchParams({ category: 'intro', limit: '1' });
+      const res = await fetch(`${this.userBaseUrl}/blogs?${qs.toString()}`);
+      if (!res.ok) throw new Error('API Error');
+      const data: any[] = await res.json();
+      const b = data[0];
+      if (!b) return null;
+      return {
+        id: String(b.id),
+        title: b.title || '',
+        content: b.content || '',
+        thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
+        author: b.author || '',
+        createdAt: b.created_at || b.published_at || '',
+        category: (b.category || 'intro') as Blog['category'],
+      };
+    } catch {
+      return null;
+    }
   }
 
   // Orders

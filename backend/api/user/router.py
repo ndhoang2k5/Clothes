@@ -60,11 +60,39 @@ def get_products(
     category: str | None = None,
     page: int = 1,
     per_page: int = 24,
+    sizes: str | None = None,
+    colors: str | None = None,
+    materials: str | None = None,
+    price_min: int | None = None,
+    price_max: int | None = None,
+    sort: str | None = None,
     db: Session = Depends(get_db),
 ):
+    """
+    Danh sách sản phẩm active cho user.
+
+    Hỗ trợ filter theo:
+    - category: slug danh mục
+    - sizes: chuỗi "S,M,L"
+    - colors: chuỗi "trang,den"
+    - materials: chuỗi "cotton,lanh"
+    - price_min, price_max: khoảng giá (int, VND)
+    - sort: newest | price-asc | price-desc | bestseller
+    """
     if category and str(category).strip() == "uu-dai-cuoi-mua":
         _ensure_clearance_category(db)
-    return UserProductService.get_active_products(db, category, page=page, per_page=per_page)
+    return UserProductService.get_active_products(
+        db,
+        category_slug=category,
+        page=page,
+        per_page=per_page,
+        sizes=sizes,
+        colors=colors,
+        materials=materials,
+        price_min=price_min,
+        price_max=price_max,
+        sort=sort,
+    )
 
 @router.get("/products/{product_id}")
 def get_product(product_id: int, db: Session = Depends(get_db)):

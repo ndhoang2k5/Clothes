@@ -162,7 +162,10 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
                       <div className="flex flex-wrap gap-2">
                         {uniqueSizes.map((size) => {
                           const hasStock = variants.some(
-                            (v: any) => v.size === size && v.stock > 0,
+                            (v: any) =>
+                              v.size === size &&
+                              v.stock > 0 &&
+                              (!selectedVariant?.color || v.color === selectedVariant.color),
                           );
                           const isSelected = selectedVariant?.size === size;
                           return (
@@ -171,7 +174,13 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
                               type="button"
                               disabled={!hasStock}
                               onClick={() => {
-                                const next = variants.find((v: any) => v.size === size && v.stock > 0);
+                                const sameColor = selectedVariant?.color;
+                                const next = variants.find(
+                                  (v: any) =>
+                                    v.size === size &&
+                                    v.stock > 0 &&
+                                    (sameColor ? v.color === sameColor : true),
+                                );
                                 if (next) setSelectedVariantId(String(next.id));
                               }}
                               className={`min-w-[3rem] px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-colors ${
@@ -195,7 +204,10 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
                       <div className="flex flex-wrap gap-2">
                         {uniqueColors.map((color) => {
                           const hasStock = variants.some(
-                            (v: any) => v.color === color && v.stock > 0,
+                            (v: any) =>
+                              v.color === color &&
+                              v.stock > 0 &&
+                              (!selectedVariant?.size || v.size === selectedVariant.size),
                           );
                           const isSelected = selectedVariant?.color === color;
                           return (
@@ -204,8 +216,12 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
                               type="button"
                               disabled={!hasStock}
                               onClick={() => {
+                                const sameSize = selectedVariant?.size;
                                 const next = variants.find(
-                                  (v: any) => v.color === color && v.stock > 0,
+                                  (v: any) =>
+                                    v.color === color &&
+                                    v.stock > 0 &&
+                                    (sameSize ? v.size === sameSize : true),
                                 );
                                 if (next) setSelectedVariantId(String(next.id));
                               }}

@@ -6,14 +6,18 @@ import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
 import Pagination from '../components/Pagination';
 import { CATEGORIES } from '../constants';
+import { QuickAddToCartModal } from './QuickAddToCartModal';
 
-const PAGE_SIZE = 24;
+const SERVER_PER_PAGE = 24;
 
 const ProductPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [facetSourceProducts, setFacetSourceProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
+  const [quickAddProductId, setQuickAddProductId] = useState<string | null>(null);
+  const [serverTotal, setServerTotal] = useState<number | null>(null);
   const [filters, setFilters] = useState({
     sizes: [] as string[],
     colors: [] as string[],
@@ -26,22 +30,59 @@ const ProductPage: React.FC = () => {
   const queryParams = new URLSearchParams(window.location.hash.split('?')[1]);
   const activeCategory = queryParams.get('cat');
 
+  // Load current page with filters (server-side filtering)
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
-        // Lấy TẤT CẢ sản phẩm của category để filter client-side
-        const r = await api.getProductsPage({ category: activeCategory, page: 1, per_page: 0, useCache: true });
+        const r = await api.getProductsPage({
+          category: activeCategory,
+          page: currentPage,
+          per_page: SERVER_PER_PAGE,
+          useCache: true,
+          sizes: filters.sizes,
+          colors: filters.colors,
+          materials: filters.materials,
+          priceRange: filters.priceRange,
+          sort: filters.sort as any,
+        });
         if (cancelled) return;
         setProducts(r.items);
+        setServerTotal(r.total);
       } catch {
-        if (!cancelled) setProducts([]);
+        if (!cancelled) {
+          setProducts([]);
+          setServerTotal(0);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
     void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeCategory, currentPage, filters]);
+
+  // Load full product list ONCE per category to build facet options
+  useEffect(() => {
+    let cancelled = false;
+    const loadAllForFacets = async () => {
+      try {
+        const r = await api.getProductsPage({
+          category: activeCategory,
+          page: 1,
+          per_page: 0,
+          useCache: true,
+        });
+        if (cancelled) return;
+        setFacetSourceProducts(r.items);
+      } catch {
+        if (!cancelled) setFacetSourceProducts([]);
+      }
+    };
+    void loadAllForFacets();
     return () => {
       cancelled = true;
     };
@@ -59,13 +100,13 @@ const ProductPage: React.FC = () => {
     }
   }, [filters, activeCategory]);
 
-  // Compute available filter options from actual product variants (dynamic)
+  // Compute available filter options from ALL products in category (facetSourceProducts)
   const availableOptions = useMemo(() => {
     const sizes = new Set<string>();
     const colors = new Set<string>();
     const materials = new Set<string>();
 
-    products.forEach(p => {
+    (facetSourceProducts.length > 0 ? facetSourceProducts : products).forEach(p => {
       (p.variants || []).forEach(v => {
         if (v.size && String(v.size).trim()) sizes.add(String(v.size).trim());
         if (v.color && String(v.color).trim()) colors.add(String(v.color).trim());
@@ -78,48 +119,12 @@ const ProductPage: React.FC = () => {
       colors: Array.from(colors).sort(),
       materials: Array.from(materials).sort()
     };
-  }, [products]);
+  }, [facetSourceProducts, products]);
 
-  // Apply filtering and sorting
-  const filteredProducts = useMemo(() => {
-    let result = products;
-
-    // Custom filters
-    if (filters.sizes.length > 0) {
-      result = result.filter(p => (p.variants || []).some(v => v.size && filters.sizes.includes(v.size)));
-    }
-    if (filters.colors.length > 0) {
-      result = result.filter(p => (p.variants || []).some(v => v.color && filters.colors.includes(v.color)));
-    }
-    if (filters.materials.length > 0) {
-      result = result.filter(p => filters.materials.includes(p.material));
-    }
-    result = result.filter(p => {
-      const actualPrice = p.discountPrice || p.price;
-      return actualPrice >= filters.priceRange[0] && actualPrice <= filters.priceRange[1];
-    });
-
-    // Sorting
-    return [...result].sort((a, b) => {
-      const priceA = a.discountPrice || a.price;
-      const priceB = b.discountPrice || b.price;
-      
-      switch (filters.sort) {
-        case 'price-asc': return priceA - priceB;
-        case 'price-desc': return priceB - priceA;
-        case 'bestseller': return (a.isHot ? -1 : 1) - (b.isHot ? -1 : 1);
-        case 'newest': 
-        default: return (a.isNew ? -1 : 1) - (b.isNew ? -1 : 1);
-      }
-    });
-  }, [products, filters, activeCategory]);
-
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE)), [filteredProducts.length]);
-
-  const paginatedProducts = useMemo(() => {
-    const start = (currentPage - 1) * PAGE_SIZE;
-    return filteredProducts.slice(start, start + PAGE_SIZE);
-  }, [filteredProducts, currentPage]);
+  const totalPages = useMemo(() => {
+    if (serverTotal == null) return 1;
+    return Math.max(1, Math.ceil(serverTotal / SERVER_PER_PAGE));
+  }, [serverTotal]);
 
   const currentCategoryName = CATEGORIES.find(c => c.slug === activeCategory)?.name || 'Tất cả sản phẩm';
 
@@ -138,7 +143,7 @@ const ProductPage: React.FC = () => {
                     <h1 className="text-4xl font-black text-gray-800 tracking-tight">{currentCategoryName}</h1>
                 </div>
                 <div className="bg-pink-50 px-6 py-4 rounded-3xl flex items-center gap-4">
-                    <span className="text-pink-600 font-black text-xl">{filteredProducts.length}</span>
+                    <span className="text-pink-600 font-black text-xl">{serverTotal ?? products.length}</span>
                     <span className="text-pink-400 font-bold text-sm uppercase tracking-wider">Sản phẩm được tìm thấy</span>
                 </div>
             </div>
@@ -159,7 +164,7 @@ const ProductPage: React.FC = () => {
             Lọc
           </button>
           <div className="text-xs text-gray-500 font-bold">
-            {filteredProducts.length} sản phẩm
+            {serverTotal ?? products.length} sản phẩm
           </div>
         </div>
 
@@ -231,11 +236,15 @@ const ProductPage: React.FC = () => {
                   <div key={i} className="bg-white rounded-2xl h-[260px] md:h-[320px] animate-pulse border border-gray-100"></div>
                 ))}
               </div>
-            ) : paginatedProducts.length > 0 ? (
+            ) : products.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  {paginatedProducts.map(product => (
-                    <ProductCard key={product.id} product={product} />
+                  {products.map(product => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      onAddToCart={() => setQuickAddProductId(String(product.id))}
+                    />
                   ))}
                 </div>
                 <Pagination 
@@ -262,6 +271,12 @@ const ProductPage: React.FC = () => {
           </div>
         </div>
       </div>
+      {quickAddProductId && (
+        <QuickAddToCartModal
+          productId={quickAddProductId}
+          onClose={() => setQuickAddProductId(null)}
+        />
+      )}
     </div>
   );
 };

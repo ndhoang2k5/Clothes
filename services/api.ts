@@ -192,12 +192,28 @@ class ApiService {
     }
   }
 
-  async getProductsPage(params?: { category?: string | null; page?: number; per_page?: number; useCache?: boolean }) {
+  async getProductsPage(params?: {
+    category?: string | null;
+    page?: number;
+    per_page?: number;
+    useCache?: boolean;
+    sizes?: string[];
+    colors?: string[];
+    materials?: string[];
+    priceRange?: [number, number];
+    sort?: 'newest' | 'price-asc' | 'price-desc' | 'bestseller';
+  }) {
     const category = params?.category ?? null;
     const page = params?.page ?? 1;
     const per_page = params?.per_page ?? 24;
     const useCache = params?.useCache ?? true;
-    const key = `${category || 'all'}|${page}|${per_page}`;
+    const sizes = params?.sizes ?? [];
+    const colors = params?.colors ?? [];
+    const materials = params?.materials ?? [];
+    const priceRange = params?.priceRange;
+    const sort = params?.sort ?? 'newest';
+
+    const key = `${category || 'all'}|${page}|${per_page}|${sizes.join(',')}|${colors.join(',')}|${materials.join(',')}|${priceRange ? priceRange.join('-') : ''}|${sort}`;
 
     if (useCache) {
       const cached = this.productListCache.get(key);
@@ -210,6 +226,16 @@ class ApiService {
     if (category) qs.set('category', category);
     qs.set('page', String(page));
     qs.set('per_page', String(per_page));
+
+    if (sizes.length > 0) qs.set('sizes', sizes.join(','));
+    if (colors.length > 0) qs.set('colors', colors.join(','));
+    if (materials.length > 0) qs.set('materials', materials.join(','));
+    if (priceRange) {
+      const [min, max] = priceRange;
+      if (typeof min === 'number' && min > 0) qs.set('price_min', String(min));
+      if (typeof max === 'number' && max > 0) qs.set('price_max', String(max));
+    }
+    if (sort && sort !== 'newest') qs.set('sort', sort);
 
     const res = await fetch(`${this.userBaseUrl}/products?${qs.toString()}`);
     if (!res.ok) throw new Error('API Error');

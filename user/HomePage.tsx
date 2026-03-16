@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import type { AdminBanner, BannerSlot, Product, Collection, Blog } from '../types';
 import { CATEGORIES, TRUST_FEATURES } from '../constants';
 import ProductCard from '../components/ProductCard';
+import { QuickAddToCartModal } from './QuickAddToCartModal';
 
 const FALLBACK_HERO: AdminBanner = {
   id: -1,
@@ -40,6 +41,7 @@ const HomePage: React.FC = () => {
   const [promoIndex, setPromoIndex] = useState(0);
   const [activeFeaturedTab, setActiveFeaturedTab] = useState<'new' | 'hot' | 'accessory' | 'all'>('new');
   const [clearanceProducts, setClearanceProducts] = useState<Product[]>([]);
+  const [quickAddProductId, setQuickAddProductId] = useState<string | null>(null);
 
   useEffect(() => {
     // Load only first page for homepage (fast) and reuse cache for smooth back navigation.
@@ -301,7 +303,11 @@ const HomePage: React.FC = () => {
             <div className="max-w-7xl mx-auto">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 {list.slice(0, 8).map((product) => (
-                  <ProductCard key={product.id} product={product} />
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    onAddToCart={() => setQuickAddProductId(product.id)}
+                  />
                 ))}
               </div>
             </div>
@@ -328,7 +334,11 @@ const HomePage: React.FC = () => {
         {clearanceProducts.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {clearanceProducts.slice(0, 8).map((p) => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard
+                key={p.id}
+                product={p}
+                onAddToCart={() => setQuickAddProductId(p.id)}
+              />
             ))}
           </div>
         ) : (
@@ -358,7 +368,11 @@ const HomePage: React.FC = () => {
               .filter((p) => p.category === 'qua-tang')
               .slice(0, 4)
               .map((p) => (
-                <ProductCard key={p.id} product={p} />
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  onAddToCart={() => setQuickAddProductId(p.id)}
+                />
               ))}
           </div>
         </section>
@@ -378,7 +392,11 @@ const HomePage: React.FC = () => {
               .filter((p) => p.category === 'di-sinh')
               .slice(0, 4)
               .map((p) => (
-                <ProductCard key={p.id} product={p} />
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  onAddToCart={() => setQuickAddProductId(p.id)}
+                />
               ))}
           </div>
         </section>
@@ -466,6 +484,13 @@ const HomePage: React.FC = () => {
           </div>
         )}
       </section>
+
+      {quickAddProductId && (
+        <QuickAddToCartModal
+          productId={quickAddProductId}
+          onClose={() => setQuickAddProductId(null)}
+        />
+      )}
 
       {/* Blog / Tips Teaser */}
       {tips.length > 0 && (

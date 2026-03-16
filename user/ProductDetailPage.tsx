@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
 import type { Product, ComboItem } from '../types';
 import ProductCard from '../components/ProductCard';
+import { useCart } from './CartContext';
 
 interface ProductDetailPageProps {
   productId: string;
@@ -15,6 +16,8 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const { addItem } = useCart();
+  const [addedMessage, setAddedMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!productId || productId.trim() === '') {
@@ -110,11 +113,37 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
 
   const handleAddToCart = () => {
     if (!product) return;
+
     if (product.kind === 'combo') {
-      console.log('Add combo to cart', product.id);
-    } else if (selectedVariantId) {
-      console.log('Add to cart', product.id, selectedVariantId, quantity);
+      addItem({
+        product,
+        quantity,
+      });
+      setAddedMessage('Đã thêm combo vào giỏ hàng');
+      window.setTimeout(() => setAddedMessage(null), 3000);
+      return;
     }
+
+    const variantForCart = selectedVariantId
+      ? variants.find((v) => String(v.id) === String(selectedVariantId))
+      : undefined;
+
+    if (variants.length > 0 && !variantForCart) return;
+
+    addItem({
+      product,
+      variant: variantForCart
+        ? {
+            id: String(variantForCart.id),
+            size: (variantForCart as any).size,
+            color: (variantForCart as any).color,
+            stock: (variantForCart as any).stock,
+          }
+        : undefined,
+      quantity,
+    });
+    setAddedMessage('Đã thêm vào giỏ hàng');
+    window.setTimeout(() => setAddedMessage(null), 3000);
   };
 
   if (loading) {
@@ -379,6 +408,11 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
                 >
                   Thêm vào giỏ
                 </button>
+                {addedMessage && (
+                  <p className="text-sm font-semibold text-green-600">
+                    {addedMessage}
+                  </p>
+                )}
               </div>
             </div>
           )}

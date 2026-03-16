@@ -6,6 +6,9 @@ import ProductPage from './user/ProductPage';
 import CollectionPage from './user/CollectionPage';
 import ProductDetailPage from './user/ProductDetailPage';
 import AboutPage from './user/AboutPage';
+import BlogPage from './user/BlogPage';
+import CartPage from './user/CartPage';
+import { CartProvider } from './user/CartContext';
 import { api } from './services/api';
 import type { AdminBanner } from './types';
 
@@ -161,6 +164,10 @@ const App: React.FC = () => {
         return <ProductPage />;
       case '#/collections':
         return <CollectionPage />;
+      case '#/blog':
+        return <BlogPage />;
+      case '#/cart':
+        return <CartPage />;
       case '#/about':
         return <AboutPage />;
       case '#/':
@@ -170,13 +177,15 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-[#F8F3EC]">
-      <Navbar />
-      <main className="flex-grow min-h-[80vh]">
-        {renderRoute()}
-      </main>
-      <Footer />
-    </div>
+    <CartProvider>
+      <div className="flex flex-col min-h-screen bg-[#F8F3EC]">
+        <Navbar />
+        <main className="flex-grow min-h-[80vh]">
+          {renderRoute()}
+        </main>
+        <Footer />
+      </div>
+    </CartProvider>
   );
 };
 

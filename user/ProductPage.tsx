@@ -7,13 +7,13 @@ import FilterSidebar from '../components/FilterSidebar';
 import Pagination from '../components/Pagination';
 import { CATEGORIES } from '../constants';
 
-const SERVER_PER_PAGE = 24;
+const PAGE_SIZE = 24;
 
 const ProductPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
-  const [serverTotal, setServerTotal] = useState<number | null>(null);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [filters, setFilters] = useState({
     sizes: [] as string[],
     colors: [] as string[],
@@ -31,10 +31,10 @@ const ProductPage: React.FC = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const r = await api.getProductsPage({ category: activeCategory, page: currentPage, per_page: SERVER_PER_PAGE, useCache: true });
+        // Lấy TẤT CẢ sản phẩm của category để filter client-side
+        const r = await api.getProductsPage({ category: activeCategory, page: 1, per_page: 0, useCache: true });
         if (cancelled) return;
         setProducts(r.items);
-        setServerTotal(r.total);
       } catch {
         if (!cancelled) setProducts([]);
       } finally {
@@ -45,7 +45,7 @@ const ProductPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeCategory, currentPage]);
+  }, [activeCategory]);
 
   // Reset to page 1 when filters or category change and scroll user back to top of list
   useEffect(() => {
@@ -114,10 +114,12 @@ const ProductPage: React.FC = () => {
     });
   }, [products, filters, activeCategory]);
 
-  const totalPages = useMemo(() => {
-    if (serverTotal == null) return 1;
-    return Math.max(1, Math.ceil(serverTotal / SERVER_PER_PAGE));
-  }, [serverTotal]);
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(filteredProducts.length / PAGE_SIZE)), [filteredProducts.length]);
+
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredProducts.slice(start, start + PAGE_SIZE);
+  }, [filteredProducts, currentPage]);
 
   const currentCategoryName = CATEGORIES.find(c => c.slug === activeCategory)?.name || 'Tất cả sản phẩm';
 
@@ -136,7 +138,7 @@ const ProductPage: React.FC = () => {
                     <h1 className="text-4xl font-black text-gray-800 tracking-tight">{currentCategoryName}</h1>
                 </div>
                 <div className="bg-pink-50 px-6 py-4 rounded-3xl flex items-center gap-4">
-                    <span className="text-pink-600 font-black text-xl">{serverTotal ?? filteredProducts.length}</span>
+                    <span className="text-pink-600 font-black text-xl">{filteredProducts.length}</span>
                     <span className="text-pink-400 font-bold text-sm uppercase tracking-wider">Sản phẩm được tìm thấy</span>
                 </div>
             </div>
@@ -144,9 +146,76 @@ const ProductPage: React.FC = () => {
       </div>
 
       <div id="product-list-top" className="max-w-7xl mx-auto px-4 pb-20">
+        {/* Mobile filter bar */}
+        <div className="lg:hidden mb-4 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setMobileFiltersOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-white border border-gray-100 shadow-sm font-bold text-sm text-gray-700"
+          >
+            <svg className="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h18l-7 8v6l-4 2v-8L3 4z" />
+            </svg>
+            Lọc
+          </button>
+          <div className="text-xs text-gray-500 font-bold">
+            {filteredProducts.length} sản phẩm
+          </div>
+        </div>
+
+        {mobileFiltersOpen && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={() => setMobileFiltersOpen(false)}
+              aria-hidden="true"
+            />
+            <div className="absolute inset-x-0 bottom-0 bg-white rounded-t-[2rem] shadow-2xl max-h-[85vh] overflow-y-auto">
+              <div className="px-5 pt-5 pb-3 flex items-center justify-between border-b border-gray-100">
+                <div className="font-black text-lg text-gray-800">
+                  Bộ lọc
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileFiltersOpen(false)}
+                  className="p-2 rounded-xl hover:bg-gray-50"
+                  aria-label="Đóng bộ lọc"
+                >
+                  <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="px-5 py-5">
+                <FilterSidebar
+                  filters={filters}
+                  onFilterChange={setFilters}
+                  availableOptions={availableOptions}
+                />
+                <div className="mt-6 grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFilters({ sizes: [], colors: [], materials: [], priceRange: [0, 1000000], sort: 'newest' })}
+                    className="py-3 rounded-2xl bg-gray-100 text-gray-600 font-black"
+                  >
+                    Xóa bộ lọc
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileFiltersOpen(false)}
+                    className="py-3 rounded-2xl font-black text-white shadow-lg shadow-pink-200 bg-pink-500"
+                  >
+                    Áp dụng
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-col lg:flex-row gap-6 lg:gap-8">
           {/* Sidebar */}
-          <aside className="w-full lg:basis-[20%] lg:max-w-[240px] xl:max-w-[260px] flex-shrink-0">
+          <aside className="hidden lg:block w-full lg:basis-[20%] lg:max-w-[240px] xl:max-w-[260px] flex-shrink-0">
             <FilterSidebar 
               filters={filters} 
               onFilterChange={setFilters} 
@@ -162,10 +231,10 @@ const ProductPage: React.FC = () => {
                   <div key={i} className="bg-white rounded-2xl h-[260px] md:h-[320px] animate-pulse border border-gray-100"></div>
                 ))}
               </div>
-            ) : filteredProducts.length > 0 ? (
+            ) : paginatedProducts.length > 0 ? (
               <>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  {filteredProducts.map(product => (
+                  {paginatedProducts.map(product => (
                     <ProductCard key={product.id} product={product} />
                   ))}
                 </div>

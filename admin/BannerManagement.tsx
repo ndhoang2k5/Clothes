@@ -10,7 +10,19 @@ const SLOT_OPTIONS: Array<{ value: BannerSlot; label: string; desc: string }> = 
   { value: 'footer_banner', label: 'Banner chân trang', desc: 'Banner cuối trang' },
 ];
 
+/** Kích thước ảnh khuyến nghị (px) cho từng slot — khớp với tỉ lệ hiển thị trên giao diện user. */
+export const BANNER_IMAGE_SIZES: Record<BannerSlot, { width: number; height: number; note?: string }> = {
+  home_hero: { width: 1920, height: 600, note: 'Bìa full ngang, cao 400–600px trên màn hình' },
+  home_promo: { width: 1920, height: 400, note: 'Banner khuyến mãi giữa trang, cao ~240–280px' },
+  home_category_feature: { width: 800, height: 352, note: 'Mỗi ô 1/3 cột, hiển thị ~400×176px' },
+  footer_banner: { width: 1920, height: 220, note: 'Dải ngang trước footer, cao ~180–220px' },
+};
+
 const getSlotLabel = (value: string) => SLOT_OPTIONS.find((o) => o.value === value)?.label ?? value;
+const getBannerSizeHint = (slot: string) => {
+  const s = BANNER_IMAGE_SIZES[slot as BannerSlot];
+  return s ? `${s.width} × ${s.height} px` : '';
+};
 
 const BannerManagement: React.FC = () => {
   const [slot, setSlot] = useState<BannerSlot>('home_hero');
@@ -310,78 +322,94 @@ const BannerManagement: React.FC = () => {
       </div>
 
       {modalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-lg p-10 shadow-2xl">
-            <h3 className="text-2xl font-black mb-6">{editing ? 'Sửa Banner' : 'Tạo Banner'}</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Vị trí hiển thị</label>
-                <select
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500 font-bold"
-                  value={form.slot}
-                  onChange={(e) => setForm((s) => ({ ...s, slot: e.target.value as BannerSlot }))}
-                >
-                  {SLOT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label} — {o.desc}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Thứ tự (sort)</label>
-                <input
-                  type="number"
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500 font-bold"
-                  value={form.sort_order}
-                  onChange={(e) => setForm((s) => ({ ...s, sort_order: Number(e.target.value) }))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Trạng thái hiển thị</label>
-                <div className="inline-flex p-1 bg-gray-100 rounded-xl w-full sm:w-auto">
-                  <button
-                    type="button"
-                    onClick={() => setForm((s) => ({ ...s, is_active: true }))}
-                    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${form.is_active ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur flex items-center justify-center p-3 overflow-y-auto">
+          <div className="bg-white rounded-2xl w-full max-w-4xl my-4 p-6 md:p-8 shadow-2xl max-h-[calc(100vh-2rem)] flex flex-col">
+            <h3 className="text-xl font-black mb-4 flex-shrink-0">{editing ? 'Sửa Banner' : 'Tạo Banner'}</h3>
+            <div className="space-y-3 overflow-y-auto min-h-0 flex-1 pr-1">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-black text-gray-400 uppercase mb-1">Vị trí hiển thị</label>
+                  <select
+                    className="w-full bg-gray-50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500 font-bold"
+                    value={form.slot}
+                    onChange={(e) => setForm((s) => ({ ...s, slot: e.target.value as BannerSlot }))}
                   >
-                    Đang hiển thị
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setForm((s) => ({ ...s, is_active: false }))}
-                    className={`flex-1 sm:flex-none px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${!form.is_active ? 'bg-gray-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
-                  >
-                    Đang ẩn
-                  </button>
+                    {SLOT_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label} — {o.desc}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-gray-400 uppercase mb-1">Thứ tự</label>
+                  <input
+                    type="number"
+                    className="w-full bg-gray-50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500 font-bold"
+                    value={form.sort_order}
+                    onChange={(e) => setForm((s) => ({ ...s, sort_order: Number(e.target.value) }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-gray-400 uppercase mb-1">Trạng thái</label>
+                  <div className="inline-flex p-0.5 bg-gray-100 rounded-lg">
+                    <button
+                      type="button"
+                      onClick={() => setForm((s) => ({ ...s, is_active: true }))}
+                      className={`px-3 py-2 rounded-md text-xs font-bold transition-all ${form.is_active ? 'bg-green-500 text-white' : 'text-gray-500 hover:bg-gray-200'}`}
+                    >
+                      Hiển thị
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setForm((s) => ({ ...s, is_active: false }))}
+                      className={`px-3 py-2 rounded-md text-xs font-bold transition-all ${!form.is_active ? 'bg-gray-500 text-white' : 'text-gray-500 hover:bg-gray-200'}`}
+                    >
+                      Ẩn
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-black text-gray-400 uppercase mb-1">Tiêu đề</label>
+                  <input
+                    className="w-full bg-gray-50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500"
+                    value={form.title}
+                    onChange={e => setForm((s) => ({ ...s, title: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-black text-gray-400 uppercase mb-1">Subtitle (tuỳ chọn)</label>
+                  <input
+                    className="w-full bg-gray-50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500"
+                    value={form.subtitle}
+                    onChange={e => setForm((s) => ({ ...s, subtitle: e.target.value }))}
+                  />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Tiêu đề</label>
-                <input 
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500"
-                  value={form.title}
-                  onChange={e => setForm((s) => ({...s, title: e.target.value}))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Subtitle (tuỳ chọn)</label>
-                <input 
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500"
-                  value={form.subtitle}
-                  onChange={e => setForm((s) => ({...s, subtitle: e.target.value}))}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Ảnh banner</label>
-                <div className="flex gap-3">
+                <div className="flex items-baseline justify-between gap-2 mb-1">
+                  <label className="block text-[11px] font-black text-gray-400 uppercase">Ảnh banner</label>
+                  <span className="text-[11px] text-gray-500 whitespace-nowrap">
+                    Khuyến nghị: <strong className="text-gray-700">{getBannerSizeHint(form.slot)}</strong>
+                  </span>
+                </div>
+                <div className="flex gap-3 items-center">
+                  <div className="min-w-[180px] sm:min-w-[240px] w-48 sm:w-64 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                    {form.image_url ? (
+                      <img src={form.image_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-[10px]">Chưa có ảnh</div>
+                    )}
+                  </div>
                   <input
-                    className="flex-grow bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500"
+                    className="flex-1 min-w-0 bg-gray-50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500"
                     value={form.image_url}
                     onChange={(e) => setForm((s) => ({ ...s, image_url: e.target.value }))}
-                    placeholder="URL ảnh (hoặc upload bên phải)"
+                    placeholder="URL ảnh (dán link hoặc bấm Upload)"
                   />
-                  <label className="px-4 py-3 bg-gray-900 text-white rounded-xl font-black cursor-pointer hover:bg-gray-800 transition-colors whitespace-nowrap">
+                  <label className="flex-shrink-0 inline-flex items-center justify-center px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold cursor-pointer hover:bg-gray-800">
                     {uploading ? 'Đang up...' : 'Upload'}
                     <input
                       type="file"
@@ -396,16 +424,11 @@ const BannerManagement: React.FC = () => {
                     />
                   </label>
                 </div>
-                {form.image_url && (
-                  <div className="mt-3 w-full h-40 rounded-2xl overflow-hidden bg-gray-50 border border-gray-100">
-                    <img src={form.image_url} className="w-full h-full object-cover" />
-                  </div>
-                )}
               </div>
               <div>
-                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Link URL (tuỳ chọn)</label>
+                <label className="block text-[11px] font-black text-gray-400 uppercase mb-1">Link URL (tuỳ chọn)</label>
                 <input
-                  className="w-full bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500"
+                  className="w-full bg-gray-50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500"
                   value={form.link_url}
                   onChange={(e) => setForm((s) => ({ ...s, link_url: e.target.value }))}
                   placeholder="#/products hoặc https://..."
@@ -413,21 +436,21 @@ const BannerManagement: React.FC = () => {
               </div>
             </div>
             {error && (
-              <div className="mt-4 bg-red-50 text-red-700 border border-red-100 rounded-2xl px-4 py-3 font-bold text-sm">
+              <div className="mt-3 flex-shrink-0 bg-red-50 text-red-700 border border-red-100 rounded-xl px-3 py-2 text-sm font-bold">
                 {error}
               </div>
             )}
-            <div className="flex gap-4 mt-8">
+            <div className="flex gap-3 mt-4 flex-shrink-0">
               <button
                 onClick={() => setModalOpen(false)}
-                className="flex-grow py-3 bg-gray-100 text-gray-600 font-bold rounded-xl"
+                className="flex-grow py-2.5 text-sm font-bold rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200"
                 disabled={saving || uploading}
               >
                 Hủy
               </button>
               <button
                 onClick={handleSave}
-                className="flex-grow py-3 bg-pink-500 text-white font-bold rounded-xl shadow-lg disabled:opacity-60"
+                className="flex-grow py-2.5 text-sm font-bold rounded-xl bg-pink-500 text-white shadow-lg hover:bg-pink-600 disabled:opacity-60"
                 disabled={saving || uploading}
               >
                 {saving ? 'Đang lưu...' : 'Lưu'}

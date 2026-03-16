@@ -49,6 +49,7 @@ const ProductManagement: React.FC = () => {
     updated_variants: number;
     errors: string[];
   } | null>(null);
+  const [clearanceSuccess, setClearanceSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async (page: number, q: string) => {
@@ -119,11 +120,46 @@ const ProductManagement: React.FC = () => {
 
   const handleMoveToClearance = async (p: Product) => {
     setError(null);
+    setClearanceSuccess(null);
+    const clearanceCat = categories.find((c) => c.slug === 'uu-dai-cuoi-mua');
+    // Luôn gửi category (slug) để backend tự resolve; gửi thêm category_id nếu có
+    const payload: Partial<Product> = {
+      category: 'uu-dai-cuoi-mua',
+      isActive: true,
+      ...(clearanceCat?.id ? ({ category_id: Number(clearanceCat.id) } as unknown as Partial<Product>) : {}),
+    };
     try {
-      await api.adminUpdateProduct(p.id, { category: 'uu-dai-cuoi-mua' });
+      const updated = await api.adminUpdateProduct(p.id, payload);
+      const catSlug = updated?.category ?? 'uu-dai-cuoi-mua';
+      setClearanceSuccess(`Đã chuyển "${p.name}" vào Ưu đãi cuối mùa (danh mục: ${catSlug}). Sản phẩm sẽ hiển thị trên trang chủ.`);
+      setTimeout(() => setClearanceSuccess(null), 6000);
+      setProducts((prev) =>
+        prev.map((item) => (item.id === updated.id ? { ...item, category: catSlug, isActive: updated.isActive ?? true } : item))
+      );
       await reloadPage(currentPage, search);
     } catch (e: any) {
       setError(e?.message || 'Đưa vào Ưu đãi cuối mùa thất bại');
+    }
+  };
+
+  const DEFAULT_EXIT_CLEARANCE_SLUG = 'so-sinh';
+  const handleRemoveFromClearance = async (p: Product) => {
+    setError(null);
+    setClearanceSuccess(null);
+    const exitCat = categories.find((c) => c.slug === DEFAULT_EXIT_CLEARANCE_SLUG) || categories.find((c) => c.slug !== 'uu-dai-cuoi-mua');
+    const payload: Partial<Product> = exitCat?.id
+      ? ({ category_id: Number(exitCat.id), category: exitCat.slug } as unknown as Partial<Product>)
+      : { category: DEFAULT_EXIT_CLEARANCE_SLUG };
+    try {
+      const updated = await api.adminUpdateProduct(p.id, payload);
+      setClearanceSuccess(`Đã đưa "${p.name}" ra khỏi Ưu đãi cuối mùa.`);
+      setTimeout(() => setClearanceSuccess(null), 5000);
+      setProducts((prev) =>
+        prev.map((item) => (item.id === updated.id ? { ...item, category: updated.category } : item))
+      );
+      await reloadPage(currentPage, search);
+    } catch (e: any) {
+      setError(e?.message || 'Đưa ra khỏi Ưu đãi cuối mùa thất bại');
     }
   };
 
@@ -416,6 +452,11 @@ const ProductManagement: React.FC = () => {
           {error}
         </div>
       )}
+      {clearanceSuccess && (
+        <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-2xl px-5 py-4 font-bold text-sm">
+          {clearanceSuccess}
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full text-left">
@@ -465,7 +506,7 @@ const ProductManagement: React.FC = () => {
                     </div>
                   </div>
                 </td>
-                <td className="py-4 px-4 text-gray-500">{p.category}</td>
+                <td className="py-4 px-4 text-gray-500">{categories.find((c) => c.slug === p.category)?.name ?? (p.category && p.category !== 'unknown' ? p.category : 'Chưa chọn')}</td>
                 <td className="py-4 px-4">
                   <span className="font-bold text-pink-500">
                     {p.discountPrice
@@ -505,7 +546,15 @@ const ProductManagement: React.FC = () => {
                 </td>
                 <td className="py-4 px-4 text-right">
                   <div className="flex items-center justify-end gap-2">
-                    {p.category !== 'uu-dai-cuoi-mua' && (
+                    {p.category === 'uu-dai-cuoi-mua' ? (
+                      <button
+                        onClick={() => void handleRemoveFromClearance(p)}
+                        className="px-3 py-1.5 rounded-xl bg-gray-100 text-gray-700 font-bold text-xs hover:bg-gray-200 border border-gray-300"
+                        title="Đưa sản phẩm ra khỏi danh mục Ưu đãi cuối mùa"
+                      >
+                        Đưa ra khỏi Ưu đãi
+                      </button>
+                    ) : (
                       <button
                         onClick={() => void handleMoveToClearance(p)}
                         className="px-3 py-1.5 rounded-xl bg-amber-50 text-amber-700 font-bold text-xs hover:bg-amber-100 border border-amber-200"

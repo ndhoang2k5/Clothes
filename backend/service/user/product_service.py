@@ -16,8 +16,13 @@ class UserProductService:
             )
             .filter(models.Product.is_active == True)  # noqa: E712
         )
-        if category_slug:
-            query = query.join(models.Category).filter(models.Category.slug == category_slug)
+        if category_slug and str(category_slug).strip():
+            cat = db.query(models.Category).filter(models.Category.slug == str(category_slug).strip()).first()
+            if cat:
+                query = query.filter(models.Product.category_id == cat.id)
+            # nếu không tìm thấy category thì không lọc (trả về rỗng cho slug không tồn tại)
+            else:
+                query = query.filter(models.Product.id == -1)
         query = query.order_by(models.Product.updated_at.desc(), models.Product.id.desc())
         total = query.count()
         if per_page and per_page > 0:

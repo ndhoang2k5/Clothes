@@ -58,7 +58,7 @@ const HomePage: React.FC = () => {
           })(),
           api.getCollections().catch(() => []),
           api.getTips(3).catch(() => []),
-          api.getProductsPage({ category: 'uu-dai-cuoi-mua', page: 1, per_page: 8, useCache: true }).catch(() => ({ items: [] })),
+          api.getProductsPage({ category: 'uu-dai-cuoi-mua', page: 1, per_page: 8, useCache: false }).catch(() => ({ items: [] })),
         ]);
 
         setProducts((productRes as any).items ?? []);
@@ -309,30 +309,40 @@ const HomePage: React.FC = () => {
         })()}
       </section>
 
-      {/* Ưu đãi cuối mùa */}
-      {clearanceProducts.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 pb-10">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-2xl md:text-3xl font-black text-[#4B3B32]">Ưu đãi cuối mùa</h2>
-              <p className="text-sm text-[#9C8573]">
-                Những mẫu còn lại cuối mùa với mức giá dễ chịu để xả kho.
-              </p>
-            </div>
-            <a
-              href="#/products?cat=uu-dai-cuoi-mua"
-              className="text-sm font-bold text-[#B58A5A] hover:underline"
-            >
-              Xem tất cả
-            </a>
+      {/* Ưu đãi cuối mùa — luôn hiển thị block, có hoặc chưa có sản phẩm */}
+      <section className="max-w-7xl mx-auto px-4 pb-10">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-black text-[#4B3B32]">Ưu đãi cuối mùa</h2>
+            <p className="text-sm text-[#9C8573]">
+              Những mẫu còn lại cuối mùa với mức giá dễ chịu để xả kho.
+            </p>
           </div>
+          <a
+            href="#/products?cat=uu-dai-cuoi-mua"
+            className="text-sm font-bold text-[#B58A5A] hover:underline"
+          >
+            Xem tất cả
+          </a>
+        </div>
+        {clearanceProducts.length > 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {clearanceProducts.slice(0, 8).map((p) => (
               <ProductCard key={p.id} product={p} />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="bg-[#FFF9F1] border border-[#E5D6C4]/70 rounded-2xl py-12 text-center">
+            <p className="text-[#9C8573] mb-4">Chưa có sản phẩm ưu đãi cuối mùa.</p>
+            <a
+              href="#/products"
+              className="inline-flex bg-[#B58A5A] text-[#FDF8F0] px-6 py-3 rounded-full font-bold hover:bg-[#A3784E] transition-colors"
+            >
+              Xem tất cả sản phẩm
+            </a>
+          </div>
+        )}
+      </section>
 
       {/* Box quà tặng */}
       {products.some((p) => p.category === 'qua-tang') && (

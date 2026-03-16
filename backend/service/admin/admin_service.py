@@ -1,4 +1,5 @@
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ...entities import models
 from ..serializers import (
@@ -251,10 +252,40 @@ class AdminService:
         product = db.query(models.Product).filter(models.Product.id == product_id).first()
         if not product:
             return None
+        data = dict(data)
+        # Luôn resolve category từ slug (ưu tiên); tự tạo danh mục "uu-dai-cuoi-mua" nếu chưa có
+        if "category" in data:
+            raw = data.pop("category")
+            slug = str(raw).strip() if raw and isinstance(raw, str) else None
+            if slug:
+                slug = str(slug).strip()
+                cat = db.query(models.Category).filter(models.Category.slug == slug).first()
+                if not cat and slug == "uu-dai-cuoi-mua":
+                    db.execute(
+                        text(
+                            "INSERT INTO categories (name, slug, icon, sort_order) "
+                            "VALUES ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 7) "
+                            "ON CONFLICT (slug) DO NOTHING"
+                        )
+                    )
+                    db.commit()
+                    cat = db.query(models.Category).filter(models.Category.slug == "uu-dai-cuoi-mua").first()
+                if cat:
+                    data["category_id"] = cat.id
+        if "category_id" in data and data["category_id"] is not None:
+            try:
+                data["category_id"] = int(data["category_id"])
+            except (TypeError, ValueError):
+                data.pop("category_id", None)
         for k, v in data.items():
             if hasattr(product, k):
                 setattr(product, k, v)
         product.updated_at = __import__("datetime").datetime.utcnow()
+        # Ghi trực tiếp xuống DB khi đổi category để chắc chắn
+        if "category_id" in data:
+            cid = data["category_id"]
+            db.execute(text("UPDATE products SET category_id = :cid, updated_at = NOW() WHERE id = :pid"), {"cid": cid, "pid": product_id})
+            db.expire(product, ["category"])
         db.commit()
         db.refresh(product)
         product = AdminService.get_product(db, product_id)

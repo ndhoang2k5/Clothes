@@ -80,9 +80,11 @@ const INITIAL_ORDERS: Order[] = [
 ];
 
 class ApiService {
-  /** Backend port: khớp với docker-compose backend ports "8888:8000" (host:container) */
+  /** Backend: Docker "8888:8000" → dùng 8888; nếu chạy backend riêng port 8000 thì set VITE_API_ORIGIN=http://localhost:8000 */
   private readonly backendPort = 8888;
   private getBackendOrigin(): string {
+    const env = typeof (import.meta as any)?.env !== 'undefined' && (import.meta as any).env?.VITE_API_ORIGIN;
+    if (env && String(env).trim()) return String(env).trim().replace(/\/+$/, '');
     if (typeof window !== 'undefined') {
       return `${window.location.protocol}//${window.location.hostname}:${this.backendPort}`;
     }
@@ -415,18 +417,29 @@ class ApiService {
     if (patch.isHot !== undefined) payload.is_hot = patch.isHot;
     if (patch.isNew !== undefined) payload.is_new = patch.isNew;
     if (patch.isSale !== undefined) payload.is_sale = patch.isSale;
-    // category update: resolve slug -> id
-    if (patch.category !== undefined) {
-      const categories = await this.adminListCategories(true);
-      const categoryId = categories.find((c) => c.slug === patch.category)?.id;
-      payload.category_id = categoryId ? Number(categoryId) : null;
+    // category: gửi cả category_id và category (slug) để backend cập nhật chắc chắn
+    const patchAny = patch as { category_id?: number; category?: string };
+    if (patchAny.category !== undefined && patchAny.category !== null && String(patchAny.category).trim()) {
+      payload.category = String(patchAny.category).trim();
+    }
+    if (patchAny.category_id !== undefined && patchAny.category_id !== null) {
+      payload.category_id = patchAny.category_id;
     }
     const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) throw new Error('API Error');
+    if (!res.ok) {
+      let msg = 'Cập nhật thất bại';
+      try {
+        const errBody = await res.json();
+        if (errBody?.detail) msg = Array.isArray(errBody.detail) ? errBody.detail.map((d: any) => d?.msg ?? d).join(', ') : String(errBody.detail);
+      } catch {
+        // ignore
+      }
+      throw new Error(msg);
+    }
     const updated = await res.json();
     return this.mapBackendProductToFrontend(updated);
   }
@@ -558,17 +571,34 @@ class ApiService {
     }
   }
 
+  /** Lấy banner theo slot. Nếu slot=footer_banner mà rỗng thì thử lấy tất cả rồi lọc theo slot (tránh lệch tên slot backend). */
   async userListBannersBySlot(slot: BannerSlot): Promise<AdminBanner[]> {
-    const res = await fetch(`${this.userBaseUrl}/banners?slot=${encodeURIComponent(slot)}`);
-    if (!res.ok) throw new Error('API Error');
-    const data: AdminBanner[] = await res.json();
-    return data
-      .filter((b) => b.is_active)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
-      .map((b) => {
-        const pathOrUrl = (b as { image_url?: string }).image_url ?? (b as { imageUrl?: string }).imageUrl ?? '';
-        return { ...b, image_url: this.toAbsoluteUrl(pathOrUrl) };
-      });
+    const parse = (raw: any): AdminBanner[] => {
+      const arr = Array.isArray(raw) ? raw : (raw?.data ?? raw?.items ?? []);
+      if (!Array.isArray(arr)) return [];
+      return arr
+        .filter((b: any) => b && (b.is_active !== false))
+        .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        .map((b: any) => {
+          const pathOrUrl = b.image_url ?? b.imageUrl ?? '';
+          return { ...b, image_url: this.toAbsoluteUrl(pathOrUrl) };
+        });
+    };
+    try {
+      const res = await fetch(`${this.userBaseUrl}/banners?slot=${encodeURIComponent(slot)}`);
+      if (!res.ok) throw new Error('API Error');
+      const data = await res.json();
+      let list = parse(data);
+      if (slot) list = list.filter((b) => (b.slot || '').toLowerCase() === slot.toLowerCase());
+      if (list.length > 0) return list;
+      // Fallback: lấy tất cả banner rồi lọc theo slot (phòng backend lệch tên slot)
+      const resAll = await fetch(`${this.userBaseUrl}/banners`);
+      if (!resAll.ok) return [];
+      const all = parse(await resAll.json());
+      return slot ? all.filter((b) => (b.slot || '').toLowerCase() === slot.toLowerCase()) : all;
+    } catch {
+      return [];
+    }
   }
 
   async adminListBanners(params?: { slot?: BannerSlot | string; active_only?: boolean }): Promise<AdminBanner[]> {
@@ -631,7 +661,7 @@ class ApiService {
         coverImage: this.toAbsoluteUrl(c.cover_image || c.coverImage || ''),
         products: (c.product_ids || c.products || []).map((pid: any) => String(pid)),
       }));
-      // cache to localStorage for faster subsequent loads
+      // cache to localStorage for faster subsequent loads (user-facing)
       this.collections = mapped;
       this.save();
       return mapped;
@@ -640,22 +670,75 @@ class ApiService {
       return this.collections;
     }
   }
-  async addCollection(collection: Collection) {
-    const newCol = { ...collection, id: Date.now().toString() };
-    this.collections.push(newCol);
-    this.save();
-    return newCol;
+  /** Admin: list collections (includes inactive by default). */
+  async adminListCollections(include_inactive: boolean = true): Promise<Collection[]> {
+    const res = await fetch(`${this.adminBaseUrl}/collections?include_inactive=${include_inactive ? 'true' : 'false'}`);
+    if (!res.ok) throw new Error('API Error');
+    const data: any[] = await res.json();
+    return data.map((c) => ({
+      id: String(c.id),
+      name: c.name,
+      description: c.description ?? '',
+      coverImage: this.toAbsoluteUrl(c.cover_image || c.coverImage || ''),
+      products: (c.product_ids || c.products || []).map((pid: any) => String(pid)),
+    }));
   }
-  async updateCollection(collection: Collection) {
-    const idx = this.collections.findIndex(c => c.id === collection.id);
-    if (idx !== -1) {
-      this.collections[idx] = collection;
-      this.save();
-    }
+
+  async adminAddCollection(payload: { name: string; description?: string; coverImage?: string; products: string[]; isActive?: boolean; sortOrder?: number; slug?: string }): Promise<Collection> {
+    const body = {
+      name: payload.name,
+      description: payload.description ?? '',
+      cover_image: payload.coverImage ?? null,
+      is_active: payload.isActive ?? true,
+      sort_order: payload.sortOrder ?? 0,
+      product_ids: (payload.products || []).map((id) => Number(id)),
+      slug: payload.slug ?? undefined,
+    };
+    const res = await fetch(`${this.adminBaseUrl}/collections`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('API Error');
+    const c: any = await res.json();
+    return {
+      id: String(c.id),
+      name: c.name,
+      description: c.description ?? '',
+      coverImage: this.toAbsoluteUrl(c.cover_image || ''),
+      products: (c.product_ids || []).map((pid: any) => String(pid)),
+    };
   }
-  async deleteCollection(id: string) {
-    this.collections = this.collections.filter(c => c.id !== id);
-    this.save();
+
+  async adminUpdateCollection(collection: Collection & { isActive?: boolean; sortOrder?: number; slug?: string }): Promise<Collection> {
+    const body = {
+      name: collection.name,
+      description: collection.description ?? '',
+      cover_image: collection.coverImage ?? null,
+      is_active: (collection as any).isActive ?? true,
+      sort_order: (collection as any).sortOrder ?? 0,
+      product_ids: (collection.products || []).map((id) => Number(id)),
+      slug: (collection as any).slug ?? undefined,
+    };
+    const res = await fetch(`${this.adminBaseUrl}/collections/${Number(collection.id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error('API Error');
+    const c: any = await res.json();
+    return {
+      id: String(c.id),
+      name: c.name,
+      description: c.description ?? '',
+      coverImage: this.toAbsoluteUrl(c.cover_image || ''),
+      products: (c.product_ids || []).map((pid: any) => String(pid)),
+    };
+  }
+
+  async adminDeleteCollection(id: string): Promise<void> {
+    const res = await fetch(`${this.adminBaseUrl}/collections/${Number(id)}`, { method: 'DELETE' });
+    if (!res.ok) throw new Error('API Error');
   }
 
   // Blogs / Intro / Tips

@@ -13,7 +13,7 @@ const CollectionManagement: React.FC = () => {
   }, []);
 
   const fetchData = async () => {
-    const [c, p] = await Promise.all([api.getCollections(), api.getProducts()]);
+    const [c, p] = await Promise.all([api.adminListCollections(true), api.getProducts()]);
     setCollections(c);
     setProducts(p);
   };
@@ -21,13 +21,14 @@ const CollectionManagement: React.FC = () => {
   const handleSave = async () => {
     if (!editing || !editing.name) return;
     if (editing.id) {
-      await api.updateCollection(editing as Collection);
+      await api.adminUpdateCollection(editing as Collection);
     } else {
-      await api.addCollection({
-        ...editing,
+      await api.adminAddCollection({
+        name: editing.name,
+        description: editing.description || '',
         coverImage: editing.coverImage || 'https://picsum.photos/800/400',
-        products: editing.products || []
-      } as Collection);
+        products: editing.products || [],
+      });
     }
     setEditing(null);
     fetchData();
@@ -61,7 +62,7 @@ const CollectionManagement: React.FC = () => {
                <img src={col.coverImage} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                <div className="absolute top-4 right-4 flex gap-2">
                  <button onClick={() => setEditing(col)} className="bg-white/90 backdrop-blur p-2 rounded-xl shadow-lg hover:text-pink-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
-                 <button onClick={() => { if(confirm('Xóa?')) api.deleteCollection(col.id).then(fetchData) }} className="bg-white/90 backdrop-blur p-2 rounded-xl shadow-lg hover:text-red-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                 <button onClick={() => { if(confirm('Xóa?')) api.adminDeleteCollection(col.id).then(fetchData) }} className="bg-white/90 backdrop-blur p-2 rounded-xl shadow-lg hover:text-red-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                </div>
             </div>
             <div className="p-8">
@@ -106,13 +107,45 @@ const CollectionManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-widest">URL Ảnh bìa</label>
-                  <input 
-                    type="text" 
-                    className="w-full bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-pink-500"
-                    value={editing.coverImage}
-                    onChange={e => setEditing({...editing, coverImage: e.target.value})}
-                  />
+                  <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-widest">Ảnh bìa</label>
+                  <div className="space-y-3">
+                    <div className="flex gap-2 items-center">
+                      <input 
+                        type="text" 
+                        className="flex-1 bg-gray-50 border-none rounded-2xl px-6 py-4 outline-none focus:ring-2 focus:ring-pink-500"
+                        placeholder="https://..."
+                        value={editing.coverImage}
+                        onChange={e => setEditing({...editing, coverImage: e.target.value})}
+                      />
+                      <label className="px-4 py-3 rounded-2xl bg-gray-900 text-white text-xs font-black cursor-pointer hover:bg-gray-800 whitespace-nowrap">
+                        Upload
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const url = await api.adminUploadImage(file);
+                              setEditing((prev) => (prev ? { ...prev, coverImage: url } : prev));
+                            } finally {
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
+                    {editing.coverImage && (
+                      <div className="h-40 rounded-2xl overflow-hidden bg-gray-50 shadow-inner">
+                        <img
+                          src={editing.coverImage}
+                          alt={editing.name || 'Ảnh bìa bộ sưu tập'}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

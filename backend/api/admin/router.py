@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from ...service.admin.admin_service import AdminService
 from ...service.salework_sync import sync_salework
@@ -52,11 +52,12 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     return serialize_product(product)
 
 @router.post("/products")
-def create_product(data: dict, db: Session = Depends(get_db)):
+def create_product(data: dict = Body(...), db: Session = Depends(get_db)):
     return AdminService.create_product(db, data)
 
 @router.put("/products/{product_id}")
-def update_product(product_id: int, data: dict, db: Session = Depends(get_db)):
+def update_product(product_id: int, data: dict = Body(default={}), db: Session = Depends(get_db)):
+    data = data or {}
     updated = AdminService.update_product(db, product_id, data)
     if not updated:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -237,12 +238,12 @@ def list_banners(slot: str | None = None, active_only: bool = True, db: Session 
 
 
 @router.post("/banners")
-def create_banner(data: dict, db: Session = Depends(get_db)):
+def create_banner(data: dict = Body(...), db: Session = Depends(get_db)):
     return AdminService.create_banner(db, data)
 
 
 @router.put("/banners/{banner_id}")
-def update_banner(banner_id: int, data: dict, db: Session = Depends(get_db)):
+def update_banner(banner_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
     updated = AdminService.update_banner(db, banner_id, data)
     if not updated:
         raise HTTPException(status_code=404, detail="Banner not found")

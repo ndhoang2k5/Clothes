@@ -92,6 +92,22 @@ class ApiService {
   }
   private get adminBaseUrl() { return `${this.getBackendOrigin()}/api/admin`; }
   private get userBaseUrl() { return `${this.getBackendOrigin()}/api/user`; }
+  private getAuthToken(): string | null {
+    try {
+      return localStorage.getItem('unbee_user_token');
+    } catch {
+      return null;
+    }
+  }
+
+  private setAuthToken(token: string | null) {
+    try {
+      if (!token) localStorage.removeItem('unbee_user_token');
+      else localStorage.setItem('unbee_user_token', token);
+    } catch {
+      // ignore
+    }
+  }
 
   private products: Product[] = JSON.parse(localStorage.getItem('unbee_products') || JSON.stringify(INITIAL_PRODUCTS));
   private banners: Banner[] = JSON.parse(localStorage.getItem('unbee_banners') || JSON.stringify(INITIAL_BANNERS));
@@ -674,6 +690,78 @@ class ApiService {
     return this.toAbsoluteUrl(data.url);
   }
 
+  // --- Admin: Vouchers ---
+  async adminListVouchers(params?: { q?: string; is_active?: boolean; page?: number; per_page?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.q) qs.set('q', params.q);
+    if (params?.is_active !== undefined) qs.set('is_active', params.is_active ? 'true' : 'false');
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.per_page) qs.set('per_page', String(params.per_page));
+    const res = await fetch(`${this.adminBaseUrl}/vouchers${qs.toString() ? `?${qs.toString()}` : ''}`);
+    if (!res.ok) throw new Error('Không thể tải vouchers');
+    return res.json();
+  }
+
+  async adminCreateVoucher(payload: any) {
+    const res = await fetch(`${this.adminBaseUrl}/vouchers`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as any)?.detail || 'Tạo voucher thất bại');
+    return data;
+  }
+
+  async adminUpdateVoucher(id: number, payload: any) {
+    const res = await fetch(`${this.adminBaseUrl}/vouchers/${Number(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as any)?.detail || 'Cập nhật voucher thất bại');
+    return data;
+  }
+
+  // --- Admin: Shipping rules ---
+  async adminListShippingRules(params?: { active_only?: boolean }) {
+    const qs = new URLSearchParams();
+    if (params?.active_only !== undefined) qs.set('active_only', params.active_only ? 'true' : 'false');
+    const res = await fetch(`${this.adminBaseUrl}/shipping-rules${qs.toString() ? `?${qs.toString()}` : ''}`);
+    if (!res.ok) throw new Error('Không thể tải shipping rules');
+    return res.json();
+  }
+
+  async adminCreateShippingRule(payload: any) {
+    const res = await fetch(`${this.adminBaseUrl}/shipping-rules`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as any)?.detail || 'Tạo shipping rule thất bại');
+    return data;
+  }
+
+  async adminUpdateShippingRule(id: number, payload: any) {
+    const res = await fetch(`${this.adminBaseUrl}/shipping-rules/${Number(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as any)?.detail || 'Cập nhật shipping rule thất bại');
+    return data;
+  }
+
+  async adminDeleteShippingRule(id: number) {
+    const res = await fetch(`${this.adminBaseUrl}/shipping-rules/${Number(id)}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any)?.detail || 'Xóa shipping rule thất bại');
+    return data;
+  }
+
   // Collections
   async getCollections(): Promise<Collection[]> {
     try {
@@ -935,9 +1023,13 @@ class ApiService {
     voucherCode?: string;
     note?: string;
   }): Promise<{ orderId: number; orderCode: string; status: string; totalAmount: number; createdAt: string }> {
+    const token = this.getAuthToken();
     const res = await fetch(`${this.userBaseUrl}/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
     });
     const data = await res.json();
@@ -946,6 +1038,46 @@ class ApiService {
       throw new Error(msg);
     }
     return data;
+  }
+
+  // Auth (Phase C)
+  async userRegister(payload: { name?: string; email: string; phone?: string; password: string }) {
+    const res = await fetch(`${this.userBaseUrl}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as any)?.detail || 'Đăng ký thất bại');
+    if (data?.token) this.setAuthToken(String(data.token));
+    return data;
+  }
+
+  async userLogin(payload: { emailOrPhone: string; password: string }) {
+    const res = await fetch(`${this.userBaseUrl}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as any)?.detail || 'Đăng nhập thất bại');
+    if (data?.token) this.setAuthToken(String(data.token));
+    return data;
+  }
+
+  async userMe() {
+    const token = this.getAuthToken();
+    if (!token) throw new Error('Chưa đăng nhập');
+    const res = await fetch(`${this.userBaseUrl}/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as any)?.detail || 'Không thể tải thông tin');
+    return data;
+  }
+
+  userLogout() {
+    this.setAuthToken(null);
   }
 }
 

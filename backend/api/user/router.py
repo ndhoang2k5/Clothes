@@ -8,6 +8,14 @@ from ...service.voucher_service import VoucherService
 from ...service.shipping_service import ShippingService
 from ...service.order_service import OrderService
 from ...service.serializers import _dt
+from ...service.auth_service import (
+    create_access_token,
+    get_current_customer,
+    get_current_customer_optional,
+    hash_password,
+    verify_password,
+)
+from ...service.serializers import serialize_customer, serialize_order
 from ...database_config import get_db
 from ...entities import models
 
@@ -177,13 +185,14 @@ def create_order(
         description='{ "customer": { name, phone, email?, address }, "items": [ { productId, variantId?, quantity } ], "voucherCode?", "note?" }',
     ),
     db: Session = Depends(get_db),
+    current_customer=Depends(get_current_customer_optional),
 ):
     """
     Tạo đơn hàng. Body theo pipeline A.5.
     Trả về: { orderId, orderCode, status, totalAmount, createdAt }.
     """
     try:
-        order = OrderService.create_order(db, body)
+        order = OrderService.create_order(db, body, customer_id=(current_customer.id if current_customer else None))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {
@@ -192,4 +201,74 @@ def create_order(
         "status": order.status,
         "totalAmount": float(order.total_amount or 0),
         "createdAt": _dt(getattr(order, "created_at", None)),
+    }
+
+
+@router.post("/register")
+def register(body: dict = Body(...), db: Session = Depends(get_db)):
+    """
+    Body: { name, email, phone, password }
+    """
+    name = (body.get("name") or "").strip()
+    email = (body.get("email") or "").strip().lower()
+    phone = (body.get("phone") or "").strip()
+    password = body.get("password") or ""
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Email và mật khẩu là bắt buộc")
+    if db.query(models.Customer).filter(models.Customer.email == email).first():
+        raise HTTPException(status_code=400, detail="Email đã tồn tại")
+
+    customer = models.Customer(
+        name=name or None,
+        email=email,
+        phone=phone or None,
+        password_hash=hash_password(str(password)),
+        default_address=None,
+    )
+    db.add(customer)
+    db.commit()
+    db.refresh(customer)
+    token = create_access_token(customer.id)
+    return {"token": token, "customer": serialize_customer(customer)}
+
+
+@router.post("/login")
+def login(body: dict = Body(...), db: Session = Depends(get_db)):
+    """
+    Body: { emailOrPhone, password }
+    """
+    email_or_phone = (body.get("emailOrPhone") or "").strip()
+    password = body.get("password") or ""
+    if not email_or_phone or not password:
+        raise HTTPException(status_code=400, detail="Thiếu thông tin đăng nhập")
+
+    q = db.query(models.Customer)
+    if "@" in email_or_phone:
+        customer = q.filter(models.Customer.email == email_or_phone.lower()).first()
+    else:
+        customer = q.filter(models.Customer.phone == email_or_phone).first()
+    if not customer or not getattr(customer, "password_hash", None):
+        raise HTTPException(status_code=401, detail="Sai tài khoản hoặc mật khẩu")
+    if not verify_password(str(password), str(customer.password_hash)):
+        raise HTTPException(status_code=401, detail="Sai tài khoản hoặc mật khẩu")
+
+    token = create_access_token(customer.id)
+    return {"token": token, "customer": serialize_customer(customer)}
+
+
+@router.get("/me")
+def me(
+    db: Session = Depends(get_db),
+    customer=Depends(get_current_customer),
+):
+    orders = (
+        db.query(models.Order)
+        .filter(models.Order.customer_id == customer.id)
+        .order_by(models.Order.created_at.desc())
+        .limit(10)
+        .all()
+    )
+    return {
+        "customer": serialize_customer(customer),
+        "last_orders": [serialize_order(o) for o in orders],
     }

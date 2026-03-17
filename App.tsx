@@ -10,6 +10,9 @@ import BlogPage from './user/BlogPage';
 import CartPage from './user/CartPage';
 import OrderSuccessPage from './user/OrderSuccessPage';
 import { CartProvider } from './user/CartContext';
+import { AuthProvider } from './user/AuthContext';
+import LoginPage from './user/LoginPage';
+import AccountPage from './user/AccountPage';
 import { api } from './services/api';
 import type { AdminBanner } from './types';
 
@@ -169,6 +172,10 @@ const App: React.FC = () => {
         return <BlogPage />;
       case '#/cart':
         return <CartPage />;
+      case '#/login':
+        return <LoginPage />;
+      case '#/account':
+        return <AccountPage />;
       case '#/order-success':
         return <OrderSuccessPage />;
       case '#/about':
@@ -180,15 +187,17 @@ const App: React.FC = () => {
   };
 
   return (
-    <CartProvider>
-      <div className="flex flex-col min-h-screen bg-[#F8F3EC]">
-        <Navbar />
-        <main className="flex-grow min-h-[80vh]">
-          {renderRoute()}
-        </main>
-        <Footer />
-      </div>
-    </CartProvider>
+    <AuthProvider>
+      <CartProvider>
+        <div className="flex flex-col min-h-screen bg-[#F8F3EC]">
+          <Navbar />
+          <main className="flex-grow min-h-[80vh]">
+            {renderRoute()}
+          </main>
+          <Footer />
+        </div>
+      </CartProvider>
+    </AuthProvider>
   );
 };
 

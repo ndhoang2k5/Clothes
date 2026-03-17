@@ -1,9 +1,11 @@
 
 import React, { useState } from 'react';
 import { useCart } from './CartContext';
+import { useAuth } from './AuthContext';
 
 const Navbar: React.FC = () => {
   const { totalQuantity } = useCart();
+  const { customer, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobile = () => setMobileOpen(false);
   const navigate = (hash: string) => {
@@ -66,6 +68,22 @@ const Navbar: React.FC = () => {
                 </span>
               )}
             </a>
+            <a
+              href={customer ? '#/account' : '#/login'}
+              className="hidden md:inline-flex items-center gap-2 px-4 py-2 rounded-full font-black text-white shadow-lg shadow-pink-200"
+              style={{ backgroundColor: '#B58A5A' }}
+            >
+              <span className="text-sm">{customer ? (customer.name || 'Tài khoản') : 'Đăng nhập'}</span>
+            </a>
+            {customer && (
+              <button
+                onClick={() => { logout(); navigate('#/'); }}
+                className="hidden md:inline-flex px-3 py-2 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-gray-200"
+                title="Đăng xuất"
+              >
+                Đăng xuất
+              </button>
+            )}
             <button
               className="md:hidden p-2 text-gray-500"
               onClick={() => setMobileOpen(true)}
@@ -101,6 +119,12 @@ const Navbar: React.FC = () => {
               </button>
             </div>
             <nav className="px-4 space-y-1 text-base font-medium text-[#6B5645]">
+              <button
+                onClick={() => navigate(customer ? '#/account' : '#/login')}
+                className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70 font-black"
+              >
+                {customer ? 'Tài khoản' : 'Đăng nhập'}
+              </button>
               <button onClick={() => navigate('#/')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
                 Trang chủ
               </button>
@@ -119,6 +143,14 @@ const Navbar: React.FC = () => {
               <button onClick={() => navigate('#/cart')} className="w-full text-left py-2.5">
                 Giỏ hàng {totalQuantity > 0 && <span className="ml-1 text-xs text-pink-600 font-bold">({totalQuantity})</span>}
               </button>
+              {customer && (
+                <button
+                  onClick={() => { logout(); navigate('#/'); }}
+                  className="w-full text-left py-2.5 text-red-600 font-black"
+                >
+                  Đăng xuất
+                </button>
+              )}
             </nav>
           </div>
         </div>

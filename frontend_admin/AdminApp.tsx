@@ -7,6 +7,8 @@ import OrderManagement from './pages/OrderManagement';
 import CollectionManagement from './pages/CollectionManagement';
 import BannerManagement from './pages/BannerManagement';
 import IntroManagement from './pages/IntroManagement';
+import VoucherManagement from './pages/VoucherManagement';
+import ShippingRulesManagement from './pages/ShippingRulesManagement';
 
 const AdminApp: React.FC = () => {
   const [currentHash, setCurrentHash] = useState(window.location.hash || '#/admin');
@@ -22,6 +24,8 @@ const AdminApp: React.FC = () => {
       case '#/admin/products': return <ProductManagement />;
       case '#/admin/orders': return <OrderManagement />;
       case '#/admin/collections': return <CollectionManagement />;
+      case '#/admin/vouchers': return <VoucherManagement />;
+      case '#/admin/shipping-rules': return <ShippingRulesManagement />;
       case '#/admin/banners': return <BannerManagement />;
       case '#/admin/intro': return <IntroManagement />;
       case '#/admin':

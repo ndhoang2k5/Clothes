@@ -44,7 +44,7 @@ def _generate_order_code():
 
 class OrderService:
     @staticmethod
-    def create_order(db: Session, payload: dict):
+    def create_order(db: Session, payload: dict, customer_id: int | None = None):
         """
         payload: {
           "customer": { "name", "phone", "email?", "address" },
@@ -135,6 +135,7 @@ class OrderService:
 
         order = models.Order(
             order_code=order_code,
+            customer_id=customer_id,
             customer_name=name,
             phone=phone,
             email=(customer.get("email") or "").strip() or None,

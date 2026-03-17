@@ -762,6 +762,38 @@ class ApiService {
     return data;
   }
 
+  // --- Admin: Orders (read-only for now) ---
+  async adminListOrders(params?: { page?: number; per_page?: number; status?: string; q?: string; date_from?: string; date_to?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.per_page) qs.set('per_page', String(params.per_page));
+    if (params?.status) qs.set('status', params.status);
+    if (params?.q) qs.set('q', params.q);
+    if (params?.date_from) qs.set('date_from', params.date_from);
+    if (params?.date_to) qs.set('date_to', params.date_to);
+    const res = await fetch(`${this.adminBaseUrl}/orders${qs.toString() ? `?${qs.toString()}` : ''}`);
+    if (!res.ok) throw new Error('Không thể tải danh sách đơn hàng');
+    return res.json();
+  }
+
+  async adminGetOrder(orderId: number) {
+    const res = await fetch(`${this.adminBaseUrl}/orders/${Number(orderId)}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as any)?.detail || 'Không thể tải chi tiết đơn hàng');
+    return data;
+  }
+
+  async adminUpdateOrderStatus(orderId: number, status: string) {
+    const res = await fetch(`${this.adminBaseUrl}/orders/${Number(orderId)}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error((data as any)?.detail || 'Cập nhật trạng thái thất bại');
+    return data;
+  }
+
   // Collections
   async getCollections(): Promise<Collection[]> {
     try {

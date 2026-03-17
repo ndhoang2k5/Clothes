@@ -201,6 +201,7 @@ CREATE TABLE IF NOT EXISTS orders (
 );
 CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders (status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_id);
+CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders (phone);
 
 -- 13) Order items
 CREATE TABLE IF NOT EXISTS order_items (
@@ -221,6 +222,7 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id);
 CREATE TABLE IF NOT EXISTS vouchers (
     id SERIAL PRIMARY KEY,
     code VARCHAR(64) UNIQUE NOT NULL,
+    auto_apply BOOLEAN NOT NULL DEFAULT FALSE,
     type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (type IN ('percent', 'fixed')),
     value NUMERIC(12, 2) NOT NULL,
     min_order_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -235,6 +237,7 @@ CREATE TABLE IF NOT EXISTS vouchers (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_vouchers_code ON vouchers (UPPER(code));
 CREATE INDEX IF NOT EXISTS idx_vouchers_code_active ON vouchers (code, is_active);
+CREATE INDEX IF NOT EXISTS idx_vouchers_auto_active ON vouchers (auto_apply, is_active);
 CREATE INDEX IF NOT EXISTS idx_vouchers_valid ON vouchers (valid_from, valid_to);
 
 -- 15) Shipping rules (Phase A.4 – admin tự do đổi ngưỡng và phí ship)

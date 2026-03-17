@@ -43,6 +43,9 @@ def _generate_order_code():
 
 
 class OrderService:
+    STATUS_FLOW = ("pending", "confirmed", "paid", "shipped", "completed")
+    STATUS_ALL = ("pending", "confirmed", "paid", "shipped", "completed", "cancelled")
+
     @staticmethod
     def create_order(db: Session, payload: dict, customer_id: int | None = None):
         """
@@ -179,8 +182,86 @@ class OrderService:
         )
 
     @staticmethod
-    def get_all_orders(db: Session, page: int = 1, per_page: int = 50):
-        query = db.query(models.Order).order_by(models.Order.created_at.desc())
+    def update_status(db: Session, order_id: int, new_status: str):
+        order = db.query(models.Order).filter(models.Order.id == order_id).first()
+        if not order:
+            return None
+        ns = (new_status or "").strip()
+        if ns not in OrderService.STATUS_ALL:
+            raise ValueError("Trạng thái không hợp lệ")
+
+        cur = (order.status or "pending").strip()
+        # allow cancel anytime
+        if ns == "cancelled":
+            order.status = "cancelled"
+        else:
+            if cur == "cancelled":
+                raise ValueError("Đơn đã hủy không thể đổi trạng thái")
+            # allow same status (idempotent)
+            if cur == ns:
+                return order
+            try:
+                cur_idx = OrderService.STATUS_FLOW.index(cur)
+                ns_idx = OrderService.STATUS_FLOW.index(ns)
+            except ValueError:
+                raise ValueError("Trạng thái hiện tại không hợp lệ")
+            if ns_idx < cur_idx:
+                raise ValueError("Không thể lùi trạng thái đơn hàng")
+            if ns_idx > cur_idx + 1:
+                raise ValueError("Chỉ được chuyển sang trạng thái kế tiếp")
+            order.status = ns
+
+        order.updated_at = datetime.datetime.utcnow()
+        db.commit()
+        db.refresh(order)
+        return order
+
+    @staticmethod
+    def get_all_orders(
+        db: Session,
+        page: int = 1,
+        per_page: int = 50,
+        status: str | None = None,
+        q: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ):
+        query = db.query(models.Order)
+        if status and str(status).strip():
+            query = query.filter(models.Order.status == str(status).strip())
+        if q and str(q).strip():
+            term = f"%{str(q).strip()}%"
+            query = query.filter(
+                (models.Order.order_code.ilike(term))
+                | (models.Order.phone.ilike(term))
+            )
+        if date_from or date_to:
+            # Accept yyyy-mm-dd or full ISO. Filter by created_at.
+            def _parse(s: str, end_of_day: bool):
+                s = str(s).strip()
+                if not s:
+                    return None
+                try:
+                    if len(s) == 10 and s[4] == "-" and s[7] == "-":
+                        y, m, d = (int(s[0:4]), int(s[5:7]), int(s[8:10]))
+                        dt = datetime.datetime(y, m, d, 0, 0, 0)
+                    else:
+                        dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+                        if dt.tzinfo is not None:
+                            dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+                    if end_of_day:
+                        return dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+                    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                except Exception:
+                    return None
+
+            df = _parse(date_from, end_of_day=False) if date_from else None
+            dt = _parse(date_to, end_of_day=True) if date_to else None
+            if df is not None:
+                query = query.filter(models.Order.created_at >= df)
+            if dt is not None:
+                query = query.filter(models.Order.created_at <= dt)
+        query = query.order_by(models.Order.created_at.desc())
         total = query.count()
         if per_page and per_page > 0:
             page = max(1, page)

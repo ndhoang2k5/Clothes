@@ -28,8 +28,16 @@ class AdminService:
         return [serialize_order(o) for o in orders]
 
     @staticmethod
-    def list_orders(db: Session, page: int = 1, per_page: int = 50):
-        result = OrderService.get_all_orders(db, page=page, per_page=per_page)
+    def list_orders(
+        db: Session,
+        page: int = 1,
+        per_page: int = 50,
+        status: str | None = None,
+        q: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ):
+        result = OrderService.get_all_orders(db, page=page, per_page=per_page, status=status, q=q, date_from=date_from, date_to=date_to)
         return {
             "items": [serialize_order(o) for o in result["items"]],
             "total": result["total"],
@@ -40,6 +48,11 @@ class AdminService:
     @staticmethod
     def get_order(db: Session, order_id: int):
         order = OrderService.get_by_id(db, order_id)
+        return serialize_order(order) if order else None
+
+    @staticmethod
+    def update_order_status(db: Session, order_id: int, status: str):
+        order = OrderService.update_status(db, order_id, status)
         return serialize_order(order) if order else None
 
     # --- Customers (Phase A.2) ---

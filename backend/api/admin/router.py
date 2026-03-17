@@ -13,13 +13,31 @@ router = APIRouter()
 def list_orders(
     page: int = 1,
     per_page: int = 50,
+    status: str | None = None,
+    q: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     db: Session = Depends(get_db),
 ):
-    return AdminService.list_orders(db, page=page, per_page=per_page)
+    return AdminService.list_orders(db, page=page, per_page=per_page, status=status, q=q, date_from=date_from, date_to=date_to)
 
 @router.get("/orders/{order_id}")
 def get_order(order_id: int, db: Session = Depends(get_db)):
     out = AdminService.get_order(db, order_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return out
+
+@router.patch("/orders/{order_id}/status")
+def update_order_status(order_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
+    """
+    Body: { status: pending|confirmed|paid|shipped|completed|cancelled }
+    """
+    status = (data.get("status") or "").strip()
+    try:
+        out = AdminService.update_order_status(db, order_id, status)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if out is None:
         raise HTTPException(status_code=404, detail="Order not found")
     return out

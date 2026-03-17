@@ -20,7 +20,8 @@ const AdminApp: React.FC = () => {
   }, []);
 
   const renderRoute = () => {
-    switch (currentHash) {
+    const [path] = (currentHash || '#/admin').split('?');
+    switch (path) {
       case '#/admin/products': return <ProductManagement />;
       case '#/admin/orders': return <OrderManagement />;
       case '#/admin/collections': return <CollectionManagement />;

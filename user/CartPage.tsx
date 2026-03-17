@@ -1,9 +1,102 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCart } from './CartContext';
 import { COLORS } from './designTokens';
+import { api } from '../services/api';
 
 const CartPage: React.FC = () => {
-  const { items, totalPrice, updateQuantity, removeItem, clearCart } = useCart();
+  const { items, totalPrice, updateQuantity, removeItem, clearCart, appliedVoucher, applyVoucher, removeVoucher } = useCart();
+
+  const [voucherInput, setVoucherInput] = useState('');
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
+
+  const [shippingFee, setShippingFee] = useState<number>(0);
+  const [shippingLoading, setShippingLoading] = useState(false);
+
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
+  const [note, setNote] = useState('');
+
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (items.length === 0 || totalPrice <= 0) {
+      setShippingFee(0);
+      return;
+    }
+    setShippingLoading(true);
+    api
+      .userCalculateShipping(totalPrice)
+      .then((r) => setShippingFee(r.finalFee ?? 0))
+      .catch(() => setShippingFee(0))
+      .finally(() => setShippingLoading(false));
+  }, [items.length, totalPrice]);
+
+  const voucherDiscount = appliedVoucher?.discountAmount ?? 0;
+  const totalPay = Math.max(0, totalPrice - voucherDiscount + shippingFee);
+
+  const handleApplyVoucher = async () => {
+    setVoucherError(null);
+    setVoucherLoading(true);
+    try {
+      await applyVoucher(voucherInput);
+      setVoucherInput('');
+    } catch (e) {
+      setVoucherError(e instanceof Error ? e.message : 'Mã không hợp lệ');
+    } finally {
+      setVoucherLoading(false);
+    }
+  };
+
+  const handleSubmitOrder = async () => {
+    const trimName = name.trim();
+    const trimPhone = phone.trim();
+    const trimAddress = address.trim();
+    if (!trimName || !trimPhone || !trimAddress) {
+      setSubmitError('Vui lòng điền đủ Họ tên, Số điện thoại và Địa chỉ.');
+      return;
+    }
+    if (items.length === 0) {
+      setSubmitError('Giỏ hàng trống.');
+      return;
+    }
+    setSubmitError(null);
+    setSubmitLoading(true);
+    try {
+      const payload = {
+        customer: {
+          name: trimName,
+          phone: trimPhone,
+          email: email.trim() || undefined,
+          address: trimAddress,
+        },
+        items: items.map((it) => ({
+          productId: Number(it.productId),
+          variantId: it.variant?.id ? Number(it.variant.id) : undefined,
+          quantity: it.quantity,
+        })),
+        voucherCode: appliedVoucher?.code || undefined,
+        note: note.trim() || undefined,
+      };
+      const result = await api.userCreateOrder(payload);
+      clearCart();
+      const params = new URLSearchParams({
+        code: result.orderCode,
+        total: String(result.totalAmount),
+        date: result.createdAt || '',
+      });
+      window.location.hash = `#/order-success?${params.toString()}`;
+    } catch (e) {
+      setSubmitError(e instanceof Error ? e.message : 'Đặt hàng thất bại');
+    } finally {
+      setSubmitLoading(false);
+    }
+  };
+
+  const formValid = name.trim() && phone.trim() && address.trim() && items.length > 0;
 
   if (items.length === 0) {
     return (
@@ -73,7 +166,6 @@ const CartPage: React.FC = () => {
                         Xóa
                       </button>
                     </div>
-
                     <div className="mt-3 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-2">
                         <span className="text-xs font-bold text-gray-600">SL</span>
@@ -99,25 +191,133 @@ const CartPage: React.FC = () => {
               </div>
             );
           })}
+
+          {/* Mã giảm giá */}
+          <div className="bg-white rounded-3xl p-4 md:p-5 border border-gray-100 shadow-sm">
+            <div className="font-black text-gray-900 mb-3">Mã giảm giá</div>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                type="text"
+                value={voucherInput}
+                onChange={(e) => { setVoucherInput(e.target.value); setVoucherError(null); }}
+                onKeyDown={(e) => e.key === 'Enter' && handleApplyVoucher()}
+                placeholder="Nhập mã"
+                className="flex-1 min-w-[120px] rounded-xl border border-gray-200 px-4 py-2.5 font-medium outline-none focus:border-pink-500"
+                disabled={voucherLoading || items.length === 0}
+              />
+              <button
+                type="button"
+                onClick={handleApplyVoucher}
+                disabled={voucherLoading || !voucherInput.trim() || items.length === 0}
+                className="px-5 py-2.5 rounded-xl font-bold text-white disabled:opacity-50"
+                style={{ backgroundColor: COLORS.ctaPrimary }}
+              >
+                {voucherLoading ? 'Đang kiểm tra...' : 'Áp dụng'}
+              </button>
+            </div>
+            {voucherError && <p className="mt-2 text-sm text-red-600">{voucherError}</p>}
+            {appliedVoucher && (
+              <p className="mt-2 text-sm text-green-700 font-medium">
+                Đã áp dụng mã <strong>{appliedVoucher.code}</strong> (−{appliedVoucher.discountAmount.toLocaleString()}đ)
+                <button type="button" onClick={removeVoucher} className="ml-2 text-gray-500 hover:text-red-600 font-bold">Gỡ</button>
+              </p>
+            )}
+          </div>
+
+          {/* Thông tin giao hàng */}
+          <div className="bg-white rounded-3xl p-4 md:p-6 border border-gray-100 shadow-sm">
+            <div className="font-black text-lg text-gray-900 mb-4">Thông tin giao hàng</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Họ tên <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Nguyễn Văn A"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:border-pink-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Số điện thoại <span className="text-red-500">*</span></label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="0901234567"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:border-pink-500"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-gray-700 mb-1">Email (tùy chọn)</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:border-pink-500"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-gray-700 mb-1">Địa chỉ giao hàng <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Số nhà, đường, phường/xã, quận/huyện, tỉnh/thành"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:border-pink-500"
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-gray-700 mb-1">Ghi chú (tùy chọn)</label>
+                <input
+                  type="text"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Ghi chú cho đơn hàng"
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2.5 outline-none focus:border-pink-500"
+                />
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm h-fit">
-          <div className="font-black text-lg text-gray-900 mb-4">Tóm tắt</div>
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
-            <span>Tạm tính</span>
-            <span className="font-bold">{totalPrice.toLocaleString()}đ</span>
+        <div className="space-y-4">
+          <div className="bg-white rounded-3xl p-6 border border-gray-100 shadow-sm h-fit">
+            <div className="font-black text-lg text-gray-900 mb-4">Tóm tắt</div>
+            <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+              <span>Tạm tính</span>
+              <span className="font-bold">{totalPrice.toLocaleString()}đ</span>
+            </div>
+            {appliedVoucher && (
+              <div className="flex items-center justify-between text-sm text-green-700 mb-2">
+                <span>Giảm giá (mã)</span>
+                <span className="font-bold">−{voucherDiscount.toLocaleString()}đ</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+              <span>Phí vận chuyển</span>
+              <span className="font-bold">
+                {shippingLoading ? 'Đang tính...' : `${shippingFee.toLocaleString()}đ`}
+              </span>
+            </div>
+            <div className="border-t border-gray-200 pt-4 mt-4 flex items-center justify-between">
+              <span className="font-black text-gray-900">Tổng thanh toán</span>
+              <span className="text-xl font-black" style={{ color: COLORS.ctaPrimary }}>
+                {totalPay.toLocaleString()}đ
+              </span>
+            </div>
+            {submitError && <p className="mt-3 text-sm text-red-600">{submitError}</p>}
+            <button
+              type="button"
+              onClick={handleSubmitOrder}
+              disabled={!formValid || submitLoading}
+              className="w-full mt-4 py-3 rounded-2xl text-white font-black shadow-lg shadow-pink-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ backgroundColor: COLORS.ctaPrimary }}
+            >
+              {submitLoading ? 'Đang đặt hàng...' : 'Đặt hàng'}
+            </button>
           </div>
-          <div className="flex items-center justify-between text-sm text-gray-600 mb-6">
-            <span>Phí vận chuyển</span>
-            <span className="font-bold">Tính khi thanh toán</span>
-          </div>
-          <button
-            type="button"
-            className="w-full py-3 rounded-2xl text-white font-black shadow-lg shadow-pink-200"
-            style={{ backgroundColor: COLORS.ctaPrimary }}
-          >
-            Thanh toán
-          </button>
         </div>
       </div>
     </div>
@@ -125,4 +325,3 @@ const CartPage: React.FC = () => {
 };
 
 export default CartPage;
-

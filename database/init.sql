@@ -167,17 +167,31 @@ CREATE TABLE IF NOT EXISTS blogs (
 );
 CREATE INDEX IF NOT EXISTS idx_blogs_published ON blogs (is_published, published_at DESC);
 
--- 11) Orders (guest checkout)
--- status: pending | confirmed | processing | shipped | delivered | cancelled
+-- 11) Customers (sẵn sàng cho Phase A.2 – liên kết với Order qua customer_id)
+CREATE TABLE IF NOT EXISTS customers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255),
+    phone VARCHAR(30),
+    email VARCHAR(255) UNIQUE,
+    password_hash TEXT,
+    default_address TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_customers_email ON customers (email);
+
+-- 12) Orders (guest checkout; customer_id nullable cho khách đặt không đăng nhập)
+-- status: pending | confirmed | paid | shipped | completed | cancelled (theo pipeline cart/checkout)
 CREATE TABLE IF NOT EXISTS orders (
     id SERIAL PRIMARY KEY,
     order_code VARCHAR(32) UNIQUE,
+    customer_id INT REFERENCES customers(id) ON DELETE SET NULL,
     customer_name VARCHAR(255) NOT NULL,
     phone VARCHAR(30) NOT NULL,
     email VARCHAR(255),
     address TEXT NOT NULL,
     note TEXT,
-    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','confirmed','processing','shipped','delivered','cancelled')),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CONSTRAINT orders_status_check CHECK (status IN ('pending','confirmed','paid','shipped','completed','cancelled')),
     subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0,
     discount_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
     shipping_fee NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -186,7 +200,9 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_id);
 
+-- 13) Order items
 CREATE TABLE IF NOT EXISTS order_items (
     id SERIAL PRIMARY KEY,
     order_id INT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -200,7 +216,55 @@ CREATE TABLE IF NOT EXISTS order_items (
 );
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id);
 
--- 12) Admin users (JWT auth will use this table)
+-- 14) Vouchers (mã giảm giá – Phase A.3)
+-- type: percent | fixed; value: % hoặc số tiền; max_discount: trần giảm (cho percent)
+CREATE TABLE IF NOT EXISTS vouchers (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(64) UNIQUE NOT NULL,
+    type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (type IN ('percent', 'fixed')),
+    value NUMERIC(12, 2) NOT NULL,
+    min_order_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    max_discount NUMERIC(12, 2),
+    usage_limit INT,
+    used_count INT NOT NULL DEFAULT 0,
+    valid_from TIMESTAMPTZ,
+    valid_to TIMESTAMPTZ,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vouchers_code ON vouchers (UPPER(code));
+CREATE INDEX IF NOT EXISTS idx_vouchers_code_active ON vouchers (code, is_active);
+CREATE INDEX IF NOT EXISTS idx_vouchers_valid ON vouchers (valid_from, valid_to);
+
+-- 15) Shipping rules (Phase A.4 – admin tự do đổi ngưỡng và phí ship)
+-- Chọn rule: min_order_total lớn nhất mà ≤ cart_total; discount_type: percent | fixed | free
+CREATE TABLE IF NOT EXISTS shipping_rules (
+    id SERIAL PRIMARY KEY,
+    min_order_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    base_fee NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    discount_type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (discount_type IN ('percent', 'fixed', 'free')),
+    discount_value NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_shipping_rules_min_order ON shipping_rules (min_order_total DESC);
+CREATE INDEX IF NOT EXISTS idx_shipping_rules_active_sort ON shipping_rules (is_active, sort_order);
+
+-- Rule mặc định (chỉ seed khi chưa có rule): đơn 0 → 30k; đơn ≥ 200k → giảm 50%; đơn ≥ 300k → freeship
+INSERT INTO shipping_rules (min_order_total, base_fee, discount_type, discount_value, is_active, sort_order)
+SELECT 0, 30000, 'fixed', 0, true, 1
+WHERE NOT EXISTS (SELECT 1 FROM shipping_rules LIMIT 1);
+INSERT INTO shipping_rules (min_order_total, base_fee, discount_type, discount_value, is_active, sort_order)
+SELECT 200000, 30000, 'percent', 50, true, 2
+WHERE NOT EXISTS (SELECT 1 FROM shipping_rules WHERE min_order_total = 200000 LIMIT 1);
+INSERT INTO shipping_rules (min_order_total, base_fee, discount_type, discount_value, is_active, sort_order)
+SELECT 300000, 30000, 'free', 0, true, 3
+WHERE NOT EXISTS (SELECT 1 FROM shipping_rules WHERE min_order_total = 300000 LIMIT 1);
+
+-- 16) Admin users (JWT auth will use this table)
 CREATE TABLE IF NOT EXISTS admin_users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,

@@ -1,9 +1,13 @@
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ...service.user.product_service import UserProductService
 from ...service.admin.admin_service import AdminService
+from ...service.voucher_service import VoucherService
+from ...service.shipping_service import ShippingService
+from ...service.order_service import OrderService
+from ...service.serializers import _dt
 from ...database_config import get_db
 from ...entities import models
 
@@ -130,3 +134,62 @@ def get_blogs(category: str | None = None, limit: int = 3, db: Session = Depends
     if limit and limit > 0:
         items = items[: limit]
     return items
+
+
+@router.post("/vouchers/validate")
+def validate_voucher(
+    body: dict = Body(..., description="{ code: string, cart_total: number }"),
+    db: Session = Depends(get_db),
+):
+    """
+    Kiểm tra mã giảm giá. Body: { "code": "MÃ", "cart_total": số_tiền }.
+    Trả về: { "ok": bool, "discountAmount": number | null, "reason": string | null }.
+    """
+    code = (body.get("code") or "").strip()
+    cart_total = body.get("cart_total")
+    if not code:
+        return {"ok": False, "discountAmount": None, "reason": "Vui lòng nhập mã"}
+    result = VoucherService.validate_voucher(db, code, cart_total)
+    return {
+        "ok": result["ok"],
+        "discountAmount": result.get("discount_amount"),
+        "reason": result.get("reason"),
+    }
+
+
+@router.get("/shipping/calculate")
+def calculate_shipping_fee(
+    cart_total: float = 0,
+    db: Session = Depends(get_db),
+):
+    """
+    Tính phí ship theo tổng tiền giỏ hàng (cart_total, VND).
+    Trả về: { baseFee, discountFromShipping, finalFee, ruleId }.
+    """
+    result = ShippingService.calculate_fee(db, cart_total)
+    return result
+
+
+@router.post("/orders")
+def create_order(
+    body: dict = Body(
+        ...,
+        description='{ "customer": { name, phone, email?, address }, "items": [ { productId, variantId?, quantity } ], "voucherCode?", "note?" }',
+    ),
+    db: Session = Depends(get_db),
+):
+    """
+    Tạo đơn hàng. Body theo pipeline A.5.
+    Trả về: { orderId, orderCode, status, totalAmount, createdAt }.
+    """
+    try:
+        order = OrderService.create_order(db, body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {
+        "orderId": order.id,
+        "orderCode": order.order_code,
+        "status": order.status,
+        "totalAmount": float(order.total_amount or 0),
+        "createdAt": _dt(getattr(order, "created_at", None)),
+    }

@@ -1,7 +1,10 @@
 
-from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text, Numeric
+from sqlalchemy import Column, Integer, String, Boolean, ForeignKey, DateTime, Text, Numeric, CheckConstraint
 from sqlalchemy.orm import relationship, declarative_base
 import datetime
+
+# Order.status: pending | confirmed | paid | shipped | completed | cancelled
+ORDER_STATUS_VALUES = ("pending", "confirmed", "paid", "shipped", "completed", "cancelled")
 
 Base = declarative_base()
 
@@ -131,10 +134,44 @@ class CollectionProduct(Base):
     collection = relationship("Collection", back_populates="items")
     product = relationship("Product")
 
+
+class Customer(Base):
+    """
+    Khách hàng (Phase A.2). email unique cho đăng nhập sau (Phase C).
+    password_hash, default_address dùng khi có tài khoản.
+    """
+    __tablename__ = "customers"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255))
+    phone = Column(String(30))
+    email = Column(String(255), unique=True)
+    password_hash = Column(Text)
+    default_address = Column(Text)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    orders = relationship("Order", back_populates="customer")
+
+
 class Order(Base):
+    """
+    Đơn hàng. Các field theo pipeline:
+    - subtotal: tổng tiền hàng chưa giảm giá.
+    - discount_total: tổng tiền giảm (voucher, khuyến mãi).
+    - shipping_fee: phí vận chuyển (sau khi áp rule giảm ship nếu có).
+    - total_amount: tổng tiền khách phải trả.
+    - status: pending | confirmed | paid | shipped | completed | cancelled.
+    """
     __tablename__ = "orders"
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in ORDER_STATUS_VALUES)})",
+            name="orders_status_check",
+        ),
+    )
     id = Column(Integer, primary_key=True, index=True)
     order_code = Column(String(32), unique=True, index=True)
+    customer_id = Column(Integer, ForeignKey("customers.id"), nullable=True, index=True)
     customer_name = Column(String(255), nullable=False)
     phone = Column(String(30), nullable=False)
     email = Column(String(255))
@@ -148,9 +185,16 @@ class Order(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
+    customer = relationship("Customer", back_populates="orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
 
 class OrderItem(Base):
+    """
+    Dòng đơn hàng. Lưu snapshot tại thời điểm đặt:
+    - product_id, variant_id: tham chiếu sản phẩm/biến thể.
+    - product_name, variant_label: tên hiển thị khi xem lịch sử, không phụ thuộc join.
+    - quantity, unit_price, line_total: số lượng, đơn giá, tổng dòng.
+    """
     __tablename__ = "order_items"
     id = Column(Integer, primary_key=True, index=True)
     order_id = Column(Integer, ForeignKey("orders.id"), nullable=False, index=True)
@@ -163,6 +207,57 @@ class OrderItem(Base):
     line_total = Column(Numeric(12, 2), nullable=False)
 
     order = relationship("Order", back_populates="items")
+
+
+class Voucher(Base):
+    """
+    Mã giảm giá (Phase A.3).
+    type: percent | fixed. value: % hoặc số tiền. max_discount: trần giảm (percent).
+    """
+    __tablename__ = "vouchers"
+    id = Column(Integer, primary_key=True, index=True)
+    code = Column(String(64), unique=True, nullable=False, index=True)
+    type = Column(String(20), nullable=False, default="fixed")
+    value = Column(Numeric(12, 2), nullable=False)
+    min_order_total = Column(Numeric(12, 2), default=0)
+    max_discount = Column(Numeric(12, 2))
+    usage_limit = Column(Integer)
+    used_count = Column(Integer, default=0)
+    valid_from = Column(DateTime)
+    valid_to = Column(DateTime)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint("type IN ('percent', 'fixed')", name="vouchers_type_check"),
+    )
+
+
+class ShippingRule(Base):
+    """
+    Quy tắc phí ship (Phase A.4). Admin đổi ngưỡng và giá thoải mái.
+    Chọn rule: min_order_total lớn nhất mà ≤ cart_total.
+    discount_type: percent | fixed | free. discount_value: % hoặc số tiền (free thì 0).
+    """
+    __tablename__ = "shipping_rules"
+    id = Column(Integer, primary_key=True, index=True)
+    min_order_total = Column(Numeric(12, 2), default=0)
+    base_fee = Column(Numeric(12, 2), default=0)
+    discount_type = Column(String(20), nullable=False, default="fixed")
+    discount_value = Column(Numeric(12, 2), default=0)
+    is_active = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint(
+            "discount_type IN ('percent', 'fixed', 'free')",
+            name="shipping_rules_discount_type_check",
+        ),
+    )
+
 
 class Banner(Base):
     __tablename__ = "banners"

@@ -131,6 +131,19 @@ def serialize_product(product) -> dict:
     }
 
 
+def serialize_customer(customer) -> dict:
+    """Không trả về password_hash."""
+    return {
+        "id": customer.id,
+        "name": getattr(customer, "name", None),
+        "phone": getattr(customer, "phone", None),
+        "email": getattr(customer, "email", None),
+        "default_address": getattr(customer, "default_address", None),
+        "created_at": _dt(getattr(customer, "created_at", None)),
+        "updated_at": _dt(getattr(customer, "updated_at", None)),
+    }
+
+
 def serialize_order_item(item) -> dict:
     return {
         "id": item.id,
@@ -149,6 +162,7 @@ def serialize_order(order) -> dict:
     return {
         "id": order.id,
         "order_code": getattr(order, "order_code", None),
+        "customer_id": getattr(order, "customer_id", None),
         "customer_name": order.customer_name,
         "phone": order.phone,
         "email": getattr(order, "email", None),
@@ -265,6 +279,38 @@ def serialize_product_picker_item(product) -> dict:
         "total_stock": total_stock,
         "is_active": getattr(product, "is_active", True),
         "kind": getattr(product, "kind", "single"),
+    }
+
+
+def serialize_shipping_rule(rule) -> dict:
+    return {
+        "id": rule.id,
+        "min_order_total": _num(getattr(rule, "min_order_total", 0)),
+        "base_fee": _num(getattr(rule, "base_fee", 0)),
+        "discount_type": getattr(rule, "discount_type", "fixed"),
+        "discount_value": _num(getattr(rule, "discount_value", 0)),
+        "is_active": getattr(rule, "is_active", True),
+        "sort_order": getattr(rule, "sort_order", 0),
+        "created_at": _dt(getattr(rule, "created_at", None)),
+        "updated_at": _dt(getattr(rule, "updated_at", None)),
+    }
+
+
+def serialize_voucher(voucher) -> dict:
+    return {
+        "id": voucher.id,
+        "code": voucher.code,
+        "type": getattr(voucher, "type", "fixed"),
+        "value": _num(getattr(voucher, "value", None)),
+        "min_order_total": _num(getattr(voucher, "min_order_total", 0)),
+        "max_discount": _num(getattr(voucher, "max_discount", None)),
+        "usage_limit": getattr(voucher, "usage_limit", None),
+        "used_count": getattr(voucher, "used_count", 0),
+        "valid_from": _dt(getattr(voucher, "valid_from", None)),
+        "valid_to": _dt(getattr(voucher, "valid_to", None)),
+        "is_active": getattr(voucher, "is_active", True),
+        "created_at": _dt(getattr(voucher, "created_at", None)),
+        "updated_at": _dt(getattr(voucher, "updated_at", None)),
     }
 
 

@@ -8,6 +8,7 @@ import ProductDetailPage from './user/ProductDetailPage';
 import AboutPage from './user/AboutPage';
 import BlogPage from './user/BlogPage';
 import CartPage from './user/CartPage';
+import OrderSuccessPage from './user/OrderSuccessPage';
 import { CartProvider } from './user/CartContext';
 import { api } from './services/api';
 import type { AdminBanner } from './types';
@@ -168,6 +169,8 @@ const App: React.FC = () => {
         return <BlogPage />;
       case '#/cart':
         return <CartPage />;
+      case '#/order-success':
+        return <OrderSuccessPage />;
       case '#/about':
         return <AboutPage />;
       case '#/':

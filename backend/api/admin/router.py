@@ -10,8 +10,102 @@ import uuid
 router = APIRouter()
 
 @router.get("/orders")
-def get_orders(db: Session = Depends(get_db)):
-    return AdminService.get_all_orders(db)
+def list_orders(
+    page: int = 1,
+    per_page: int = 50,
+    db: Session = Depends(get_db),
+):
+    return AdminService.list_orders(db, page=page, per_page=per_page)
+
+@router.get("/orders/{order_id}")
+def get_order(order_id: int, db: Session = Depends(get_db)):
+    out = AdminService.get_order(db, order_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return out
+
+@router.get("/customers")
+def list_customers(
+    q: str | None = None,
+    page: int = 1,
+    per_page: int = 30,
+    db: Session = Depends(get_db),
+):
+    return AdminService.list_customers(db, q=q, page=page, per_page=per_page)
+
+@router.get("/customers/{customer_id}")
+def get_customer(customer_id: int, db: Session = Depends(get_db)):
+    out = AdminService.get_customer(db, customer_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return out
+
+@router.post("/customers")
+def create_customer(data: dict = Body(...), db: Session = Depends(get_db)):
+    return AdminService.create_customer(db, data)
+
+@router.patch("/customers/{customer_id}")
+def update_customer(customer_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
+    out = AdminService.update_customer(db, customer_id, data)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return out
+
+@router.get("/vouchers")
+def list_vouchers(
+    q: str | None = None,
+    is_active: bool | None = None,
+    page: int = 1,
+    per_page: int = 30,
+    db: Session = Depends(get_db),
+):
+    return AdminService.list_vouchers(db, q=q, is_active=is_active, page=page, per_page=per_page)
+
+@router.get("/vouchers/{voucher_id}")
+def get_voucher(voucher_id: int, db: Session = Depends(get_db)):
+    out = AdminService.get_voucher(db, voucher_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    return out
+
+@router.post("/vouchers")
+def create_voucher(data: dict = Body(...), db: Session = Depends(get_db)):
+    return AdminService.create_voucher(db, data)
+
+@router.patch("/vouchers/{voucher_id}")
+def update_voucher(voucher_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
+    out = AdminService.update_voucher(db, voucher_id, data)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    return out
+
+@router.get("/shipping-rules")
+def list_shipping_rules(active_only: bool | None = None, db: Session = Depends(get_db)):
+    return AdminService.list_shipping_rules(db, active_only=active_only)
+
+@router.get("/shipping-rules/{rule_id}")
+def get_shipping_rule(rule_id: int, db: Session = Depends(get_db)):
+    out = AdminService.get_shipping_rule(db, rule_id)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Shipping rule not found")
+    return out
+
+@router.post("/shipping-rules")
+def create_shipping_rule(data: dict = Body(...), db: Session = Depends(get_db)):
+    return AdminService.create_shipping_rule(db, data)
+
+@router.patch("/shipping-rules/{rule_id}")
+def update_shipping_rule(rule_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
+    out = AdminService.update_shipping_rule(db, rule_id, data)
+    if out is None:
+        raise HTTPException(status_code=404, detail="Shipping rule not found")
+    return out
+
+@router.delete("/shipping-rules/{rule_id}")
+def delete_shipping_rule(rule_id: int, db: Session = Depends(get_db)):
+    if not AdminService.delete_shipping_rule(db, rule_id):
+        raise HTTPException(status_code=404, detail="Shipping rule not found")
+    return {"ok": True}
 
 @router.get("/categories")
 def list_categories(active_only: bool = True, db: Session = Depends(get_db)):

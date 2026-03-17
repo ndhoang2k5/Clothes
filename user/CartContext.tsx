@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Product } from '../types';
+import { api } from '../services/api';
 
 export type CartVariant = {
   id: string;
@@ -16,6 +17,11 @@ export type CartItem = {
   quantity: number;
 };
 
+export type AppliedVoucher = {
+  code: string;
+  discountAmount: number;
+};
+
 type AddItemArgs = {
   product: Product;
   variant?: CartVariant;
@@ -26,10 +32,13 @@ type CartContextValue = {
   items: CartItem[];
   totalQuantity: number;
   totalPrice: number;
+  appliedVoucher: AppliedVoucher | null;
   addItem: (args: AddItemArgs) => void;
   removeItem: (key: string) => void;
   updateQuantity: (key: string, quantity: number) => void;
   clearCart: () => void;
+  applyVoucher: (code: string) => Promise<void>;
+  removeVoucher: () => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -102,16 +111,38 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setItems((prev) => prev.map((it) => (it.key === key ? { ...it, quantity: q } : it)));
   };
 
-  const clearCart = () => setItems([]);
+  const [appliedVoucher, setAppliedVoucher] = useState<AppliedVoucher | null>(null);
+
+  const clearCart = () => {
+    setItems([]);
+    setAppliedVoucher(null);
+  };
+
+  const applyVoucher = async (code: string) => {
+    const trimmed = (code || '').trim();
+    if (!trimmed) throw new Error('Vui lòng nhập mã giảm giá');
+    const cartTotal = items.reduce((sum, it) => {
+      const price = Number((it.product as any).discountPrice ?? (it.product as any).price ?? 0) || 0;
+      return sum + price * (it.quantity || 0);
+    }, 0);
+    const result = await api.userValidateVoucher(trimmed, cartTotal);
+    if (!result.ok) throw new Error(result.reason || 'Mã không hợp lệ');
+    setAppliedVoucher({ code: trimmed, discountAmount: result.discountAmount ?? 0 });
+  };
+
+  const removeVoucher = () => setAppliedVoucher(null);
 
   const value: CartContextValue = {
     items,
     totalQuantity,
     totalPrice,
+    appliedVoucher,
     addItem,
     removeItem,
     updateQuantity,
     clearCart,
+    applyVoucher,
+    removeVoucher,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;

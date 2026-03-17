@@ -10,7 +10,14 @@ from ..serializers import (
     serialize_collection,
     serialize_product_picker_item,
     serialize_blog,
+    serialize_customer,
+    serialize_voucher,
+    serialize_shipping_rule,
 )
+from ..customer_service import CustomerService
+from ..voucher_service import VoucherService
+from ..shipping_service import ShippingService
+from ..order_service import OrderService
 from ..serializers import _normalize_banner_image_url
 from sqlalchemy.orm import selectinload
 
@@ -19,6 +26,98 @@ class AdminService:
     def get_all_orders(db: Session):
         orders = db.query(models.Order).order_by(models.Order.created_at.desc()).all()
         return [serialize_order(o) for o in orders]
+
+    @staticmethod
+    def list_orders(db: Session, page: int = 1, per_page: int = 50):
+        result = OrderService.get_all_orders(db, page=page, per_page=per_page)
+        return {
+            "items": [serialize_order(o) for o in result["items"]],
+            "total": result["total"],
+            "page": result["page"],
+            "per_page": result["per_page"],
+        }
+
+    @staticmethod
+    def get_order(db: Session, order_id: int):
+        order = OrderService.get_by_id(db, order_id)
+        return serialize_order(order) if order else None
+
+    # --- Customers (Phase A.2) ---
+    @staticmethod
+    def list_customers(db: Session, q: str | None = None, page: int = 1, per_page: int = 30):
+        result = CustomerService.list(db, q=q, page=page, per_page=per_page)
+        return {
+            "items": [serialize_customer(c) for c in result["items"]],
+            "total": result["total"],
+            "page": result["page"],
+            "per_page": result["per_page"],
+        }
+
+    @staticmethod
+    def get_customer(db: Session, customer_id: int):
+        customer = CustomerService.get_by_id(db, customer_id)
+        return serialize_customer(customer) if customer else None
+
+    @staticmethod
+    def create_customer(db: Session, data: dict):
+        customer = CustomerService.create(db, data)
+        return serialize_customer(customer) if customer else None
+
+    @staticmethod
+    def update_customer(db: Session, customer_id: int, data: dict):
+        customer = CustomerService.update(db, customer_id, data)
+        return serialize_customer(customer) if customer else None
+
+    # --- Vouchers (Phase A.3) ---
+    @staticmethod
+    def list_vouchers(db: Session, q: str | None = None, is_active: bool | None = None, page: int = 1, per_page: int = 30):
+        result = VoucherService.list(db, q=q, is_active=is_active, page=page, per_page=per_page)
+        return {
+            "items": [serialize_voucher(v) for v in result["items"]],
+            "total": result["total"],
+            "page": result["page"],
+            "per_page": result["per_page"],
+        }
+
+    @staticmethod
+    def get_voucher(db: Session, voucher_id: int):
+        voucher = VoucherService.get_by_id(db, voucher_id)
+        return serialize_voucher(voucher) if voucher else None
+
+    @staticmethod
+    def create_voucher(db: Session, data: dict):
+        voucher = VoucherService.create(db, data)
+        return serialize_voucher(voucher) if voucher else None
+
+    @staticmethod
+    def update_voucher(db: Session, voucher_id: int, data: dict):
+        voucher = VoucherService.update(db, voucher_id, data)
+        return serialize_voucher(voucher) if voucher else None
+
+    # --- Shipping rules (Phase A.4) ---
+    @staticmethod
+    def list_shipping_rules(db: Session, active_only: bool | None = None):
+        rules = ShippingService.list(db, active_only=active_only)
+        return [serialize_shipping_rule(r) for r in rules]
+
+    @staticmethod
+    def get_shipping_rule(db: Session, rule_id: int):
+        rule = ShippingService.get_by_id(db, rule_id)
+        return serialize_shipping_rule(rule) if rule else None
+
+    @staticmethod
+    def create_shipping_rule(db: Session, data: dict):
+        rule = ShippingService.create(db, data)
+        return serialize_shipping_rule(rule) if rule else None
+
+    @staticmethod
+    def update_shipping_rule(db: Session, rule_id: int, data: dict):
+        rule = ShippingService.update(db, rule_id, data)
+        return serialize_shipping_rule(rule) if rule else None
+
+    @staticmethod
+    def delete_shipping_rule(db: Session, rule_id: int) -> bool:
+        return ShippingService.delete(db, rule_id)
 
     @staticmethod
     def create_product(db: Session, data: dict):

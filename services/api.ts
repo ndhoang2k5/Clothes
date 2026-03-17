@@ -910,6 +910,43 @@ class ApiService {
     this.save();
     return newOrder;
   }
+
+  // User checkout (Phase B)
+  async userValidateVoucher(code: string, cart_total: number): Promise<{ ok: boolean; discountAmount?: number; reason?: string | null }> {
+    const res = await fetch(`${this.userBaseUrl}/vouchers/validate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code.trim(), cart_total }),
+    });
+    const data = await res.json();
+    if (!res.ok) return { ok: false, reason: (data as any)?.detail ?? 'Lỗi xác thực mã' };
+    return { ok: !!data.ok, discountAmount: data.discountAmount ?? undefined, reason: data.reason ?? undefined };
+  }
+
+  async userCalculateShipping(cart_total: number): Promise<{ baseFee: number; discountFromShipping: number; finalFee: number; ruleId?: number }> {
+    const res = await fetch(`${this.userBaseUrl}/shipping/calculate?cart_total=${encodeURIComponent(cart_total)}`);
+    if (!res.ok) return { baseFee: 0, discountFromShipping: 0, finalFee: 0 };
+    return res.json();
+  }
+
+  async userCreateOrder(payload: {
+    customer: { name: string; phone: string; email?: string; address: string };
+    items: { productId: number; variantId?: number; quantity: number }[];
+    voucherCode?: string;
+    note?: string;
+  }): Promise<{ orderId: number; orderCode: string; status: string; totalAmount: number; createdAt: string }> {
+    const res = await fetch(`${this.userBaseUrl}/orders`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const msg = typeof (data as any)?.detail === 'string' ? (data as any).detail : 'Đặt hàng thất bại';
+      throw new Error(msg);
+    }
+    return data;
+  }
 }
 
 export const api = new ApiService();

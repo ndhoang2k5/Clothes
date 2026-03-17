@@ -59,8 +59,22 @@ CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants (pro
 CREATE UNIQUE INDEX IF NOT EXISTS uq_product_variants_sku ON product_variants (sku);
 CREATE INDEX IF NOT EXISTS idx_product_variants_external_sku ON product_variants (external_sku_id) WHERE external_sku_id IS NOT NULL;
 
+-- Bảng customers (Phase A.2) – tạo trước khi thêm FK từ orders
+CREATE TABLE IF NOT EXISTS customers (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255),
+    phone VARCHAR(30),
+    email VARCHAR(255) UNIQUE,
+    password_hash TEXT,
+    default_address TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_customers_email ON customers (email);
+
 ALTER TABLE orders
     ADD COLUMN IF NOT EXISTS order_code VARCHAR(32),
+    ADD COLUMN IF NOT EXISTS customer_id INT REFERENCES customers(id) ON DELETE SET NULL,
     ADD COLUMN IF NOT EXISTS email VARCHAR(255),
     ADD COLUMN IF NOT EXISTS note TEXT,
     ADD COLUMN IF NOT EXISTS subtotal NUMERIC(12, 2) NOT NULL DEFAULT 0,
@@ -68,8 +82,13 @@ ALTER TABLE orders
     ADD COLUMN IF NOT EXISTS shipping_fee NUMERIC(12, 2) NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
+-- Chuẩn hóa order status theo pipeline: pending | confirmed | paid | shipped | completed | cancelled
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('pending','confirmed','paid','shipped','completed','cancelled'));
+
 CREATE UNIQUE INDEX IF NOT EXISTS uq_orders_order_code ON orders (order_code);
 CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders (status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_id);
 
 -- 2) Create new tables
 CREATE TABLE IF NOT EXISTS system_configs (
@@ -170,6 +189,39 @@ CREATE TABLE IF NOT EXISTS order_items (
     line_total NUMERIC(12, 2) NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id);
+
+CREATE TABLE IF NOT EXISTS vouchers (
+    id SERIAL PRIMARY KEY,
+    code VARCHAR(64) UNIQUE NOT NULL,
+    type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (type IN ('percent', 'fixed')),
+    value NUMERIC(12, 2) NOT NULL,
+    min_order_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    max_discount NUMERIC(12, 2),
+    usage_limit INT,
+    used_count INT NOT NULL DEFAULT 0,
+    valid_from TIMESTAMPTZ,
+    valid_to TIMESTAMPTZ,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vouchers_code ON vouchers (UPPER(code));
+CREATE INDEX IF NOT EXISTS idx_vouchers_code_active ON vouchers (code, is_active);
+CREATE INDEX IF NOT EXISTS idx_vouchers_valid ON vouchers (valid_from, valid_to);
+
+CREATE TABLE IF NOT EXISTS shipping_rules (
+    id SERIAL PRIMARY KEY,
+    min_order_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    base_fee NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    discount_type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (discount_type IN ('percent', 'fixed', 'free')),
+    discount_value NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_shipping_rules_min_order ON shipping_rules (min_order_total DESC);
+CREATE INDEX IF NOT EXISTS idx_shipping_rules_active_sort ON shipping_rules (is_active, sort_order);
 
 CREATE TABLE IF NOT EXISTS admin_users (
     id SERIAL PRIMARY KEY,

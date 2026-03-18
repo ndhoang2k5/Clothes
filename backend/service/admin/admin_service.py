@@ -168,7 +168,14 @@ class AdminService:
         return serialize_product(product)
 
     @staticmethod
-    def list_products(db: Session, include_inactive: bool = True, q: str | None = None, page: int = 1, per_page: int = 30):
+    def list_products(
+        db: Session,
+        include_inactive: bool = True,
+        q: str | None = None,
+        category_slug: str | None = None,
+        page: int = 1,
+        per_page: int = 30,
+    ):
         query = db.query(models.Product).options(
             selectinload(models.Product.images),
             selectinload(models.Product.variants).selectinload(models.ProductVariant.images),
@@ -177,6 +184,16 @@ class AdminService:
         )
         if not include_inactive:
             query = query.filter(models.Product.is_active == True)  # noqa: E712
+        if category_slug and str(category_slug).strip():
+            cat = (
+                db.query(models.Category)
+                .filter(models.Category.slug == str(category_slug).strip())
+                .first()
+            )
+            if cat:
+                query = query.filter(models.Product.category_id == cat.id)
+            else:
+                query = query.filter(models.Product.id == -1)
         if q and str(q).strip():
             term = f"%{str(q).strip()}%"
             query = (
@@ -188,9 +205,8 @@ class AdminService:
                 )
                 .distinct()
             )
+        total = query.order_by(None).count()
         query = query.order_by(models.Product.updated_at.desc(), models.Product.id.desc())
-
-        total = query.count()
         if per_page and per_page > 0:
             page = max(1, page)
             offset = (page - 1) * per_page
@@ -212,6 +228,7 @@ class AdminService:
     def list_products_picker(
         db: Session,
         q: str | None = None,
+        category_slug: str | None = None,
         page: int = 1,
         per_page: int = 30,
         include_inactive: bool = True,
@@ -222,6 +239,16 @@ class AdminService:
         )
         if not include_inactive:
             query = query.filter(models.Product.is_active == True)  # noqa: E712
+        if category_slug and str(category_slug).strip():
+            cat = (
+                db.query(models.Category)
+                .filter(models.Category.slug == str(category_slug).strip())
+                .first()
+            )
+            if cat:
+                query = query.filter(models.Product.category_id == cat.id)
+            else:
+                query = query.filter(models.Product.id == -1)
         if q and str(q).strip():
             term = f"%{str(q).strip()}%"
             query = (
@@ -233,8 +260,8 @@ class AdminService:
                 )
                 .distinct()
             )
+        total = query.order_by(None).count()
         query = query.order_by(models.Product.updated_at.desc(), models.Product.id.desc())
-        total = query.count()
         page = max(1, int(page or 1))
         per_page = max(1, min(200, int(per_page or 30)))
         offset = (page - 1) * per_page
@@ -695,6 +722,24 @@ class AdminService:
         if not img:
             return False
         db.delete(img)
+        db.commit()
+        return True
+
+    @staticmethod
+    def set_product_image_primary(db: Session, image_id: int) -> bool:
+        """
+        Set exactly one product image as `is_primary=True` for the image's product.
+        """
+        img = db.query(models.ProductImage).filter(models.ProductImage.id == image_id).first()
+        if not img:
+            return False
+
+        product_id = img.product_id
+        # Unset other images first
+        db.query(models.ProductImage).filter(models.ProductImage.product_id == product_id).update(
+            {"is_primary": False}
+        )
+        img.is_primary = True
         db.commit()
         return True
 

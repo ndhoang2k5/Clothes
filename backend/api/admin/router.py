@@ -133,26 +133,28 @@ def list_categories(active_only: bool = True, db: Session = Depends(get_db)):
 def list_products(
     include_inactive: bool = True,
     q: str | None = None,
+    category: str | None = None,
     page: int = 1,
     per_page: int = 30,
     db: Session = Depends(get_db),
 ):
     """Paginated list. Omit page/per_page or set per_page=0 to get all (can be slow)."""
     return AdminService.list_products(
-        db, include_inactive=include_inactive, q=q, page=page, per_page=per_page
+        db, include_inactive=include_inactive, q=q, category_slug=category, page=page, per_page=per_page
     )
 
 
 @router.get("/products/picker")
 def list_products_picker(
     q: str | None = None,
+    category: str | None = None,
     page: int = 1,
     per_page: int = 30,
     include_inactive: bool = True,
     db: Session = Depends(get_db),
 ):
     """Lightweight products list for pickers (collections/combo)."""
-    return AdminService.list_products_picker(db, q=q, page=page, per_page=per_page, include_inactive=include_inactive)
+    return AdminService.list_products_picker(db, q=q, category_slug=category, page=page, per_page=per_page, include_inactive=include_inactive)
 
 @router.get("/products/{product_id}")
 def get_product(product_id: int, db: Session = Depends(get_db)):
@@ -246,6 +248,14 @@ def add_product_image(product_id: int, data: dict, db: Session = Depends(get_db)
 @router.delete("/product-images/{image_id}")
 def delete_product_image(image_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_product_image(db, image_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Image not found")
+    return {"ok": True}
+
+
+@router.post("/product-images/{image_id}/set-primary")
+def set_product_image_primary(image_id: int, db: Session = Depends(get_db)):
+    ok = AdminService.set_product_image_primary(db, image_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Image not found")
     return {"ok": True}

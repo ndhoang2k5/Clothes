@@ -144,9 +144,9 @@ const HomePage: React.FC = () => {
       {/* Quick Categories */}
       <section className="max-w-7xl mx-auto px-4 -mt-16 relative z-10">
         <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-          {CATEGORIES.map(cat => (
+          {CATEGORIES.filter((cat) => cat.slug !== 'uu-dai-cuoi-mua').map((cat) => (
             <a 
-              key={cat.id} 
+              key={cat.id}
               href={`#/products?cat=${cat.slug}`}
               className="bg-[#FFF9F1] p-6 rounded-2xl shadow-sm hover:shadow-xl transition-all text-center flex flex-col items-center group border border-[#E5D6C4]/70"
             >
@@ -345,7 +345,7 @@ const HomePage: React.FC = () => {
           <div className="bg-[#FFF9F1] border border-[#E5D6C4]/70 rounded-2xl py-12 text-center">
             <p className="text-[#9C8573] mb-4">Chưa có sản phẩm ưu đãi cuối mùa.</p>
             <a
-              href="#/products"
+              href="#/products?cat=uu-dai-cuoi-mua"
               className="inline-flex bg-[#B58A5A] text-[#FDF8F0] px-6 py-3 rounded-full font-bold hover:bg-[#A3784E] transition-colors"
             >
               Xem tất cả sản phẩm

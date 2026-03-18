@@ -120,12 +120,19 @@ class OrderService:
         subtotal_float = float(subtotal)
         voucher_code = (payload.get("voucherCode") or "").strip()
         voucher_discount = Decimal("0")
+        applied_voucher_code = None
         if voucher_code:
             vres = VoucherService.validate_voucher(db, voucher_code, subtotal_float)
             if vres.get("ok"):
                 voucher_discount = Decimal(str(vres.get("discount_amount") or 0))
+                applied_voucher_code = voucher_code
             else:
                 raise ValueError(vres.get("reason") or "Mã giảm giá không hợp lệ")
+        else:
+            best_v, best_discount = VoucherService.pick_best_auto_voucher(db, subtotal_float)
+            if best_v and best_discount > 0:
+                voucher_discount = Decimal(str(best_discount))
+                applied_voucher_code = best_v.code
 
         ship = ShippingService.calculate_fee(db, subtotal_float)
         shipping_fee = Decimal(str(ship["finalFee"]))
@@ -165,8 +172,8 @@ class OrderService:
                 line_total=it["line_total"],
             ))
 
-        if voucher_code and voucher_discount > 0:
-            VoucherService.consume_voucher(db, voucher_code)
+        if applied_voucher_code and voucher_discount > 0:
+            VoucherService.consume_voucher(db, applied_voucher_code)
 
         db.commit()
         db.refresh(order)
@@ -230,11 +237,20 @@ class OrderService:
         if status and str(status).strip():
             query = query.filter(models.Order.status == str(status).strip())
         if q and str(q).strip():
-            term = f"%{str(q).strip()}%"
-            query = query.filter(
-                (models.Order.order_code.ilike(term))
-                | (models.Order.phone.ilike(term))
-            )
+            raw = str(q).strip()
+            uq = raw.upper()
+            # Fast paths to leverage btree index where possible
+            if uq.startswith("ORD-") and len(uq) <= 32:
+                query = query.filter(models.Order.order_code == uq)
+            elif raw.isdigit() and len(raw) >= 7:
+                # phone exact match (common admin use-case)
+                query = query.filter(models.Order.phone == raw)
+            else:
+                term = f"%{raw}%"
+                query = query.filter(
+                    (models.Order.order_code.ilike(term))
+                    | (models.Order.phone.ilike(term))
+                )
         if date_from or date_to:
             # Accept yyyy-mm-dd or full ISO. Filter by created_at.
             def _parse(s: str, end_of_day: bool):
@@ -262,7 +278,7 @@ class OrderService:
             if dt is not None:
                 query = query.filter(models.Order.created_at <= dt)
         query = query.order_by(models.Order.created_at.desc())
-        total = query.count()
+        total = query.order_by(None).count()
         if per_page and per_page > 0:
             page = max(1, page)
             offset = (page - 1) * per_page

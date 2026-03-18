@@ -17,6 +17,7 @@ class UserProductService:
         price_min: int | None = None,
         price_max: int | None = None,
         sort: str | None = None,
+        q: str | None = None,
     ):
         """
         Trả về danh sách sản phẩm đang active, hỗ trợ filter server-side.
@@ -26,6 +27,7 @@ class UserProductService:
         - materials: chuỗi "cotton,lanh"
         - price_min, price_max: filter theo khoảng giá (discount_price ưu tiên)
         - sort: newest | price-asc | price-desc | bestseller
+        - q: tìm kiếm theo tên / slug sản phẩm và SKU biến thể
         """
         query = (
             db.query(models.Product)
@@ -65,7 +67,26 @@ class UserProductService:
             query = query.distinct()
 
         if material_list:
-            query = query.filter(models.Product.material.in_(material_list))
+            # `material` is defined on ProductVariant, so we need variants in the query.
+            if not (size_list or color_list):
+                query = query.join(models.Product.variants)
+            query = query.filter(models.ProductVariant.material.in_(material_list)).distinct()
+
+        # Text search (name/slug + variant SKU)
+        q_term = (q or "").strip()
+        if q_term:
+            like_term = f"%{q_term}%"
+            query = (
+                query.outerjoin(models.ProductVariant, models.ProductVariant.product_id == models.Product.id)
+                .filter(
+                    or_(
+                        models.Product.name.ilike(like_term),
+                        models.Product.slug.ilike(like_term),
+                        models.ProductVariant.sku.ilike(like_term),
+                    )
+                )
+                .distinct()
+            )
 
         # Giá thực tế (ưu tiên discount_price nếu có, ngược lại dùng base_price)
         # Dùng CASE/func.coalesce thay vì ifnull
@@ -91,7 +112,7 @@ class UserProductService:
         else:
             # newest (mặc định)
             query = query.order_by(models.Product.updated_at.desc(), models.Product.id.desc())
-        total = query.count()
+        total = query.order_by(None).count()
         if per_page and per_page > 0:
             page = max(1, page)
             offset = (page - 1) * per_page

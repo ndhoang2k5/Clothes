@@ -105,4 +105,8 @@ export interface Blog {
   author: string;
   createdAt: string;
   category: 'news' | 'tips' | 'charity' | 'intro';
+  // Optional fields used by frontend `BlogPage`
+  image?: string;
+  excerpt?: string;
+  publishedAt?: string;
 }

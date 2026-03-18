@@ -226,6 +226,7 @@ class Voucher(Base):
     valid_from = Column(DateTime)
     valid_to = Column(DateTime)
     is_active = Column(Boolean, default=True)
+    auto_apply = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 

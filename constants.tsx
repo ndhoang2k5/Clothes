@@ -62,6 +62,16 @@ export const CATEGORIES = [
       </div>
     ),
   },
+  {
+    id: '7',
+    name: 'Ưu đãi cuối mùa',
+    slug: 'uu-dai-cuoi-mua',
+    icon: (
+      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-100 to-pink-100 flex items-center justify-center">
+        <span className="text-2xl">🏷️</span>
+      </div>
+    ),
+  },
 ];
 
 export const TRUST_FEATURES = [

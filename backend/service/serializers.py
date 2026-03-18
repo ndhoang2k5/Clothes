@@ -54,6 +54,7 @@ def serialize_variant_list_item(variant) -> dict:
         "sku": getattr(variant, "sku", None),
         "size": getattr(variant, "size", None),
         "color": getattr(variant, "color", None),
+        "material": getattr(variant, "material", None),
         "stock": getattr(variant, "stock", 0),
         "price_override": _num(getattr(variant, "price_override", None)),
         "discount_price_override": _num(getattr(variant, "discount_price_override", None)),
@@ -300,6 +301,7 @@ def serialize_voucher(voucher) -> dict:
     return {
         "id": voucher.id,
         "code": voucher.code,
+        "auto_apply": getattr(voucher, "auto_apply", False),
         "type": getattr(voucher, "type", "fixed"),
         "value": _num(getattr(voucher, "value", None)),
         "min_order_total": _num(getattr(voucher, "min_order_total", 0)),

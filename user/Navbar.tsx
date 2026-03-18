@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCart } from './CartContext';
 import { useAuth } from './AuthContext';
 
@@ -7,15 +7,64 @@ const Navbar: React.FC = () => {
   const { totalQuantity } = useCart();
   const { customer, logout } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
   const closeMobile = () => setMobileOpen(false);
   const navigate = (hash: string) => {
     window.location.hash = hash;
     setMobileOpen(false);
   };
 
+  const getCatFromCurrentHash = (): string | null => {
+    try {
+      const hash = String(window.location.hash || '');
+      const [, query] = hash.split('?');
+      const params = new URLSearchParams(query || '');
+      return params.get('cat');
+    } catch {
+      return null;
+    }
+  };
+
+  const openSearch = () => {
+    try {
+      const hash = String(window.location.hash || '');
+      const [, query] = hash.split('?');
+      const params = new URLSearchParams(query || '');
+      setSearchText(params.get('q') || '');
+    } catch {
+      setSearchText('');
+    }
+    setSearchOpen(true);
+  };
+
+  const submitSearch = (q: string) => {
+    const trimmed = q.trim();
+    const params = new URLSearchParams();
+    const cat = getCatFromCurrentHash();
+    if (cat) params.set('cat', cat);
+    if (trimmed) params.set('q', trimmed);
+    const qs = params.toString();
+    navigate(`#/products${qs ? '?' + qs : ''}`);
+    setSearchOpen(false);
+  };
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (!dropdownRef.current) return;
+      if (dropdownRef.current.contains(target)) return;
+      setSearchOpen(false);
+    };
+    document.addEventListener('mousedown', onMouseDown);
+    return () => document.removeEventListener('mousedown', onMouseDown);
+  }, [searchOpen]);
+
   return (
     <nav className="sticky top-0 z-50 bg-[#F8F3EC]/90 backdrop-blur-md border-b border-[#E5D6C4]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="flex justify-between h-20 items-center">
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center cursor-pointer" onClick={() => navigate('#/')}>
@@ -38,6 +87,7 @@ const Navbar: React.FC = () => {
                     <a href="#/products?cat=so-sinh" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Đồ sơ sinh</a>
                     <a href="#/products?cat=be-trai" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Bé trai</a>
                     <a href="#/products?cat=be-gai" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Bé gái</a>
+                    <a href="#/products?cat=uu-dai-cuoi-mua" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Ưu đãi cuối mùa</a>
                 </div>
             </div>
             <a href="#/collections" className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
@@ -53,7 +103,12 @@ const Navbar: React.FC = () => {
 
           {/* Icons */}
           <div className="flex items-center space-x-5">
-            <button className="p-2 text-[#8B7765] hover:text-[#B58A5A] transition-colors">
+            <button
+              className="p-2 text-[#8B7765] hover:text-[#B58A5A] transition-colors"
+              onClick={openSearch}
+              aria-label="Tìm kiếm sản phẩm"
+              type="button"
+            >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
@@ -153,6 +208,63 @@ const Navbar: React.FC = () => {
               )}
             </nav>
           </div>
+        </div>
+      )}
+
+      {searchOpen && (
+        <div
+          ref={dropdownRef}
+          className="absolute right-4 top-20 z-50 w-[330px] bg-[#FDF8F0] border border-[#E5D6C4]/70 rounded-2xl shadow-xl p-3"
+        >
+          <div className="flex items-center justify-between mb-2 px-1">
+            <div className="font-black text-gray-800 text-sm">Tìm kiếm</div>
+            <button
+              type="button"
+              onClick={() => setSearchOpen(false)}
+              className="p-2 rounded-xl hover:bg-white/60"
+              aria-label="Đóng tìm kiếm"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              submitSearch(searchText);
+            }}
+          >
+            <div className="flex gap-2">
+              <input
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Nhập tên hoặc SKU..."
+                className="flex-1 bg-white border border-gray-100 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#B58A5A]/35"
+              />
+              <button
+                type="submit"
+                className="bg-[#B58A5A] text-white px-4 py-2 rounded-xl font-bold hover:bg-[#A3784E] transition-colors whitespace-nowrap"
+              >
+                Tìm
+              </button>
+            </div>
+
+            <div className="mt-2 flex items-center justify-between gap-3 px-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchText('');
+                  submitSearch('');
+                }}
+                className="text-xs font-bold text-gray-500 hover:text-gray-800"
+              >
+                Xóa
+              </button>
+              <div className="text-xs text-gray-500">Enter để tìm</div>
+            </div>
+          </form>
         </div>
       )}
     </nav>

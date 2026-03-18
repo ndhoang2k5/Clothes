@@ -20,6 +20,7 @@ export type CartItem = {
 export type AppliedVoucher = {
   code: string;
   discountAmount: number;
+  isAuto?: boolean;
 };
 
 type AddItemArgs = {
@@ -112,10 +113,54 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const [appliedVoucher, setAppliedVoucher] = useState<AppliedVoucher | null>(null);
+  const [autoSuppressedAtTotal, setAutoSuppressedAtTotal] = useState<number | null>(null);
+
+  useEffect(() => {
+    // Reset when cart empty
+    if (items.length === 0 || totalPrice <= 0) {
+      if (appliedVoucher?.isAuto) setAppliedVoucher(null);
+      setAutoSuppressedAtTotal(null);
+      return;
+    }
+
+    // If user applied manual voucher, do not override.
+    if (appliedVoucher && !appliedVoucher.isAuto) {
+      setAutoSuppressedAtTotal(null);
+      return;
+    }
+
+    // If user clicked "Bỏ áp" at this subtotal, don't re-apply until subtotal changes.
+    if (autoSuppressedAtTotal !== null && autoSuppressedAtTotal === totalPrice) return;
+
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      void api
+        .userGetAutoVoucher(totalPrice)
+        .then((r) => {
+          if (cancelled) return;
+          const code = r.code ? String(r.code).trim() : '';
+          const discountAmount = Number(r.discountAmount || 0);
+          if (code && discountAmount > 0) {
+            setAppliedVoucher({ code, discountAmount, isAuto: true });
+          } else if (appliedVoucher?.isAuto) {
+            setAppliedVoucher(null);
+          }
+        })
+        .catch(() => {
+          // ignore
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [items.length, totalPrice, appliedVoucher?.code, appliedVoucher?.discountAmount, appliedVoucher?.isAuto, autoSuppressedAtTotal]);
 
   const clearCart = () => {
     setItems([]);
     setAppliedVoucher(null);
+    setAutoSuppressedAtTotal(null);
   };
 
   const applyVoucher = async (code: string) => {
@@ -127,10 +172,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 0);
     const result = await api.userValidateVoucher(trimmed, cartTotal);
     if (!result.ok) throw new Error(result.reason || 'Mã không hợp lệ');
-    setAppliedVoucher({ code: trimmed, discountAmount: result.discountAmount ?? 0 });
+    setAppliedVoucher({ code: trimmed, discountAmount: result.discountAmount ?? 0, isAuto: false });
+    setAutoSuppressedAtTotal(null);
   };
 
-  const removeVoucher = () => setAppliedVoucher(null);
+  const removeVoucher = () => {
+    // If removing auto voucher, suppress re-applying until cart total changes
+    if (appliedVoucher?.isAuto) setAutoSuppressedAtTotal(totalPrice);
+    setAppliedVoucher(null);
+  };
 
   const value: CartContextValue = {
     items,

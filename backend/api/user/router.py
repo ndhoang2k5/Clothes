@@ -18,8 +18,11 @@ from ...service.auth_service import (
 from ...service.serializers import serialize_customer, serialize_order
 from ...database_config import get_db
 from ...entities import models
+from ...utils.ttl_cache import TTLCache
 
 router = APIRouter()
+
+_PUBLIC_TTL_CACHE = TTLCache(default_ttl_seconds=10.0, max_items=2048)
 
 
 def _ensure_clearance_category(db: Session):
@@ -65,11 +68,16 @@ def debug_clearance(db: Session = Depends(get_db)):
 
 @router.get("/categories")
 def list_categories(db: Session = Depends(get_db)):
-    return AdminService.list_categories(db, active_only=True)
+    return _PUBLIC_TTL_CACHE.get_or_set(
+        "user:categories:active_only=true",
+        lambda: AdminService.list_categories(db, active_only=True),
+        ttl_seconds=30.0,
+    )
 
 @router.get("/products")
 def get_products(
     category: str | None = None,
+    q: str | None = None,
     page: int = 1,
     per_page: int = 24,
     sizes: str | None = None,
@@ -104,6 +112,7 @@ def get_products(
         price_min=price_min,
         price_max=price_max,
         sort=sort,
+        q=q,
     )
 
 @router.get("/products/{product_id}")
@@ -126,21 +135,35 @@ def get_product_combo_items(product_id: int, db: Session = Depends(get_db)):
 @router.get("/banners")
 def get_banners(slot: str | None = None, db: Session = Depends(get_db)):
     # User-facing banners: only active banners
-    return AdminService.list_banners(db, slot=slot, active_only=True)
+    key = f"user:banners:slot={slot or ''}:active_only=true"
+    return _PUBLIC_TTL_CACHE.get_or_set(
+        key,
+        lambda: AdminService.list_banners(db, slot=slot, active_only=True),
+        ttl_seconds=15.0,
+    )
 
 
 @router.get("/collections")
 def get_collections(db: Session = Depends(get_db)):
     """Danh sách bộ sưu tập hiển thị cho user (chỉ active)."""
-    return AdminService.list_collections(db, include_inactive=False)
+    return _PUBLIC_TTL_CACHE.get_or_set(
+        "user:collections:include_inactive=false",
+        lambda: AdminService.list_collections(db, include_inactive=False),
+        ttl_seconds=20.0,
+    )
 
 
 @router.get("/blogs")
 def get_blogs(category: str | None = None, limit: int = 3, db: Session = Depends(get_db)):
     """Blog / tips cho user – chỉ bài đã publish."""
-    items = AdminService.list_blogs(db, category=category, published_only=True)
+    key = f"user:blogs:category={category or ''}:published_only=true"
+    items = _PUBLIC_TTL_CACHE.get_or_set(
+        key,
+        lambda: AdminService.list_blogs(db, category=category, published_only=True),
+        ttl_seconds=20.0,
+    )
     if limit and limit > 0:
-        items = items[: limit]
+        return items[: limit]
     return items
 
 
@@ -162,6 +185,23 @@ def validate_voucher(
         "ok": result["ok"],
         "discountAmount": result.get("discount_amount"),
         "reason": result.get("reason"),
+    }
+
+
+@router.get("/vouchers/auto")
+def get_auto_voucher(
+    cart_total: float = 0,
+    db: Session = Depends(get_db),
+):
+    """
+    Gợi ý voucher tự động tốt nhất theo tổng tiền hàng (cart_total, VND).
+    Trả về: { ok: bool, code: string | null, discountAmount: number }.
+    """
+    v, discount = VoucherService.pick_best_auto_voucher(db, cart_total)
+    return {
+        "ok": True,
+        "code": (v.code if v else None),
+        "discountAmount": float(discount or 0),
     }
 
 

@@ -6,6 +6,9 @@
 
 BEGIN;
 
+-- Search optimization for ILIKE (admin search, phone, order_code, product fields)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- 0) System configs (key-value / JSON)
 CREATE TABLE IF NOT EXISTS system_configs (
     key TEXT PRIMARY KEY,
@@ -71,6 +74,8 @@ CREATE TABLE IF NOT EXISTS products (
 );
 CREATE INDEX IF NOT EXISTS idx_products_category ON products (category_id);
 CREATE INDEX IF NOT EXISTS idx_products_flags ON products (is_active, is_hot, is_new, is_sale);
+CREATE INDEX IF NOT EXISTS gin_products_name_trgm ON products USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS gin_products_slug_trgm ON products USING gin (slug gin_trgm_ops);
 
 -- 4) Product images (non-variant specific)
 CREATE TABLE IF NOT EXISTS product_images (
@@ -108,6 +113,7 @@ CREATE TABLE IF NOT EXISTS product_variants (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_product_variants_size_color ON product_variants (product_id, size, color);
 CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants (product_id);
 CREATE INDEX IF NOT EXISTS idx_product_variants_external_sku ON product_variants (external_sku_id) WHERE external_sku_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS gin_product_variants_sku_trgm ON product_variants USING gin (sku gin_trgm_ops);
 
 -- 6) Variant images
 CREATE TABLE IF NOT EXISTS product_variant_images (
@@ -179,6 +185,9 @@ CREATE TABLE IF NOT EXISTS customers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_customers_email ON customers (email);
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers (phone);
+CREATE INDEX IF NOT EXISTS gin_customers_email_trgm ON customers USING gin (email gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS gin_customers_phone_trgm ON customers USING gin (phone gin_trgm_ops);
 
 -- 12) Orders (guest checkout; customer_id nullable cho khách đặt không đăng nhập)
 -- status: pending | confirmed | paid | shipped | completed | cancelled (theo pipeline cart/checkout)
@@ -202,6 +211,8 @@ CREATE TABLE IF NOT EXISTS orders (
 CREATE INDEX IF NOT EXISTS idx_orders_status_created ON orders (status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders (customer_id);
 CREATE INDEX IF NOT EXISTS idx_orders_phone ON orders (phone);
+CREATE INDEX IF NOT EXISTS gin_orders_order_code_trgm ON orders USING gin (order_code gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS gin_orders_phone_trgm ON orders USING gin (phone gin_trgm_ops);
 
 -- 13) Order items
 CREATE TABLE IF NOT EXISTS order_items (

@@ -16,6 +16,60 @@ def _code_upper(code: str) -> str:
 
 class VoucherService:
     @staticmethod
+    def list_auto_active(db: Session):
+        """Danh sách voucher tự động còn hiệu lực (chưa kiểm min_order_total)."""
+        now = datetime.datetime.utcnow()
+        query = db.query(models.Voucher).filter(
+            models.Voucher.is_active == True,  # noqa: E712
+            models.Voucher.auto_apply == True,  # noqa: E712
+        )
+        query = query.filter(
+            (models.Voucher.valid_from.is_(None)) | (models.Voucher.valid_from <= now)
+        ).filter(
+            (models.Voucher.valid_to.is_(None)) | (models.Voucher.valid_to >= now)
+        )
+        query = query.order_by(models.Voucher.min_order_total.desc(), models.Voucher.id.desc())
+        return query.all()
+
+    @staticmethod
+    def calc_discount_amount(voucher: models.Voucher, cart_total: float) -> float:
+        """Tính discount theo voucher, có clamp theo max_discount và subtotal."""
+        try:
+            total = float(cart_total) if cart_total is not None else 0
+        except (TypeError, ValueError):
+            total = 0
+        value = float(voucher.value or 0)
+        if voucher.type == "percent":
+            discount = total * (value / 100)
+            if voucher.max_discount is not None:
+                cap = float(voucher.max_discount)
+                discount = min(discount, cap)
+        else:
+            discount = value
+        discount = max(0.0, min(discount, total))
+        return round(float(discount), 2)
+
+    @staticmethod
+    def pick_best_auto_voucher(db: Session, cart_total: float):
+        """Chọn voucher tự động tốt nhất (discount lớn nhất) cho cart_total."""
+        try:
+            total = float(cart_total) if cart_total is not None else 0
+        except (TypeError, ValueError):
+            total = 0
+        best = None
+        best_discount = 0.0
+        for v in VoucherService.list_auto_active(db):
+            min_total = float(v.min_order_total or 0)
+            if total < min_total:
+                continue
+            if v.usage_limit is not None and (v.used_count or 0) >= v.usage_limit:
+                continue
+            disc = VoucherService.calc_discount_amount(v, total)
+            if disc > best_discount:
+                best = v
+                best_discount = disc
+        return best, best_discount
+    @staticmethod
     def get_by_code(db: Session, code: str):
         c = _code_upper(code)
         if not c:
@@ -28,13 +82,14 @@ class VoucherService:
 
     @staticmethod
     def list(db: Session, q: str | None = None, is_active: bool | None = None, page: int = 1, per_page: int = 30):
-        query = db.query(models.Voucher).order_by(models.Voucher.created_at.desc(), models.Voucher.id.desc())
+        query = db.query(models.Voucher)
         if q and str(q).strip():
             term = f"%{str(q).strip()}%"
             query = query.filter(models.Voucher.code.ilike(term))
         if is_active is not None:
             query = query.filter(models.Voucher.is_active == is_active)
-        total = query.count()
+        total = query.order_by(None).count()
+        query = query.order_by(models.Voucher.created_at.desc(), models.Voucher.id.desc())
         if per_page and per_page > 0:
             page = max(1, page)
             offset = (page - 1) * per_page
@@ -95,7 +150,7 @@ class VoucherService:
             return False
         voucher.used_count = (voucher.used_count or 0) + 1
         voucher.updated_at = datetime.datetime.utcnow()
-        db.commit()
+        # commit có thể do caller (OrderService) quản lý trong 1 transaction
         return True
 
     @staticmethod
@@ -103,7 +158,7 @@ class VoucherService:
         payload = {
             k: v for k, v in data.items()
             if k in ("code", "type", "value", "min_order_total", "max_discount", "usage_limit",
-                     "used_count", "valid_from", "valid_to", "is_active")
+                     "used_count", "valid_from", "valid_to", "is_active", "auto_apply")
         }
         if "code" in payload and payload["code"]:
             payload["code"] = _code_upper(payload["code"])
@@ -129,7 +184,7 @@ class VoucherService:
         if not voucher:
             return None
         for k in ("code", "type", "value", "min_order_total", "max_discount", "usage_limit",
-                  "used_count", "valid_from", "valid_to", "is_active"):
+                  "used_count", "valid_from", "valid_to", "is_active", "auto_apply"):
             if k in data:
                 v = data[k]
                 if k == "code" and v is not None:

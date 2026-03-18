@@ -27,8 +27,15 @@ const ProductPage: React.FC = () => {
   });
 
   // Get active category from URL
-  const queryParams = new URLSearchParams(window.location.hash.split('?')[1]);
+  const hashQuery = window.location.hash.split('?')[1] || '';
+  const queryParams = new URLSearchParams(hashQuery);
   const activeCategory = queryParams.get('cat');
+  const activeQ = queryParams.get('q') || '';
+  const [searchText, setSearchText] = useState(activeQ);
+
+  useEffect(() => {
+    setSearchText(activeQ);
+  }, [activeQ]);
 
   // Load current page with filters (server-side filtering)
   useEffect(() => {
@@ -38,6 +45,7 @@ const ProductPage: React.FC = () => {
       try {
         const r = await api.getProductsPage({
           category: activeCategory,
+          q: activeQ && activeQ.trim() ? activeQ.trim() : undefined,
           page: currentPage,
           per_page: SERVER_PER_PAGE,
           useCache: true,
@@ -63,7 +71,7 @@ const ProductPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeCategory, currentPage, filters]);
+  }, [activeCategory, activeQ, currentPage, filters]);
 
   // Load full product list ONCE per category to build facet options
   useEffect(() => {
@@ -98,7 +106,7 @@ const ProductPage: React.FC = () => {
     } catch {
       // ignore scroll errors (SSR / tests)
     }
-  }, [filters, activeCategory]);
+  }, [filters, activeCategory, activeQ]);
 
   // Compute available filter options from ALL products in category (facetSourceProducts)
   const availableOptions = useMemo(() => {
@@ -128,6 +136,15 @@ const ProductPage: React.FC = () => {
 
   const currentCategoryName = CATEGORIES.find(c => c.slug === activeCategory)?.name || 'Tất cả sản phẩm';
 
+  const setSearchQueryInHash = (nextQ: string) => {
+    const trimmed = nextQ.trim();
+    const params = new URLSearchParams();
+    if (activeCategory) params.set('cat', activeCategory);
+    if (trimmed) params.set('q', trimmed);
+    const qs = params.toString();
+    window.location.hash = `#/products${qs ? '?' + qs : ''}`;
+  };
+
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Header */}
@@ -142,9 +159,31 @@ const ProductPage: React.FC = () => {
                     </nav>
                     <h1 className="text-4xl font-black text-gray-800 tracking-tight">{currentCategoryName}</h1>
                 </div>
-                <div className="bg-pink-50 px-6 py-4 rounded-3xl flex items-center gap-4">
-                    <span className="text-pink-600 font-black text-xl">{serverTotal ?? products.length}</span>
-                    <span className="text-pink-400 font-bold text-sm uppercase tracking-wider">Sản phẩm được tìm thấy</span>
+                <div className="flex flex-col md:flex-row md:items-center gap-3">
+                  <div className="bg-pink-50 px-6 py-4 rounded-3xl flex items-center gap-4">
+                      <span className="text-pink-600 font-black text-xl">{serverTotal ?? products.length}</span>
+                      <span className="text-pink-400 font-bold text-sm uppercase tracking-wider">Sản phẩm được tìm thấy</span>
+                  </div>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      setSearchQueryInHash(searchText);
+                    }}
+                    className="w-full md:w-auto flex items-center gap-3"
+                  >
+                    <input
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                      placeholder="Tìm theo tên hoặc SKU..."
+                      className="bg-white border border-gray-100 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#B58A5A]/40 w-full md:w-[320px]"
+                    />
+                    <button
+                      type="submit"
+                      className="bg-[#B58A5A] text-white px-5 py-3 rounded-2xl font-bold hover:bg-[#A3784E] transition-colors whitespace-nowrap"
+                    >
+                      Tìm
+                    </button>
+                  </form>
                 </div>
             </div>
         </div>

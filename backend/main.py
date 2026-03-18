@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from .api.user.router import router as user_router
 from .api.admin.router import router as admin_router
+from .middleware.rate_limit import SimpleRateLimitMiddleware
 
 app = FastAPI(title="Unbee Multi-Tier API")
 
@@ -15,6 +16,21 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Anti-overload: rate limit bursts on list/search endpoints (best-effort).
+# High enough not to affect normal UI usage, but blocks abusive loops.
+app.add_middleware(
+    SimpleRateLimitMiddleware,
+    rules=[
+        ("/api/admin/orders", 30, 3.0),      # ~30 burst, ~3 req/s refill
+        ("/api/admin/products", 30, 3.0),
+        ("/api/admin/customers", 30, 3.0),
+        ("/api/admin/vouchers", 30, 3.0),
+        ("/api/user/products", 60, 6.0),    # user browsing
+        ("/api/user/vouchers/auto", 60, 6.0),
+        ("/api/user/shipping/calculate", 60, 6.0),
+    ],
 )
 
 app.include_router(user_router, prefix="/api/user", tags=["User"])

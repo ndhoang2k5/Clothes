@@ -218,8 +218,11 @@ const CartPage: React.FC = () => {
             {voucherError && <p className="mt-2 text-sm text-red-600">{voucherError}</p>}
             {appliedVoucher && (
               <p className="mt-2 text-sm text-green-700 font-medium">
-                Đã áp dụng mã <strong>{appliedVoucher.code}</strong> (−{appliedVoucher.discountAmount.toLocaleString()}đ)
-                <button type="button" onClick={removeVoucher} className="ml-2 text-gray-500 hover:text-red-600 font-bold">Gỡ</button>
+                {appliedVoucher.isAuto ? 'Đã tự áp dụng ưu đãi ' : 'Đã áp dụng mã '}
+                <strong>{appliedVoucher.code}</strong> (−{appliedVoucher.discountAmount.toLocaleString()}đ)
+                <button type="button" onClick={removeVoucher} className="ml-2 text-gray-500 hover:text-red-600 font-bold">
+                  {appliedVoucher.isAuto ? 'Bỏ áp' : 'Gỡ'}
+                </button>
               </p>
             )}
           </div>

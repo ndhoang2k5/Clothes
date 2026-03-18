@@ -176,7 +176,9 @@ class ApiService {
       price: Number(p.base_price || 0),
       discountPrice: p.discount_price ?? undefined,
       category: p.category_slug || 'unknown',
-      material: variants[0]?.material || p.material || '',
+      // `material` is not guaranteed to exist on the frontend `variants` objects,
+      // so we read it from the raw backend payload first.
+      material: p?.variants?.[0]?.material || p.material || '',
       images: allImages.length > 0 ? allImages : ['https://picsum.photos/400/500?product'],
       isActive: p.is_active ?? true,
       isHot: !!p.is_hot,
@@ -210,6 +212,7 @@ class ApiService {
 
   async getProductsPage(params?: {
     category?: string | null;
+    q?: string | null;
     page?: number;
     per_page?: number;
     useCache?: boolean;
@@ -220,6 +223,7 @@ class ApiService {
     sort?: 'newest' | 'price-asc' | 'price-desc' | 'bestseller';
   }) {
     const category = params?.category ?? null;
+    const q = params?.q ?? null;
     const page = params?.page ?? 1;
     const per_page = params?.per_page ?? 24;
     const useCache = params?.useCache ?? true;
@@ -229,7 +233,7 @@ class ApiService {
     const priceRange = params?.priceRange;
     const sort = params?.sort ?? 'newest';
 
-    const key = `${category || 'all'}|${page}|${per_page}|${sizes.join(',')}|${colors.join(',')}|${materials.join(',')}|${priceRange ? priceRange.join('-') : ''}|${sort}`;
+    const key = `${category || 'all'}|${q || ''}|${page}|${per_page}|${sizes.join(',')}|${colors.join(',')}|${materials.join(',')}|${priceRange ? priceRange.join('-') : ''}|${sort}`;
 
     if (useCache) {
       const cached = this.productListCache.get(key);
@@ -240,6 +244,7 @@ class ApiService {
 
     const qs = new URLSearchParams();
     if (category) qs.set('category', category);
+    if (q && String(q).trim()) qs.set('q', String(q).trim());
     qs.set('page', String(page));
     qs.set('per_page', String(per_page));
 
@@ -321,12 +326,14 @@ class ApiService {
   async adminListProductsPage(params?: {
     include_inactive?: boolean;
     q?: string;
+    category?: string;
     page?: number;
     per_page?: number;
   }): Promise<{ items: Product[]; total: number; page: number; per_page: number }> {
     const qs = new URLSearchParams();
     qs.set('include_inactive', params?.include_inactive === false ? 'false' : 'true');
     if (params?.q) qs.set('q', params.q);
+    if (params?.category) qs.set('category', params.category);
     if (params?.page) qs.set('page', String(params.page));
     if (params?.per_page) qs.set('per_page', String(params.per_page));
     const res = await fetch(`${this.adminBaseUrl}/products?${qs.toString()}`);
@@ -578,6 +585,13 @@ class ApiService {
     });
     if (!res.ok) throw new Error('API Error');
     return res.json();
+  }
+
+  async adminSetPrimaryProductImage(imageId: string): Promise<void> {
+    const res = await fetch(`${this.adminBaseUrl}/product-images/${Number(imageId)}/set-primary`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('API Error');
   }
 
   // Banners & images: luôn trả về URL tuyệt đối để ảnh upload hiển thị đúng bên user
@@ -895,15 +909,29 @@ class ApiService {
     const res = await fetch(url);
     if (!res.ok) throw new Error('API Error');
     const data: any[] = await res.json();
-    return data.map((b) => ({
-      id: String(b.id),
-      title: b.title || '',
-      content: b.content || '',
-      thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
-      author: b.author || '',
-      createdAt: b.created_at || b.published_at || '',
-      category: (b.category || 'tips') as Blog['category'],
-    }));
+    return data.map((b) => {
+      const content = b.content || '';
+      const createdAt = b.created_at || b.published_at || '';
+      const thumbnail = this.toAbsoluteUrl(b.thumbnail || '');
+      const excerpt = b.excerpt
+        ? String(b.excerpt)
+        : content
+          ? `${String(content).slice(0, 160).trim()}${String(content).length > 160 ? '...' : ''}`
+          : '';
+      return {
+        id: String(b.id),
+        title: b.title || '',
+        content,
+        thumbnail,
+        // Aliases to match frontend BlogPage
+        image: thumbnail,
+        excerpt,
+        publishedAt: createdAt || undefined,
+        author: b.author || '',
+        createdAt,
+        category: (b.category || 'tips') as Blog['category'],
+      };
+    });
   }
 
   async adminCreateBlog(payload: {
@@ -927,8 +955,15 @@ class ApiService {
       title: b.title || '',
       content: b.content || '',
       thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
+      image: this.toAbsoluteUrl(b.thumbnail || ''),
+      excerpt: b.excerpt
+        ? String(b.excerpt)
+        : b.content
+          ? `${String(b.content).slice(0, 160).trim()}${String(b.content).length > 160 ? '...' : ''}`
+          : '',
       author: b.author || '',
       createdAt: b.created_at || b.published_at || '',
+      publishedAt: b.created_at || b.published_at || undefined,
       category: (b.category || 'tips') as Blog['category'],
     };
   }
@@ -957,8 +992,15 @@ class ApiService {
       title: b.title || '',
       content: b.content || '',
       thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
+      image: this.toAbsoluteUrl(b.thumbnail || ''),
+      excerpt: b.excerpt
+        ? String(b.excerpt)
+        : b.content
+          ? `${String(b.content).slice(0, 160).trim()}${String(b.content).length > 160 ? '...' : ''}`
+          : '',
       author: b.author || '',
       createdAt: b.created_at || b.published_at || '',
+      publishedAt: b.created_at || b.published_at || undefined,
       category: (b.category || 'tips') as Blog['category'],
     };
   }
@@ -974,15 +1016,28 @@ class ApiService {
       const res = await fetch(`${this.userBaseUrl}/blogs?${qs.toString()}`);
       if (!res.ok) throw new Error('API Error');
       const data: any[] = await res.json();
-      return data.map((b) => ({
-        id: String(b.id),
-        title: b.title || '',
-        content: b.content || '',
-        thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
-        author: b.author || '',
-        createdAt: b.created_at || b.published_at || '',
-        category: (b.category || 'tips') as Blog['category'],
-      }));
+      return data.map((b) => {
+        const content = b.content || '';
+        const createdAt = b.created_at || b.published_at || '';
+        const thumbnail = this.toAbsoluteUrl(b.thumbnail || '');
+        const excerpt = b.excerpt
+          ? String(b.excerpt)
+          : content
+            ? `${String(content).slice(0, 160).trim()}${String(content).length > 160 ? '...' : ''}`
+            : '';
+        return {
+          id: String(b.id),
+          title: b.title || '',
+          content,
+          thumbnail,
+          image: thumbnail,
+          excerpt,
+          publishedAt: createdAt || undefined,
+          author: b.author || '',
+          createdAt,
+          category: (b.category || 'tips') as Blog['category'],
+        };
+      });
     } catch {
       return [];
     }
@@ -1001,8 +1056,15 @@ class ApiService {
         title: b.title || '',
         content: b.content || '',
         thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
+        image: this.toAbsoluteUrl(b.thumbnail || ''),
+        excerpt: b.excerpt
+          ? String(b.excerpt)
+          : b.content
+            ? `${String(b.content).slice(0, 160).trim()}${String(b.content).length > 160 ? '...' : ''}`
+            : '',
         author: b.author || '',
         createdAt: b.created_at || b.published_at || '',
+        publishedAt: b.created_at || b.published_at || undefined,
         category: (b.category || 'intro') as Blog['category'],
       };
     } catch {
@@ -1041,6 +1103,13 @@ class ApiService {
     const data = await res.json();
     if (!res.ok) return { ok: false, reason: (data as any)?.detail ?? 'Lỗi xác thực mã' };
     return { ok: !!data.ok, discountAmount: data.discountAmount ?? undefined, reason: data.reason ?? undefined };
+  }
+
+  async userGetAutoVoucher(cart_total: number): Promise<{ ok: boolean; code: string | null; discountAmount: number }> {
+    const res = await fetch(`${this.userBaseUrl}/vouchers/auto?cart_total=${encodeURIComponent(cart_total)}`);
+    const data = await res.json();
+    if (!res.ok) return { ok: false, code: null, discountAmount: 0 };
+    return { ok: !!data.ok, code: data.code ?? null, discountAmount: Number(data.discountAmount ?? 0) };
   }
 
   async userCalculateShipping(cart_total: number): Promise<{ baseFee: number; discountFromShipping: number; finalFee: number; ruleId?: number }> {

@@ -4,6 +4,7 @@ import { api } from '../services/api';
 type Voucher = {
   id: number;
   code: string;
+  auto_apply?: boolean;
   type: 'percent' | 'fixed';
   value: number;
   min_order_total: number;
@@ -36,6 +37,7 @@ const VoucherManagement: React.FC = () => {
     max_discount: null,
     usage_limit: null,
     is_active: true,
+    auto_apply: false,
   });
 
   const sorted = useMemo(() => {
@@ -77,6 +79,7 @@ const VoucherManagement: React.FC = () => {
     try {
       const payload: any = {
         code: String(draft.code || '').trim(),
+        auto_apply: Boolean(draft.auto_apply),
         type: draft.type || 'fixed',
         value: Number(draft.value || 0),
         min_order_total: Number(draft.min_order_total || 0),
@@ -86,7 +89,7 @@ const VoucherManagement: React.FC = () => {
       };
       await api.adminCreateVoucher(payload);
       setIsAdding(false);
-      setDraft({ code: '', type: 'fixed', value: 0, min_order_total: 0, max_discount: null, usage_limit: null, is_active: true });
+      setDraft({ code: '', auto_apply: false, type: 'fixed', value: 0, min_order_total: 0, max_discount: null, usage_limit: null, is_active: true });
       await load(1);
     } catch (e: any) {
       setError(e?.message || 'Tạo voucher thất bại');
@@ -211,6 +214,14 @@ const VoucherManagement: React.FC = () => {
               />
               Active
             </label>
+            <label className="text-sm font-bold text-gray-700 flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={Boolean(draft.auto_apply)}
+                onChange={(e) => setDraft((p) => ({ ...p, auto_apply: e.target.checked }))}
+              />
+              Tự động áp dụng (nếu khách không nhập mã)
+            </label>
           </div>
           <div className="mt-5 flex gap-3">
             <button
@@ -247,6 +258,18 @@ const VoucherManagement: React.FC = () => {
                 <div className="md:col-span-2">
                   <div className="text-[11px] text-gray-400 font-black uppercase">Mã</div>
                   <div className="font-black text-gray-900">{v.code}</div>
+                </div>
+                <div className="md:col-span-1">
+                  <div className="text-[11px] text-gray-400 font-black uppercase">Tự động</div>
+                  <button
+                    className={`px-3 py-2 rounded-xl font-black text-sm ${
+                      v.auto_apply ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'
+                    }`}
+                    onClick={() => updateVoucher(v.id, { auto_apply: !v.auto_apply })}
+                    title="Nếu bật, hệ thống sẽ tự áp voucher tốt nhất khi khách không nhập mã"
+                  >
+                    {v.auto_apply ? 'Tự áp' : 'Thủ công'}
+                  </button>
                 </div>
                 <div className="md:col-span-1">
                   <div className="text-[11px] text-gray-400 font-black uppercase">Kiểu giảm</div>

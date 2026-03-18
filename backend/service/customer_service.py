@@ -24,7 +24,7 @@ class CustomerService:
         page: int = 1,
         per_page: int = 30,
     ):
-        query = db.query(models.Customer).order_by(models.Customer.updated_at.desc(), models.Customer.id.desc())
+        query = db.query(models.Customer)
         if q and str(q).strip():
             term = f"%{str(q).strip()}%"
             query = query.filter(
@@ -32,7 +32,8 @@ class CustomerService:
                 | (models.Customer.email.ilike(term))
                 | (models.Customer.phone.ilike(term))
             )
-        total = query.count()
+        total = query.order_by(None).count()
+        query = query.order_by(models.Customer.updated_at.desc(), models.Customer.id.desc())
         if per_page and per_page > 0:
             page = max(1, page)
             offset = (page - 1) * per_page

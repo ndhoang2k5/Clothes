@@ -7,6 +7,8 @@ import CollectionPage from './user/CollectionPage';
 import ProductDetailPage from './user/ProductDetailPage';
 import AboutPage from './user/AboutPage';
 import BlogPage from './user/BlogPage';
+import TipsPage from './user/TipsPage';
+import BlogPostPage from './user/BlogPostPage';
 import CartPage from './user/CartPage';
 import OrderSuccessPage from './user/OrderSuccessPage';
 import { CartProvider } from './user/CartContext';
@@ -163,6 +165,16 @@ const App: React.FC = () => {
       );
     }
 
+    if (path.startsWith('#/blog/post/')) {
+      const parts = path.split('/');
+      const blogId = parts[parts.length - 1] || '';
+      return (
+        <ErrorBoundary>
+          <BlogPostPage blogId={blogId} />
+        </ErrorBoundary>
+      );
+    }
+
     switch (path) {
       case '#/products':
         return <ProductPage />;
@@ -170,6 +182,8 @@ const App: React.FC = () => {
         return <CollectionPage />;
       case '#/blog':
         return <BlogPage />;
+      case '#/tips':
+        return <TipsPage />;
       case '#/cart':
         return <CartPage />;
       case '#/login':

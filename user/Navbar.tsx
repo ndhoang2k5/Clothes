@@ -93,9 +93,26 @@ const Navbar: React.FC = () => {
             <a href="#/collections" className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
               Bộ sưu tập
             </a>
-            <a href="#/blog" className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
-              Blog
-            </a>
+            <div className="group relative">
+              <a href="#/blog" className="text-[#6B5645] font-medium transition-all flex items-center hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
+                Blog
+                <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+              </a>
+              <div className="absolute top-full -left-6 w-56 bg-[#FFF9F1] shadow-xl rounded-xl py-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all border border-[#E5D6C4]">
+                <a
+                  href="#/tips"
+                  className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]"
+                >
+                  Tips
+                </a>
+                <a
+                  href="#/blog?category=news"
+                  className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]"
+                >
+                  Blogs (News)
+                </a>
+              </div>
+            </div>
             <a href="#/about" className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
               Về Unbee
             </a>
@@ -189,8 +206,11 @@ const Navbar: React.FC = () => {
               <button onClick={() => navigate('#/collections')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
                 Bộ sưu tập
               </button>
-              <button onClick={() => navigate('#/blog')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
-                Blog
+              <button onClick={() => navigate('#/tips')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
+                Tips
+              </button>
+              <button onClick={() => navigate('#/blog?category=news')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
+                Blogs
               </button>
               <button onClick={() => navigate('#/about')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
                 Về Unbee

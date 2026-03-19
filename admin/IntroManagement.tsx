@@ -14,6 +14,7 @@ const IntroManagement: React.FC = () => {
   const [editingTip, setEditingTip] = useState<Partial<Blog> | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [uploadingContentImage, setUploadingContentImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -107,6 +108,41 @@ const IntroManagement: React.FC = () => {
                 value={story.content}
                 onChange={e => setStory({...story, content: e.target.value})}
               />
+              <div className="mt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Thêm ảnh vào nội dung</div>
+                  <label className="px-3 py-1.5 bg-gray-900 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-black">
+                    {uploadingContentImage ? 'Đang up...' : 'Upload ảnh'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={uploadingContentImage}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.currentTarget.value = '';
+                        if (!file) return;
+                        try {
+                          setUploadingContentImage(true);
+                          setError(null);
+                          const url = await api.adminUploadImage(file);
+                          setStory((s) => ({
+                            ...s,
+                            content: `${s.content || ''}${s.content ? '\n' : ''}${url}\n`,
+                          }));
+                        } catch (err: any) {
+                          setError(err?.message || 'Upload ảnh thất bại');
+                        } finally {
+                          setUploadingContentImage(false);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                <p className="text-[11px] text-gray-500 mt-2">
+                  Mỗi ảnh hiển thị ở bài viết nếu bạn dán/đưa URL ảnh trên một dòng riêng (vd: `.jpg/.png/.webp`).
+                </p>
+              </div>
             </div>
           </div>
           <div>
@@ -306,6 +342,42 @@ const IntroManagement: React.FC = () => {
                     value={editingTip.content || ''}
                     onChange={(e) => setEditingTip({ ...editingTip, content: e.target.value })}
                   />
+                  <div className="mt-2">
+                    <label className="px-3 py-1.5 bg-gray-900 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-black inline-flex items-center gap-2">
+                      {uploadingContentImage ? 'Đang up...' : 'Upload ảnh vào nội dung'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={uploadingContentImage}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          e.currentTarget.value = '';
+                          if (!file) return;
+                          try {
+                            setUploadingContentImage(true);
+                            setError(null);
+                            const url = await api.adminUploadImage(file);
+                            setEditingTip((prev) =>
+                              prev
+                                ? ({
+                                    ...prev,
+                                    content: `${prev.content || ''}${prev.content ? '\n' : ''}${url}\n`,
+                                  } as any)
+                                : prev,
+                            );
+                          } catch (err: any) {
+                            setError(err?.message || 'Upload ảnh thất bại');
+                          } finally {
+                            setUploadingContentImage(false);
+                          }
+                        }}
+                      />
+                    </label>
+                    <div className="text-[11px] text-gray-500 mt-2">
+                      Mỗi ảnh hiển thị nếu URL ảnh nằm trên một dòng riêng trong nội dung.
+                    </div>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <input

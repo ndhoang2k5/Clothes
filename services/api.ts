@@ -1043,6 +1043,71 @@ class ApiService {
     }
   }
 
+  async getBlogs(category: Blog['category'], limit: number = 10, q?: string): Promise<Blog[]> {
+    try {
+      const qs = new URLSearchParams({ category, limit: String(limit) });
+      if (q && String(q).trim()) qs.set('q', String(q).trim());
+      const res = await fetch(`${this.userBaseUrl}/blogs?${qs.toString()}`);
+      if (!res.ok) throw new Error('API Error');
+      const data: any[] = await res.json();
+      return data.map((b) => {
+        const content = b.content || '';
+        const createdAt = b.created_at || b.published_at || '';
+        const thumbnail = this.toAbsoluteUrl(b.thumbnail || '');
+        const excerpt = b.excerpt
+          ? String(b.excerpt)
+          : content
+            ? `${String(content).slice(0, 160).trim()}${String(content).length > 160 ? '...' : ''}`
+            : '';
+        return {
+          id: String(b.id),
+          title: b.title || '',
+          content,
+          thumbnail,
+          image: thumbnail,
+          excerpt,
+          author: b.author || '',
+          createdAt: createdAt || '',
+          publishedAt: b.published_at || undefined,
+          category: (b.category || category) as Blog['category'],
+        };
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  async getBlogById(blogId: string | number): Promise<Blog | null> {
+    try {
+      const res = await fetch(`${this.userBaseUrl}/blogs/${Number(blogId)}`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error('API Error');
+      const b: any = await res.json();
+      const content = b.content || '';
+      const createdAt = b.created_at || b.published_at || '';
+      const thumbnail = this.toAbsoluteUrl(b.thumbnail || '');
+      const excerpt = b.excerpt
+        ? String(b.excerpt)
+        : content
+          ? `${String(content).slice(0, 160).trim()}${String(content).length > 160 ? '...' : ''}`
+          : '';
+      return {
+        id: String(b.id),
+        title: b.title || '',
+        content,
+        thumbnail,
+        image: thumbnail,
+        excerpt,
+        author: b.author || '',
+        createdAt: createdAt || '',
+        publishedAt: b.published_at || undefined,
+        category: (b.category || 'tips') as Blog['category'],
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async getIntro(): Promise<Blog | null> {
     try {
       const qs = new URLSearchParams({ category: 'intro', limit: '1' });

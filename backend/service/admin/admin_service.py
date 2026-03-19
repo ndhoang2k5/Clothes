@@ -1,5 +1,5 @@
 
-from sqlalchemy import text
+from sqlalchemy import text, or_
 from sqlalchemy.orm import Session
 from ...entities import models
 from ..serializers import (
@@ -818,12 +818,27 @@ class AdminService:
 
     # --- Blogs / Intro / Tips ---
     @staticmethod
-    def list_blogs(db: Session, category: str | None = None, published_only: bool = False):
+    def list_blogs(
+        db: Session,
+        category: str | None = None,
+        published_only: bool = False,
+        q: str | None = None,
+    ):
         query = db.query(models.Blog)
         if category:
             query = query.filter(models.Blog.category == category)
         if published_only:
             query = query.filter(models.Blog.is_published == True)  # noqa: E712
+        q_term = (q or "").strip()
+        if q_term:
+            like_term = f"%{q_term}%"
+            query = query.filter(
+                or_(
+                    models.Blog.title.ilike(like_term),
+                    models.Blog.slug.ilike(like_term),
+                    models.Blog.content.ilike(like_term),
+                )
+            )
         query = query.order_by(models.Blog.published_at.desc().nullslast(), models.Blog.created_at.desc())
         return [serialize_blog(b) for b in query.all()]
 

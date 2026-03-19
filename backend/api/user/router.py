@@ -7,7 +7,7 @@ from ...service.admin.admin_service import AdminService
 from ...service.voucher_service import VoucherService
 from ...service.shipping_service import ShippingService
 from ...service.order_service import OrderService
-from ...service.serializers import _dt
+from ...service.serializers import _dt, serialize_blog
 from ...service.auth_service import (
     create_access_token,
     get_current_customer,
@@ -154,17 +154,33 @@ def get_collections(db: Session = Depends(get_db)):
 
 
 @router.get("/blogs")
-def get_blogs(category: str | None = None, limit: int = 3, db: Session = Depends(get_db)):
+def get_blogs(
+    category: str | None = None,
+    limit: int = 3,
+    q: str | None = None,
+    db: Session = Depends(get_db),
+):
     """Blog / tips cho user – chỉ bài đã publish."""
-    key = f"user:blogs:category={category or ''}:published_only=true"
+    key = f"user:blogs:category={category or ''}:q={q or ''}:published_only=true"
     items = _PUBLIC_TTL_CACHE.get_or_set(
         key,
-        lambda: AdminService.list_blogs(db, category=category, published_only=True),
+        lambda: AdminService.list_blogs(db, category=category, published_only=True, q=q),
         ttl_seconds=20.0,
     )
     if limit and limit > 0:
         return items[: limit]
     return items
+
+
+@router.get("/blogs/{blog_id}")
+def get_blog_detail(blog_id: int, db: Session = Depends(get_db)):
+    """
+    Lấy chi tiết 1 bài blog đã publish cho user.
+    """
+    blog = AdminService.get_blog(db, blog_id)
+    if not blog or not getattr(blog, "is_published", False):
+        raise HTTPException(status_code=404, detail="Blog not found")
+    return serialize_blog(blog)
 
 
 @router.post("/vouchers/validate")

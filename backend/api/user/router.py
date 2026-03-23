@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from ...service.user.product_service import UserProductService
@@ -8,6 +8,7 @@ from ...service.voucher_service import VoucherService
 from ...service.shipping_service import ShippingService
 from ...service.order_service import OrderService
 from ...service.serializers import _dt, serialize_blog
+from ...service.order_notification_service import OrderNotificationService
 from ...service.auth_service import (
     create_access_token,
     get_current_customer,
@@ -183,6 +184,47 @@ def get_blog_detail(blog_id: int, db: Session = Depends(get_db)):
     return serialize_blog(blog)
 
 
+@router.get("/vouchers/available")
+def get_available_vouchers(
+    cart_total: float = 0,
+    db: Session = Depends(get_db),
+):
+    """Trả danh sách voucher active, còn hạn, chưa hết lượt dùng cho user xem gợi ý."""
+    import datetime as _dt
+    now = _dt.datetime.utcnow()
+    query = (
+        db.query(models.Voucher)
+        .filter(
+            models.Voucher.is_active == True,  # noqa: E712
+        )
+        .filter((models.Voucher.valid_from.is_(None)) | (models.Voucher.valid_from <= now))
+        .filter((models.Voucher.valid_to.is_(None)) | (models.Voucher.valid_to >= now))
+        .order_by(models.Voucher.min_order_total.asc(), models.Voucher.id.desc())
+    )
+    vouchers = query.all()
+    result = []
+    for v in vouchers:
+        if v.usage_limit is not None and (v.used_count or 0) >= v.usage_limit:
+            continue
+        min_total = float(v.min_order_total or 0)
+        eligible = cart_total >= min_total
+        item: dict = {
+            "code": v.code,
+            "type": v.type,
+            "value": float(v.value or 0),
+            "min_order_total": min_total,
+            "eligible": eligible,
+        }
+        if v.type == "product":
+            item["display_name"] = getattr(v, "display_name", None)
+            item["image_url"] = getattr(v, "image_url", None)
+        else:
+            max_disc = float(v.max_discount) if v.max_discount else None
+            item["max_discount"] = max_disc
+        result.append(item)
+    return result
+
+
 @router.post("/vouchers/validate")
 def validate_voucher(
     body: dict = Body(..., description="{ code: string, cart_total: number }"),
@@ -197,11 +239,18 @@ def validate_voucher(
     if not code:
         return {"ok": False, "discountAmount": None, "reason": "Vui lòng nhập mã"}
     result = VoucherService.validate_voucher(db, code, cart_total)
-    return {
+    resp: dict = {
         "ok": result["ok"],
         "discountAmount": result.get("discount_amount"),
         "reason": result.get("reason"),
     }
+    if result.get("voucher_type"):
+        resp["voucherType"] = result["voucher_type"]
+    if result.get("gift_product_name"):
+        resp["giftProductName"] = result["gift_product_name"]
+    if result.get("gift_product_image"):
+        resp["giftProductImage"] = result["gift_product_image"]
+    return resp
 
 
 @router.get("/vouchers/auto")
@@ -210,15 +259,25 @@ def get_auto_voucher(
     db: Session = Depends(get_db),
 ):
     """
-    Gợi ý voucher tự động tốt nhất theo tổng tiền hàng (cart_total, VND).
-    Trả về: { ok: bool, code: string | null, discountAmount: number }.
+    Gợi ý voucher tự động: trả cả discount voucher + gift voucher (nếu có).
     """
-    v, discount = VoucherService.pick_best_auto_voucher(db, cart_total)
-    return {
-        "ok": True,
-        "code": (v.code if v else None),
-        "discountAmount": float(discount or 0),
-    }
+    best_disc, disc_amount, best_gift, _ = VoucherService.pick_auto_vouchers(db, cart_total)
+    resp: dict = {"ok": True}
+
+    if best_disc:
+        resp["code"] = best_disc.code
+        resp["discountAmount"] = float(disc_amount or 0)
+        resp["voucherType"] = getattr(best_disc, "type", "fixed")
+    else:
+        resp["code"] = None
+        resp["discountAmount"] = 0
+
+    if best_gift:
+        resp["giftCode"] = best_gift.code
+        resp["giftProductName"] = getattr(best_gift, "display_name", None) or "Quà tặng"
+        resp["giftProductImage"] = getattr(best_gift, "image_url", None)
+
+    return resp
 
 
 @router.get("/shipping/calculate")
@@ -236,9 +295,10 @@ def calculate_shipping_fee(
 
 @router.post("/orders")
 def create_order(
+    background_tasks: BackgroundTasks,
     body: dict = Body(
         ...,
-        description='{ "customer": { name, phone, email?, address }, "items": [ { productId, variantId?, quantity } ], "voucherCode?", "note?" }',
+        description='{ "customer": { name, phone, email?, address }, "items": [ { productId, variantId?, quantity } ], "voucherCode?", "giftVoucherCode?", "note?" }',
     ),
     db: Session = Depends(get_db),
     current_customer=Depends(get_current_customer_optional),
@@ -251,6 +311,35 @@ def create_order(
         order = OrderService.create_order(db, body, customer_id=(current_customer.id if current_customer else None))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    # Gửi email thông báo cho quản lý ở background để không làm chậm request đặt hàng.
+    try:
+        payload = {
+            "order_code": order.order_code,
+            "customer_name": order.customer_name,
+            "phone": order.phone,
+            "email": order.email,
+            "address": order.address,
+            "note": order.note,
+            "status": order.status,
+            "subtotal": float(order.subtotal or 0),
+            "discount_total": float(order.discount_total or 0),
+            "shipping_fee": float(order.shipping_fee or 0),
+            "total_amount": float(order.total_amount or 0),
+            "created_at": _dt(getattr(order, "created_at", None)),
+            "items": [
+                {
+                    "product_name": it.product_name,
+                    "variant_label": it.variant_label,
+                    "quantity": it.quantity,
+                    "line_total": float(it.line_total or 0),
+                }
+                for it in (getattr(order, "items", []) or [])
+            ],
+        }
+        background_tasks.add_task(OrderNotificationService.send_new_order_email, payload)
+    except Exception:
+        # Không làm fail luồng đặt đơn nếu task email lỗi.
+        pass
     return {
         "orderId": order.id,
         "orderCode": order.order_code,

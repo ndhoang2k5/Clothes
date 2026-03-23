@@ -202,7 +202,7 @@ const ShippingRulesManagement: React.FC = () => {
                   <div className="font-black text-gray-900">{Number(r.min_order_total || 0).toLocaleString()}đ</div>
                 </div>
                 <div className="md:col-span-1">
-                  <div className="text-[11px] text-gray-400 font-black uppercase">Phí gốc</div>
+                  <div className="text-[11px] text-gray-400 font-black uppercase">Phí Ship</div>
                   <input
                     type="number"
                     className="w-full bg-gray-50 rounded-xl px-3 py-2 font-black"

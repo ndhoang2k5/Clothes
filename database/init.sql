@@ -233,8 +233,10 @@ CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items (order_id);
 CREATE TABLE IF NOT EXISTS vouchers (
     id SERIAL PRIMARY KEY,
     code VARCHAR(64) UNIQUE NOT NULL,
+    display_name VARCHAR(255),
+    image_url TEXT,
     auto_apply BOOLEAN NOT NULL DEFAULT FALSE,
-    type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (type IN ('percent', 'fixed')),
+    type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (type IN ('percent', 'fixed', 'product')),
     value NUMERIC(12, 2) NOT NULL,
     min_order_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
     max_discount NUMERIC(12, 2),

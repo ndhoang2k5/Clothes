@@ -21,6 +21,9 @@ export type AppliedVoucher = {
   code: string;
   discountAmount: number;
   isAuto?: boolean;
+  voucherType?: string;
+  giftProductName?: string;
+  giftProductImage?: string;
 };
 
 type AddItemArgs = {
@@ -34,12 +37,13 @@ type CartContextValue = {
   totalQuantity: number;
   totalPrice: number;
   appliedVoucher: AppliedVoucher | null;
+  giftVoucher: AppliedVoucher | null;
   addItem: (args: AddItemArgs) => void;
   removeItem: (key: string) => void;
   updateQuantity: (key: string, quantity: number) => void;
   clearCart: () => void;
   applyVoucher: (code: string) => Promise<void>;
-  removeVoucher: () => void;
+  removeVoucher: (slot?: 'discount' | 'gift') => void;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -113,24 +117,28 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const [appliedVoucher, setAppliedVoucher] = useState<AppliedVoucher | null>(null);
+  const [giftVoucher, setGiftVoucher] = useState<AppliedVoucher | null>(null);
   const [autoSuppressedAtTotal, setAutoSuppressedAtTotal] = useState<number | null>(null);
+  const [giftSuppressedAtTotal, setGiftSuppressedAtTotal] = useState<number | null>(null);
 
   useEffect(() => {
-    // Reset when cart empty
     if (items.length === 0 || totalPrice <= 0) {
       if (appliedVoucher?.isAuto) setAppliedVoucher(null);
+      if (giftVoucher?.isAuto) setGiftVoucher(null);
       setAutoSuppressedAtTotal(null);
+      setGiftSuppressedAtTotal(null);
       return;
     }
 
-    // If user applied manual voucher, do not override.
-    if (appliedVoucher && !appliedVoucher.isAuto) {
-      setAutoSuppressedAtTotal(null);
-      return;
-    }
+    const hasManualDiscount = appliedVoucher && !appliedVoucher.isAuto;
+    const hasManualGift = giftVoucher && !giftVoucher.isAuto;
+    const discountSuppressed = autoSuppressedAtTotal !== null && autoSuppressedAtTotal === totalPrice;
+    const giftSuppressed = giftSuppressedAtTotal !== null && giftSuppressedAtTotal === totalPrice;
 
-    // If user clicked "Bỏ áp" at this subtotal, don't re-apply until subtotal changes.
-    if (autoSuppressedAtTotal !== null && autoSuppressedAtTotal === totalPrice) return;
+    if (hasManualDiscount && hasManualGift) return;
+    if (hasManualDiscount && giftSuppressed) return;
+    if (discountSuppressed && hasManualGift) return;
+    if (discountSuppressed && giftSuppressed) return;
 
     let cancelled = false;
     const t = window.setTimeout(() => {
@@ -138,12 +146,31 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .userGetAutoVoucher(totalPrice)
         .then((r) => {
           if (cancelled) return;
-          const code = r.code ? String(r.code).trim() : '';
-          const discountAmount = Number(r.discountAmount || 0);
-          if (code && discountAmount > 0) {
-            setAppliedVoucher({ code, discountAmount, isAuto: true });
-          } else if (appliedVoucher?.isAuto) {
-            setAppliedVoucher(null);
+
+          if (!hasManualDiscount && !discountSuppressed) {
+            const code = r.code ? String(r.code).trim() : '';
+            const discountAmount = Number(r.discountAmount || 0);
+            if (code && discountAmount > 0) {
+              setAppliedVoucher({ code, discountAmount, isAuto: true, voucherType: r.voucherType });
+            } else if (appliedVoucher?.isAuto) {
+              setAppliedVoucher(null);
+            }
+          }
+
+          if (!hasManualGift && !giftSuppressed) {
+            const giftCode = r.giftCode ? String(r.giftCode).trim() : '';
+            if (giftCode && r.giftProductName) {
+              setGiftVoucher({
+                code: giftCode,
+                discountAmount: 0,
+                isAuto: true,
+                voucherType: 'product',
+                giftProductName: r.giftProductName,
+                giftProductImage: r.giftProductImage,
+              });
+            } else if (giftVoucher?.isAuto) {
+              setGiftVoucher(null);
+            }
           }
         })
         .catch(() => {
@@ -155,12 +182,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       cancelled = true;
       window.clearTimeout(t);
     };
-  }, [items.length, totalPrice, appliedVoucher?.code, appliedVoucher?.discountAmount, appliedVoucher?.isAuto, autoSuppressedAtTotal]);
+  }, [items.length, totalPrice, appliedVoucher?.code, appliedVoucher?.isAuto, giftVoucher?.code, giftVoucher?.isAuto, autoSuppressedAtTotal, giftSuppressedAtTotal]);
 
   const clearCart = () => {
     setItems([]);
     setAppliedVoucher(null);
+    setGiftVoucher(null);
     setAutoSuppressedAtTotal(null);
+    setGiftSuppressedAtTotal(null);
   };
 
   const applyVoucher = async (code: string) => {
@@ -172,14 +201,37 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 0);
     const result = await api.userValidateVoucher(trimmed, cartTotal);
     if (!result.ok) throw new Error(result.reason || 'Mã không hợp lệ');
-    setAppliedVoucher({ code: trimmed, discountAmount: result.discountAmount ?? 0, isAuto: false });
-    setAutoSuppressedAtTotal(null);
+
+    if (result.voucherType === 'product') {
+      setGiftVoucher({
+        code: trimmed,
+        discountAmount: 0,
+        isAuto: false,
+        voucherType: 'product',
+        giftProductName: result.giftProductName,
+        giftProductImage: result.giftProductImage,
+      });
+      setGiftSuppressedAtTotal(null);
+    } else {
+      setAppliedVoucher({
+        code: trimmed,
+        discountAmount: result.discountAmount ?? 0,
+        isAuto: false,
+        voucherType: result.voucherType,
+      });
+      setAutoSuppressedAtTotal(null);
+    }
   };
 
-  const removeVoucher = () => {
-    // If removing auto voucher, suppress re-applying until cart total changes
-    if (appliedVoucher?.isAuto) setAutoSuppressedAtTotal(totalPrice);
-    setAppliedVoucher(null);
+  const removeVoucher = (slot?: 'discount' | 'gift') => {
+    if (!slot || slot === 'discount') {
+      if (appliedVoucher?.isAuto) setAutoSuppressedAtTotal(totalPrice);
+      setAppliedVoucher(null);
+    }
+    if (!slot || slot === 'gift') {
+      if (giftVoucher?.isAuto) setGiftSuppressedAtTotal(totalPrice);
+      setGiftVoucher(null);
+    }
   };
 
   const value: CartContextValue = {
@@ -187,6 +239,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     totalQuantity,
     totalPrice,
     appliedVoucher,
+    giftVoucher,
     addItem,
     removeItem,
     updateQuantity,
@@ -203,4 +256,3 @@ export function useCart() {
   if (!ctx) throw new Error('useCart must be used within CartProvider');
   return ctx;
 }
-

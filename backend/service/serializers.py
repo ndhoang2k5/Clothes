@@ -1,4 +1,5 @@
 import datetime
+import re
 from decimal import Decimal
 from typing import Any, Optional
 
@@ -160,6 +161,23 @@ def serialize_order_item(item) -> dict:
 
 
 def serialize_order(order) -> dict:
+    raw_note = getattr(order, "note", None)
+    applied_voucher_code = None
+    applied_gift_voucher_code = None
+    clean_note = raw_note
+    if isinstance(raw_note, str) and raw_note.strip():
+        m = re.search(r"\[VOUCHER:([A-Za-z0-9_-]{1,64})\]", raw_note)
+        if m:
+            applied_voucher_code = m.group(1)
+        mg = re.search(r"\[GIFT_VOUCHER:([A-Za-z0-9_-]{1,64})\]", raw_note)
+        if mg:
+            applied_gift_voucher_code = mg.group(1)
+        clean_note = re.sub(r"\s*\[VOUCHER:[A-Za-z0-9_-]{1,64}\]\s*", "\n", raw_note).strip()
+        clean_note = re.sub(r"\s*\[GIFT_VOUCHER:[A-Za-z0-9_-]{1,64}\]\s*", "\n", clean_note).strip()
+        if applied_voucher_code or applied_gift_voucher_code:
+            clean_note = re.sub(r"\n{3,}", "\n\n", clean_note)
+            if clean_note == "":
+                clean_note = None
     return {
         "id": order.id,
         "order_code": getattr(order, "order_code", None),
@@ -168,7 +186,9 @@ def serialize_order(order) -> dict:
         "phone": order.phone,
         "email": getattr(order, "email", None),
         "address": order.address,
-        "note": getattr(order, "note", None),
+        "note": clean_note,
+        "applied_voucher_code": applied_voucher_code,
+        "applied_gift_voucher_code": applied_gift_voucher_code,
         "status": order.status,
         "subtotal": _num(getattr(order, "subtotal", None)),
         "discount_total": _num(getattr(order, "discount_total", None)),
@@ -301,6 +321,8 @@ def serialize_voucher(voucher) -> dict:
     return {
         "id": voucher.id,
         "code": voucher.code,
+        "display_name": getattr(voucher, "display_name", None),
+        "image_url": getattr(voucher, "image_url", None),
         "auto_apply": getattr(voucher, "auto_apply", False),
         "type": getattr(voucher, "type", "fixed"),
         "value": _num(getattr(voucher, "value", None)),

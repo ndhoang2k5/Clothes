@@ -2,6 +2,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useCart } from './CartContext';
 import { useAuth } from './AuthContext';
+import { api } from '../services/api';
+
+type SearchSuggestion = {
+  id: string;
+  name: string;
+  image: string;
+  price: number;
+  discountPrice?: number;
+};
 
 const Navbar: React.FC = () => {
   const { totalQuantity } = useCart();
@@ -9,6 +18,9 @@ const Navbar: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number>(-1);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const closeMobile = () => setMobileOpen(false);
   const navigate = (hash: string) => {
@@ -36,6 +48,7 @@ const Navbar: React.FC = () => {
     } catch {
       setSearchText('');
     }
+    setActiveSuggestionIndex(-1);
     setSearchOpen(true);
   };
 
@@ -47,6 +60,13 @@ const Navbar: React.FC = () => {
     if (trimmed) params.set('q', trimmed);
     const qs = params.toString();
     navigate(`#/products${qs ? '?' + qs : ''}`);
+    setActiveSuggestionIndex(-1);
+    setSearchOpen(false);
+  };
+
+  const openProductDetail = (productId: string) => {
+    navigate(`#/product/${productId}`);
+    setActiveSuggestionIndex(-1);
     setSearchOpen(false);
   };
 
@@ -61,6 +81,53 @@ const Navbar: React.FC = () => {
     document.addEventListener('mousedown', onMouseDown);
     return () => document.removeEventListener('mousedown', onMouseDown);
   }, [searchOpen]);
+
+  useEffect(() => {
+    if (!searchOpen) {
+      setSearchSuggestions([]);
+      setSearchLoading(false);
+      setActiveSuggestionIndex(-1);
+      return;
+    }
+    const keyword = searchText.trim();
+    if (keyword.length < 2) {
+      setSearchSuggestions([]);
+      setSearchLoading(false);
+      setActiveSuggestionIndex(-1);
+      return;
+    }
+
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      setSearchLoading(true);
+      void api
+        .getProductsPage({ q: keyword, page: 1, per_page: 6, useCache: false })
+        .then((res) => {
+          if (cancelled) return;
+          const mapped: SearchSuggestion[] = (res.items || []).map((p: any) => ({
+            id: String(p.id),
+            name: String(p.name || ''),
+            image: (Array.isArray(p.images) && p.images[0]) ? String(p.images[0]) : 'https://picsum.photos/120/120?product',
+            price: Number(p.price || 0),
+            discountPrice: p.discountPrice != null ? Number(p.discountPrice) : undefined,
+          }));
+          setSearchSuggestions(mapped);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setSearchSuggestions([]);
+          setActiveSuggestionIndex(-1);
+        })
+        .finally(() => {
+          if (!cancelled) setSearchLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [searchOpen, searchText]);
 
   return (
     <nav className="sticky top-0 z-50 bg-[#F8F3EC]/90 backdrop-blur-md border-b border-[#E5D6C4]">
@@ -260,6 +327,40 @@ const Navbar: React.FC = () => {
               <input
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setSearchOpen(false);
+                    return;
+                  }
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (searchSuggestions.length === 0) return;
+                    setActiveSuggestionIndex((prev) => {
+                      if (prev < 0) return 0;
+                      return prev >= searchSuggestions.length - 1 ? 0 : prev + 1;
+                    });
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (searchSuggestions.length === 0) return;
+                    setActiveSuggestionIndex((prev) => {
+                      if (prev < 0) return searchSuggestions.length - 1;
+                      return prev <= 0 ? searchSuggestions.length - 1 : prev - 1;
+                    });
+                    return;
+                  }
+                  if (e.key === 'Enter') {
+                    if (
+                      activeSuggestionIndex >= 0 &&
+                      activeSuggestionIndex < searchSuggestions.length
+                    ) {
+                      e.preventDefault();
+                      openProductDetail(searchSuggestions[activeSuggestionIndex].id);
+                    }
+                  }
+                }}
                 placeholder="Nhập tên hoặc SKU..."
                 className="flex-1 bg-white border border-gray-100 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[#B58A5A]/35"
               />
@@ -282,8 +383,54 @@ const Navbar: React.FC = () => {
               >
                 Xóa
               </button>
-              <div className="text-xs text-gray-500">Enter để tìm</div>
+              <div className="text-xs text-gray-500">↑ ↓ để chọn • Enter để mở/tìm</div>
             </div>
+
+            {searchText.trim().length >= 2 && (
+              <div className="mt-3 border border-[#E5D6C4]/80 rounded-xl bg-white/90 max-h-80 overflow-auto">
+                {searchLoading ? (
+                  <div className="px-3 py-3 text-sm text-gray-500 font-medium">Đang gợi ý sản phẩm...</div>
+                ) : searchSuggestions.length > 0 ? (
+                  <div className="divide-y divide-[#EFE4D8]">
+                    {searchSuggestions.map((p, idx) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => openProductDetail(p.id)}
+                        onMouseEnter={() => setActiveSuggestionIndex(idx)}
+                        className={`w-full text-left px-3 py-2.5 transition-colors flex items-center gap-3 ${
+                          idx === activeSuggestionIndex ? 'bg-[#FFF0DE]' : 'hover:bg-[#FFF7EC]'
+                        }`}
+                      >
+                        <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover bg-gray-100 border border-gray-100" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-bold text-gray-800 truncate">{p.name}</div>
+                          <div className="text-xs text-gray-500">
+                            {p.discountPrice != null ? (
+                              <>
+                                <span className="font-bold text-pink-600 mr-1">{p.discountPrice.toLocaleString()}đ</span>
+                                <span className="line-through">{p.price.toLocaleString()}đ</span>
+                              </>
+                            ) : (
+                              <span className="font-bold text-gray-700">{p.price.toLocaleString()}đ</span>
+                            )}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => submitSearch(searchText)}
+                      className="w-full text-center px-3 py-2 text-xs font-bold text-[#8B6A47] hover:bg-[#FFF7EC]"
+                    >
+                      Xem tất cả kết quả cho "{searchText.trim()}"
+                    </button>
+                  </div>
+                ) : (
+                  <div className="px-3 py-3 text-sm text-gray-500">Không có sản phẩm phù hợp</div>
+                )}
+              </div>
+            )}
           </form>
         </div>
       )}

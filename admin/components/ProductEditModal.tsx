@@ -10,6 +10,24 @@ type Props = {
 };
 
 type EditingImage = { id: string; url: string; alt: string; isPrimary: boolean };
+type VoucherLite = {
+  id: number;
+  code: string;
+  type: 'percent' | 'fixed' | 'product';
+  value: number;
+  min_order_total: number;
+  max_discount?: number | null;
+  is_active: boolean;
+  display_name?: string | null;
+};
+type ShippingRuleLite = {
+  id: number;
+  min_order_total: number;
+  base_fee: number;
+  discount_type: 'percent' | 'fixed' | 'free';
+  discount_value: number;
+  is_active: boolean;
+};
 
 const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onSaved }) => {
   const [loading, setLoading] = useState(true);
@@ -21,6 +39,16 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
   const [editingDraft, setEditingDraft] = useState<Partial<Product>>({});
   const [editingVariants, setEditingVariants] = useState<ProductVariant[]>([]);
   const [editingImages, setEditingImages] = useState<EditingImage[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [relatedError, setRelatedError] = useState<string | null>(null);
+  const [activeVouchers, setActiveVouchers] = useState<VoucherLite[]>([]);
+  const [activeShippingRules, setActiveShippingRules] = useState<ShippingRuleLite[]>([]);
+  const [shippingPreview, setShippingPreview] = useState<{
+    baseFee: number;
+    discountFromShipping: number;
+    finalFee: number;
+    ruleId?: number;
+  } | null>(null);
 
   const categoryOptions = useMemo(() => (Array.isArray(categories) ? categories : []), [categories]);
 
@@ -54,6 +82,36 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
             isPrimary: !!img.is_primary,
           })),
         );
+
+        // Tải thêm dữ liệu ưu đãi/voucher/phí ship để xem nhanh ngay trong popup chi tiết sản phẩm.
+        setRelatedLoading(true);
+        setRelatedError(null);
+        try {
+          const currentPrice = Number(
+            (fresh.discountPrice ?? fresh.price ?? 0) || 0,
+          );
+          const [voucherRes, shippingRulesRes, shippingPreviewRes] = await Promise.all([
+            api.adminListVouchers({ is_active: true, page: 1, per_page: 200 }),
+            api.adminListShippingRules({ active_only: true }),
+            api.userCalculateShipping(currentPrice),
+          ]);
+          const vouchers = Array.isArray((voucherRes as any)?.items)
+            ? (voucherRes as any).items
+            : Array.isArray(voucherRes)
+              ? voucherRes
+              : [];
+          setActiveVouchers(vouchers as VoucherLite[]);
+          setActiveShippingRules(
+            (Array.isArray(shippingRulesRes) ? shippingRulesRes : []) as ShippingRuleLite[],
+          );
+          setShippingPreview(shippingPreviewRes || null);
+        } catch (e: any) {
+          setRelatedError(
+            e?.message || 'Không tải được thông tin ưu đãi/phí ship',
+          );
+        } finally {
+          setRelatedLoading(false);
+        }
       } catch (e: any) {
         if (cancelled) return;
         setError(e?.message || 'Không tải được dữ liệu sản phẩm');
@@ -65,6 +123,13 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
       cancelled = true;
     };
   }, [productId]);
+
+  const currentPrice = Number((editingDraft.discountPrice ?? editingDraft.price ?? 0) || 0);
+  const applicableVouchers = useMemo(() => {
+    return (activeVouchers || [])
+      .filter((v) => !!v?.is_active && Number(v.min_order_total || 0) <= currentPrice)
+      .sort((a, b) => Number(a.min_order_total || 0) - Number(b.min_order_total || 0));
+  }, [activeVouchers, currentPrice]);
 
   const handleSave = async () => {
     if (!editing) return;
@@ -255,6 +320,111 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
                   New
                 </label>
               </div>
+            </div>
+
+            <div className="border border-blue-100 rounded-2xl p-4 bg-blue-50/40">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <h4 className="text-sm font-black text-gray-800">Ưu đãi / khuyến mãi / phí ship (tham khảo)</h4>
+                <div className="flex items-center gap-2">
+                  <a
+                    href="#/admin/vouchers"
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  >
+                    Quản lý mã giảm giá
+                  </a>
+                  <a
+                    href="#/admin/shipping"
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  >
+                    Quản lý phí ship
+                  </a>
+                  <a
+                    href="#/admin/clearance"
+                    className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-gray-200 text-gray-700 hover:bg-gray-50"
+                  >
+                    Ưu đãi cuối mùa
+                  </a>
+                </div>
+              </div>
+
+              <div className="text-xs text-gray-600 mb-3">
+                Giá đang xét: <span className="font-black text-gray-800">{currentPrice.toLocaleString()}đ</span>
+                {' · '}
+                Trạng thái sản phẩm:
+                {(editingDraft.isSale || editing?.isSale) ? (
+                  <span className="ml-1 px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-bold">Sale</span>
+                ) : (
+                  <span className="ml-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-bold">Thường</span>
+                )}
+                {(editingDraft.category || editing?.category) === 'uu-dai-cuoi-mua' && (
+                  <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold">Ưu đãi cuối mùa</span>
+                )}
+              </div>
+
+              {relatedError && (
+                <div className="mb-3 p-2 rounded-xl text-xs font-bold bg-red-50 text-red-700 border border-red-100">
+                  {relatedError}
+                </div>
+              )}
+
+              {relatedLoading ? (
+                <div className="text-xs text-gray-500 font-bold">Đang tải ưu đãi và phí ship...</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-white border border-gray-100 rounded-xl p-3">
+                    <div className="text-xs font-black text-gray-500 uppercase mb-2">Mã có thể áp dụng</div>
+                    {applicableVouchers.length === 0 ? (
+                      <div className="text-xs text-gray-400 italic">Không có mã phù hợp với mức giá hiện tại.</div>
+                    ) : (
+                      <div className="space-y-2 max-h-40 overflow-auto pr-1">
+                        {applicableVouchers.map((v) => (
+                          <div key={v.id} className="text-xs text-gray-700">
+                            <span className="font-black">{v.code}</span>
+                            {' · '}
+                            {v.type === 'percent'
+                              ? `${Number(v.value || 0)}%`
+                              : v.type === 'fixed'
+                                ? `${Number(v.value || 0).toLocaleString()}đ`
+                                : `Tặng SP: ${v.display_name || 'Quà tặng'}`}
+                            {' · Đơn từ '}
+                            {Number(v.min_order_total || 0).toLocaleString()}đ
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="bg-white border border-gray-100 rounded-xl p-3">
+                    <div className="text-xs font-black text-gray-500 uppercase mb-2">Phí ship dự kiến</div>
+                    {shippingPreview ? (
+                      <div className="space-y-1 text-xs text-gray-700">
+                        <div>Phí gốc: <span className="font-bold">{Number(shippingPreview.baseFee || 0).toLocaleString()}đ</span></div>
+                        <div>Giảm phí: <span className="font-bold text-green-700">{Number(shippingPreview.discountFromShipping || 0).toLocaleString()}đ</span></div>
+                        <div>Phí ship cuối: <span className="font-black text-pink-600">{Number(shippingPreview.finalFee || 0).toLocaleString()}đ</span></div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">Chưa có dữ liệu phí ship.</div>
+                    )}
+                    {activeShippingRules.length > 0 && (
+                      <div className="mt-3 pt-2 border-t border-gray-100">
+                        <div className="text-[11px] text-gray-500 font-bold mb-1">Rule đang bật:</div>
+                        <div className="space-y-1 max-h-28 overflow-auto pr-1">
+                          {activeShippingRules.map((r) => (
+                            <div key={r.id} className="text-[11px] text-gray-600">
+                              Đơn từ {Number(r.min_order_total || 0).toLocaleString()}đ · phí gốc {Number(r.base_fee || 0).toLocaleString()}đ · giảm{' '}
+                              {r.discount_type === 'free'
+                                ? 'freeship'
+                                : r.discount_type === 'percent'
+                                  ? `${Number(r.discount_value || 0)}%`
+                                  : `${Number(r.discount_value || 0).toLocaleString()}đ`}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>

@@ -81,6 +81,7 @@ export interface Banner {
 export type BannerSlot =
   | 'home_hero'
   | 'home_promo'
+  | 'home_product_promo'
   | 'home_category_feature'
   | 'footer_banner';
 

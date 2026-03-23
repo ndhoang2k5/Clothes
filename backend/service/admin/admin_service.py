@@ -23,6 +23,105 @@ from sqlalchemy.orm import selectinload
 
 class AdminService:
     @staticmethod
+    def _enrich_serialized_order_for_admin(db: Session, data: dict):
+        """
+        Bổ sung thông tin hiển thị cho màn chi tiết đơn:
+        - image_url cho từng item (ưu tiên ảnh variant, fallback ảnh product)
+        - thông tin quà tặng khi áp voucher loại product
+        """
+        items = list(data.get("items") or [])
+
+        variant_ids = []
+        product_ids = []
+        if items:
+            for it in items:
+                vid = it.get("variant_id")
+                pid = it.get("product_id")
+                if vid is not None:
+                    try:
+                        variant_ids.append(int(vid))
+                    except Exception:
+                        pass
+                if pid is not None:
+                    try:
+                        product_ids.append(int(pid))
+                    except Exception:
+                        pass
+
+        variant_map: dict[int, str] = {}
+        product_map: dict[int, str] = {}
+
+        if variant_ids:
+            rows = (
+                db.query(models.ProductVariantImage)
+                .filter(models.ProductVariantImage.variant_id.in_(list(set(variant_ids))))
+                .order_by(
+                    models.ProductVariantImage.variant_id.asc(),
+                    models.ProductVariantImage.is_primary.desc(),
+                    models.ProductVariantImage.sort_order.asc(),
+                    models.ProductVariantImage.id.asc(),
+                )
+                .all()
+            )
+            for r in rows:
+                if r.variant_id not in variant_map and getattr(r, "image_url", None):
+                    variant_map[r.variant_id] = r.image_url
+
+        if product_ids:
+            rows = (
+                db.query(models.ProductImage)
+                .filter(models.ProductImage.product_id.in_(list(set(product_ids))))
+                .order_by(
+                    models.ProductImage.product_id.asc(),
+                    models.ProductImage.is_primary.desc(),
+                    models.ProductImage.sort_order.asc(),
+                    models.ProductImage.id.asc(),
+                )
+                .all()
+            )
+            for r in rows:
+                if r.product_id not in product_map and getattr(r, "image_url", None):
+                    product_map[r.product_id] = r.image_url
+
+        out = dict(data)
+        if items:
+            enriched_items = []
+            for it in items:
+                vid = it.get("variant_id")
+                pid = it.get("product_id")
+                image_url = None
+                try:
+                    if vid is not None:
+                        image_url = variant_map.get(int(vid))
+                except Exception:
+                    pass
+                if not image_url:
+                    try:
+                        if pid is not None:
+                            image_url = product_map.get(int(pid))
+                    except Exception:
+                        pass
+                enriched = dict(it)
+                enriched["image_url"] = image_url
+                enriched_items.append(enriched)
+            out["items"] = enriched_items
+
+        gift_code = (out.get("applied_gift_voucher_code") or "").strip()
+        if gift_code:
+            gift_voucher = (
+                db.query(models.Voucher)
+                .filter(models.Voucher.code == gift_code)
+                .first()
+            )
+            if gift_voucher and getattr(gift_voucher, "type", None) == "product":
+                out["applied_gift_product_name"] = (
+                    getattr(gift_voucher, "display_name", None) or gift_voucher.code
+                )
+                out["applied_gift_product_image"] = getattr(gift_voucher, "image_url", None)
+
+        return out
+
+    @staticmethod
     def get_all_orders(db: Session):
         orders = db.query(models.Order).order_by(models.Order.created_at.desc()).all()
         return [serialize_order(o) for o in orders]
@@ -48,12 +147,16 @@ class AdminService:
     @staticmethod
     def get_order(db: Session, order_id: int):
         order = OrderService.get_by_id(db, order_id)
-        return serialize_order(order) if order else None
+        if not order:
+            return None
+        return AdminService._enrich_serialized_order_for_admin(db, serialize_order(order))
 
     @staticmethod
     def update_order_status(db: Session, order_id: int, status: str):
         order = OrderService.update_status(db, order_id, status)
-        return serialize_order(order) if order else None
+        if not order:
+            return None
+        return AdminService._enrich_serialized_order_for_admin(db, serialize_order(order))
 
     # --- Customers (Phase A.2) ---
     @staticmethod

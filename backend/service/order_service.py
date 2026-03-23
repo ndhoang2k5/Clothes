@@ -119,13 +119,18 @@ class OrderService:
 
         subtotal_float = float(subtotal)
         voucher_code = (payload.get("voucherCode") or "").strip()
+        gift_voucher_code = (payload.get("giftVoucherCode") or "").strip()
         voucher_discount = Decimal("0")
         applied_voucher_code = None
+        applied_gift_voucher_code = None
         if voucher_code:
             vres = VoucherService.validate_voucher(db, voucher_code, subtotal_float)
             if vres.get("ok"):
-                voucher_discount = Decimal(str(vres.get("discount_amount") or 0))
-                applied_voucher_code = voucher_code
+                if (vres.get("voucher_type") or "fixed") == "product":
+                    applied_gift_voucher_code = voucher_code
+                else:
+                    voucher_discount = Decimal(str(vres.get("discount_amount") or 0))
+                    applied_voucher_code = voucher_code
             else:
                 raise ValueError(vres.get("reason") or "Mã giảm giá không hợp lệ")
         else:
@@ -133,6 +138,15 @@ class OrderService:
             if best_v and best_discount > 0:
                 voucher_discount = Decimal(str(best_discount))
                 applied_voucher_code = best_v.code
+
+        if gift_voucher_code:
+            gres = VoucherService.validate_voucher(db, gift_voucher_code, subtotal_float)
+            if gres.get("ok"):
+                if (gres.get("voucher_type") or "fixed") != "product":
+                    raise ValueError("Mã quà tặng không hợp lệ")
+                applied_gift_voucher_code = gift_voucher_code
+            else:
+                raise ValueError(gres.get("reason") or "Mã quà tặng không hợp lệ")
 
         ship = ShippingService.calculate_fee(db, subtotal_float)
         shipping_fee = Decimal(str(ship["finalFee"]))
@@ -143,6 +157,21 @@ class OrderService:
         while db.query(models.Order).filter(models.Order.order_code == order_code).first():
             order_code = _generate_order_code()
 
+        customer_note = (payload.get("note") or "").strip()
+        meta_tags = []
+        if applied_voucher_code:
+            meta_tags.append(f"[VOUCHER:{applied_voucher_code}]")
+        if applied_gift_voucher_code:
+            meta_tags.append(f"[GIFT_VOUCHER:{applied_gift_voucher_code}]")
+        if customer_note and meta_tags:
+            order_note = f"{customer_note}\n{' '.join(meta_tags)}"
+        elif customer_note:
+            order_note = customer_note
+        elif meta_tags:
+            order_note = " ".join(meta_tags)
+        else:
+            order_note = None
+
         order = models.Order(
             order_code=order_code,
             customer_id=customer_id,
@@ -150,7 +179,7 @@ class OrderService:
             phone=phone,
             email=(customer.get("email") or "").strip() or None,
             address=address,
-            note=(payload.get("note") or "").strip() or None,
+            note=order_note,
             status="pending",
             subtotal=subtotal,
             discount_total=voucher_discount,
@@ -172,8 +201,13 @@ class OrderService:
                 line_total=it["line_total"],
             ))
 
-        if applied_voucher_code and voucher_discount > 0:
-            VoucherService.consume_voucher(db, applied_voucher_code)
+        consume_codes = set()
+        if applied_voucher_code:
+            consume_codes.add(applied_voucher_code)
+        if applied_gift_voucher_code:
+            consume_codes.add(applied_gift_voucher_code)
+        for code in consume_codes:
+            VoucherService.consume_voucher(db, code)
 
         db.commit()
         db.refresh(order)

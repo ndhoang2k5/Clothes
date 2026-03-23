@@ -4,8 +4,10 @@ import { api } from '../services/api';
 type Voucher = {
   id: number;
   code: string;
+  display_name?: string | null;
+  image_url?: string | null;
   auto_apply?: boolean;
-  type: 'percent' | 'fixed';
+  type: 'percent' | 'fixed' | 'product';
   value: number;
   min_order_total: number;
   max_discount?: number | null;
@@ -29,8 +31,11 @@ const VoucherManagement: React.FC = () => {
   });
 
   const [isAdding, setIsAdding] = useState(false);
+  const [draftUploading, setDraftUploading] = useState(false);
   const [draft, setDraft] = useState<Partial<Voucher>>({
     code: '',
+    display_name: '',
+    image_url: '',
     type: 'fixed',
     value: 0,
     min_order_total: 0,
@@ -43,6 +48,11 @@ const VoucherManagement: React.FC = () => {
   const sorted = useMemo(() => {
     return [...(data.items || [])].sort((a, b) => (a.is_active === b.is_active ? 0 : a.is_active ? -1 : 1));
   }, [data.items]);
+
+  const promoVouchers = useMemo(
+    () => sorted.filter((v) => v.type === 'product'),
+    [sorted],
+  );
 
   const load = async (page: number = 1) => {
     setLoading(true);
@@ -79,6 +89,8 @@ const VoucherManagement: React.FC = () => {
     try {
       const payload: any = {
         code: String(draft.code || '').trim(),
+        display_name: (draft.display_name || '').trim() || null,
+        image_url: (draft.image_url || '').trim() || null,
         auto_apply: Boolean(draft.auto_apply),
         type: draft.type || 'fixed',
         value: Number(draft.value || 0),
@@ -89,7 +101,7 @@ const VoucherManagement: React.FC = () => {
       };
       await api.adminCreateVoucher(payload);
       setIsAdding(false);
-      setDraft({ code: '', auto_apply: false, type: 'fixed', value: 0, min_order_total: 0, max_discount: null, usage_limit: null, is_active: true });
+      setDraft({ code: '', display_name: '', image_url: '', auto_apply: false, type: 'fixed', value: 0, min_order_total: 0, max_discount: null, usage_limit: null, is_active: true });
       await load(1);
     } catch (e: any) {
       setError(e?.message || 'Tạo voucher thất bại');
@@ -166,6 +178,7 @@ const VoucherManagement: React.FC = () => {
               >
                 <option value="fixed">Giảm theo số tiền</option>
                 <option value="percent">Giảm theo phần trăm (%)</option>
+                <option value="product">Tặng sản phẩm</option>
               </select>
             </label>
             <label className="text-sm font-bold text-gray-700">
@@ -223,11 +236,70 @@ const VoucherManagement: React.FC = () => {
               Tự động áp dụng (nếu khách không nhập mã)
             </label>
           </div>
+
+          {draft.type === 'product' && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <div className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Thông tin sản phẩm tặng kèm</div>
+            <p className="text-xs text-gray-500 mb-3">Khi khách áp mã này, họ sẽ nhận được sản phẩm bên dưới kèm theo đơn hàng.</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="text-sm font-bold text-gray-700">
+                Tên hiển thị
+                <input
+                  value={String(draft.display_name || '')}
+                  onChange={(e) => setDraft((p) => ({ ...p, display_name: e.target.value }))}
+                  className="mt-2 w-full bg-gray-50 rounded-xl px-4 py-3 font-black"
+                  placeholder="VD: Giảm 30% Bộ Hè"
+                />
+              </label>
+              <div className="text-sm font-bold text-gray-700">
+                Ảnh khuyến mãi
+                <div className="mt-2 flex gap-3 items-center">
+                  <input
+                    value={String(draft.image_url || '')}
+                    onChange={(e) => setDraft((p) => ({ ...p, image_url: e.target.value }))}
+                    className="flex-1 bg-gray-50 rounded-xl px-4 py-3 font-black text-xs"
+                    placeholder="Dán URL ảnh hoặc upload"
+                  />
+                  <label className="px-4 py-3 rounded-xl bg-gray-900 text-white text-xs font-bold cursor-pointer hover:bg-black whitespace-nowrap">
+                    {draftUploading ? 'Đang up...' : 'Upload'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={draftUploading}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        e.currentTarget.value = '';
+                        if (!file) return;
+                        setDraftUploading(true);
+                        setError(null);
+                        try {
+                          const url = await api.adminUploadImage(file);
+                          setDraft((p) => ({ ...p, image_url: url }));
+                        } catch (err: any) {
+                          setError(err?.message || 'Upload ảnh thất bại');
+                        } finally {
+                          setDraftUploading(false);
+                        }
+                      }}
+                    />
+                  </label>
+                </div>
+                {draft.image_url && (
+                  <div className="mt-3 w-24 h-24 rounded-xl overflow-hidden border border-gray-100 bg-gray-50">
+                    <img src={draft.image_url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          )}
+
           <div className="mt-5 flex gap-3">
             <button
               onClick={createVoucher}
               className="px-6 py-3 rounded-2xl font-black text-white bg-pink-500 hover:bg-pink-600 shadow-lg shadow-pink-200"
-              disabled={!String(draft.code || '').trim()}
+              disabled={!String(draft.code || '').trim() || (draft.type === 'product' && !String(draft.display_name || '').trim())}
             >
                 Tạo mã
             </button>
@@ -280,6 +352,7 @@ const VoucherManagement: React.FC = () => {
                   >
                     <option value="fixed">Theo tiền</option>
                     <option value="percent">Theo %</option>
+                    <option value="product">Tặng SP</option>
                   </select>
                 </div>
                 <div className="md:col-span-1">
@@ -320,6 +393,31 @@ const VoucherManagement: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Tóm tắt: mã tặng sản phẩm */}
+      {promoVouchers.length > 0 && (
+        <div className="mt-8 bg-amber-50 border border-amber-100 rounded-[2rem] p-6">
+          <h3 className="text-lg font-black text-gray-800 mb-3">Mã tặng sản phẩm đang hoạt động</h3>
+          <div className="space-y-3">
+            {promoVouchers.map((v) => (
+              <div key={v.id} className="flex items-center gap-4 bg-white rounded-2xl p-3 border border-gray-100">
+                {v.image_url && (
+                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0 border border-gray-100">
+                    <img src={v.image_url} alt={v.display_name || v.code} className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="flex-grow min-w-0">
+                  <div className="font-black text-gray-900 truncate">{v.display_name || v.code}</div>
+                  <div className="text-xs text-gray-500">
+                    Mã: {v.code} · Đơn từ {Number(v.min_order_total).toLocaleString()}đ
+                    {' · '}{v.is_active ? 'Đang bật' : 'Đã tắt'}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -227,6 +227,12 @@ CREATE INDEX IF NOT EXISTS idx_vouchers_valid ON vouchers (valid_from, valid_to)
 CREATE INDEX IF NOT EXISTS idx_vouchers_auto_active ON vouchers (auto_apply, is_active);
 
 ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS auto_apply BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS image_url TEXT;
+
+-- Allow 'product' type for gift vouchers
+ALTER TABLE vouchers DROP CONSTRAINT IF EXISTS vouchers_type_check;
+ALTER TABLE vouchers ADD CONSTRAINT vouchers_type_check CHECK (type IN ('percent', 'fixed', 'product'));
 
 CREATE TABLE IF NOT EXISTS shipping_rules (
     id SERIAL PRIMARY KEY,

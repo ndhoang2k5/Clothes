@@ -4,11 +4,15 @@ import { COLORS } from './designTokens';
 import { api } from '../services/api';
 
 const CartPage: React.FC = () => {
-  const { items, totalPrice, updateQuantity, removeItem, clearCart, appliedVoucher, applyVoucher, removeVoucher } = useCart();
+  const { items, totalPrice, updateQuantity, removeItem, clearCart, appliedVoucher, giftVoucher, applyVoucher, removeVoucher } = useCart();
 
   const [voucherInput, setVoucherInput] = useState('');
   const [voucherLoading, setVoucherLoading] = useState(false);
   const [voucherError, setVoucherError] = useState<string | null>(null);
+  const [availableVouchers, setAvailableVouchers] = useState<Array<{
+    code: string; type: string; value: number; min_order_total: number; eligible: boolean;
+    max_discount?: number | null; display_name?: string | null; image_url?: string | null;
+  }>>([]);
 
   const [shippingFee, setShippingFee] = useState<number>(0);
   const [shippingLoading, setShippingLoading] = useState(false);
@@ -21,6 +25,17 @@ const CartPage: React.FC = () => {
 
   const [submitLoading, setSubmitLoading] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (items.length === 0 || totalPrice <= 0) {
+      setAvailableVouchers([]);
+      return;
+    }
+    const t = window.setTimeout(() => {
+      void api.userGetAvailableVouchers(totalPrice).then((list) => setAvailableVouchers(list)).catch(() => setAvailableVouchers([]));
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [totalPrice, items.length]);
 
   useEffect(() => {
     if (items.length === 0 || totalPrice <= 0) {
@@ -79,6 +94,7 @@ const CartPage: React.FC = () => {
           quantity: it.quantity,
         })),
         voucherCode: appliedVoucher?.code || undefined,
+        giftVoucherCode: giftVoucher?.code || undefined,
         note: note.trim() || undefined,
       };
       const result = await api.userCreateOrder(payload);
@@ -215,15 +231,99 @@ const CartPage: React.FC = () => {
                 {voucherLoading ? 'Đang kiểm tra...' : 'Áp dụng'}
               </button>
             </div>
+            {availableVouchers.length > 0 && (
+              <div className="mt-3">
+                <div className="text-xs font-bold text-gray-500 mb-2">Mã có thể dùng:</div>
+                <div className="flex flex-wrap gap-2">
+                  {availableVouchers.map((v) => {
+                    const alreadyApplied =
+                      (appliedVoucher?.code === v.code) || (giftVoucher?.code === v.code);
+                    const label =
+                      v.type === 'product'
+                        ? (v.display_name || 'Quà tặng')
+                        : v.type === 'percent'
+                          ? `Giảm ${v.value}%`
+                          : `Giảm ${Number(v.value).toLocaleString()}đ`;
+                    return (
+                      <button
+                        key={v.code}
+                        type="button"
+                        disabled={alreadyApplied || !v.eligible || voucherLoading}
+                        onClick={() => {
+                          setVoucherInput(v.code);
+                          setVoucherError(null);
+                          void (async () => {
+                            setVoucherLoading(true);
+                            try {
+                              await applyVoucher(v.code);
+                              setVoucherInput('');
+                            } catch (e: any) {
+                              setVoucherError(e?.message || 'Áp mã thất bại');
+                            } finally {
+                              setVoucherLoading(false);
+                            }
+                          })();
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                          alreadyApplied
+                            ? 'bg-green-50 text-green-700 border-green-200 cursor-default'
+                            : v.eligible
+                              ? 'bg-white text-gray-700 border-gray-200 hover:bg-pink-50 hover:border-pink-200 hover:text-pink-700'
+                              : 'bg-gray-50 text-gray-400 border-gray-100 cursor-not-allowed'
+                        }`}
+                        title={
+                          alreadyApplied
+                            ? 'Đã áp dụng'
+                            : !v.eligible
+                              ? `Đơn tối thiểu ${Number(v.min_order_total).toLocaleString()}đ`
+                              : `Áp mã ${v.code}`
+                        }
+                      >
+                        {v.type === 'product' && v.image_url && (
+                          <img src={v.image_url} alt="" className="w-4 h-4 rounded inline-block mr-1 -mt-0.5 object-cover" />
+                        )}
+                        <span className="font-mono mr-1">{v.code}</span>
+                        <span className="text-gray-500">— {label}</span>
+                        {!v.eligible && (
+                          <span className="ml-1 text-[10px] text-gray-400">(từ {Number(v.min_order_total).toLocaleString()}đ)</span>
+                        )}
+                        {alreadyApplied && <span className="ml-1 text-green-600">✓</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {voucherError && <p className="mt-2 text-sm text-red-600">{voucherError}</p>}
             {appliedVoucher && (
               <p className="mt-2 text-sm text-green-700 font-medium">
                 {appliedVoucher.isAuto ? 'Đã tự áp dụng ưu đãi ' : 'Đã áp dụng mã '}
                 <strong>{appliedVoucher.code}</strong> (−{appliedVoucher.discountAmount.toLocaleString()}đ)
-                <button type="button" onClick={removeVoucher} className="ml-2 text-gray-500 hover:text-red-600 font-bold">
+                <button type="button" onClick={() => removeVoucher('discount')} className="ml-2 text-gray-500 hover:text-red-600 font-bold">
                   {appliedVoucher.isAuto ? 'Bỏ áp' : 'Gỡ'}
                 </button>
               </p>
+            )}
+
+            {giftVoucher && (
+              <div className="mt-3 p-3 bg-amber-50 border border-amber-100 rounded-2xl">
+                <div className="flex items-center gap-3">
+                  {giftVoucher.giftProductImage && (
+                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0 border border-gray-100">
+                      <img src={giftVoucher.giftProductImage} alt={giftVoucher.giftProductName || ''} className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                  <div className="flex-grow min-w-0">
+                    <div className="text-sm font-black text-amber-800">Quà tặng kèm đơn</div>
+                    <div className="text-sm text-amber-700">{giftVoucher.giftProductName || 'Sản phẩm tặng kèm'}</div>
+                    <div className="text-xs text-amber-600 mt-1">Mã: <strong>{giftVoucher.code}</strong></div>
+                  </div>
+                  <button type="button" onClick={() => removeVoucher('gift')} className="text-gray-500 hover:text-red-600 font-bold text-sm flex-shrink-0">
+                    Gỡ
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
@@ -296,6 +396,12 @@ const CartPage: React.FC = () => {
               <div className="flex items-center justify-between text-sm text-green-700 mb-2">
                 <span>Giảm giá (mã)</span>
                 <span className="font-bold">−{voucherDiscount.toLocaleString()}đ</span>
+              </div>
+            )}
+            {giftVoucher && (
+              <div className="flex items-center justify-between text-sm text-amber-700 mb-2">
+                <span>Quà tặng kèm</span>
+                <span className="font-bold">{giftVoucher.giftProductName || 'Có'}</span>
               </div>
             )}
             <div className="flex items-center justify-between text-sm text-gray-600 mb-2">

@@ -1158,8 +1158,38 @@ class ApiService {
     return newOrder;
   }
 
+  async userGetAvailableVouchers(cart_total: number): Promise<Array<{
+    code: string;
+    type: string;
+    value: number;
+    min_order_total: number;
+    eligible: boolean;
+    max_discount?: number | null;
+    display_name?: string | null;
+    image_url?: string | null;
+  }>> {
+    try {
+      const res = await fetch(`${this.userBaseUrl}/vouchers/available?cart_total=${encodeURIComponent(cart_total)}`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data.map((v: any) => ({
+        ...v,
+        image_url: v.image_url ? this.toAbsoluteUrl(v.image_url) : null,
+      })) : [];
+    } catch {
+      return [];
+    }
+  }
+
   // User checkout (Phase B)
-  async userValidateVoucher(code: string, cart_total: number): Promise<{ ok: boolean; discountAmount?: number; reason?: string | null }> {
+  async userValidateVoucher(code: string, cart_total: number): Promise<{
+    ok: boolean;
+    discountAmount?: number;
+    reason?: string | null;
+    voucherType?: string;
+    giftProductName?: string;
+    giftProductImage?: string;
+  }> {
     const res = await fetch(`${this.userBaseUrl}/vouchers/validate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1167,14 +1197,37 @@ class ApiService {
     });
     const data = await res.json();
     if (!res.ok) return { ok: false, reason: (data as any)?.detail ?? 'Lỗi xác thực mã' };
-    return { ok: !!data.ok, discountAmount: data.discountAmount ?? undefined, reason: data.reason ?? undefined };
+    return {
+      ok: !!data.ok,
+      discountAmount: data.discountAmount ?? undefined,
+      reason: data.reason ?? undefined,
+      voucherType: data.voucherType ?? undefined,
+      giftProductName: data.giftProductName ?? undefined,
+      giftProductImage: data.giftProductImage ? this.toAbsoluteUrl(data.giftProductImage) : undefined,
+    };
   }
 
-  async userGetAutoVoucher(cart_total: number): Promise<{ ok: boolean; code: string | null; discountAmount: number }> {
+  async userGetAutoVoucher(cart_total: number): Promise<{
+    ok: boolean;
+    code: string | null;
+    discountAmount: number;
+    voucherType?: string;
+    giftCode?: string | null;
+    giftProductName?: string;
+    giftProductImage?: string;
+  }> {
     const res = await fetch(`${this.userBaseUrl}/vouchers/auto?cart_total=${encodeURIComponent(cart_total)}`);
     const data = await res.json();
     if (!res.ok) return { ok: false, code: null, discountAmount: 0 };
-    return { ok: !!data.ok, code: data.code ?? null, discountAmount: Number(data.discountAmount ?? 0) };
+    return {
+      ok: !!data.ok,
+      code: data.code ?? null,
+      discountAmount: Number(data.discountAmount ?? 0),
+      voucherType: data.voucherType ?? undefined,
+      giftCode: data.giftCode ?? null,
+      giftProductName: data.giftProductName ?? undefined,
+      giftProductImage: data.giftProductImage ? this.toAbsoluteUrl(data.giftProductImage) : undefined,
+    };
   }
 
   async userCalculateShipping(cart_total: number): Promise<{ baseFee: number; discountFromShipping: number; finalFee: number; ruleId?: number }> {
@@ -1187,6 +1240,7 @@ class ApiService {
     customer: { name: string; phone: string; email?: string; address: string };
     items: { productId: number; variantId?: number; quantity: number }[];
     voucherCode?: string;
+    giftVoucherCode?: string;
     note?: string;
   }): Promise<{ orderId: number; orderCode: string; status: string; totalAmount: number; createdAt: string }> {
     const token = this.getAuthToken();

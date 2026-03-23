@@ -34,6 +34,8 @@ class VoucherService:
     @staticmethod
     def calc_discount_amount(voucher: models.Voucher, cart_total: float) -> float:
         """Tính discount theo voucher, có clamp theo max_discount và subtotal."""
+        if getattr(voucher, "type", "fixed") == "product":
+            return 0.0
         try:
             total = float(cart_total) if cart_total is not None else 0
         except (TypeError, ValueError):
@@ -51,24 +53,40 @@ class VoucherService:
 
     @staticmethod
     def pick_best_auto_voucher(db: Session, cart_total: float):
-        """Chọn voucher tự động tốt nhất (discount lớn nhất) cho cart_total."""
+        """Chọn voucher tự động tốt nhất (discount) cho cart_total. Backward-compat wrapper."""
+        best_disc, _, best_gift, _ = VoucherService.pick_auto_vouchers(db, cart_total)
+        if best_disc:
+            return best_disc, VoucherService.calc_discount_amount(best_disc, cart_total)
+        if best_gift:
+            return best_gift, 0.0
+        return None, 0.0
+
+    @staticmethod
+    def pick_auto_vouchers(db: Session, cart_total: float):
+        """Trả (best_discount_voucher, discount_amount, best_gift_voucher, gift_voucher).
+        Cho phép áp cả discount + gift đồng thời."""
         try:
             total = float(cart_total) if cart_total is not None else 0
         except (TypeError, ValueError):
             total = 0
         best = None
         best_discount = 0.0
+        best_product_gift = None
         for v in VoucherService.list_auto_active(db):
             min_total = float(v.min_order_total or 0)
             if total < min_total:
                 continue
             if v.usage_limit is not None and (v.used_count or 0) >= v.usage_limit:
                 continue
+            if getattr(v, "type", "fixed") == "product":
+                if best_product_gift is None:
+                    best_product_gift = v
+                continue
             disc = VoucherService.calc_discount_amount(v, total)
             if disc > best_discount:
                 best = v
                 best_discount = disc
-        return best, best_discount
+        return best, best_discount, best_product_gift, best_product_gift
     @staticmethod
     def get_by_code(db: Session, code: str):
         c = _code_upper(code)
@@ -129,6 +147,17 @@ class VoucherService:
                 "discount_amount": None,
                 "reason": f"Đơn tối thiểu {min_total:,.0f} để áp dụng mã",
             }
+
+        if voucher.type == "product":
+            return {
+                "ok": True,
+                "discount_amount": 0,
+                "voucher_type": "product",
+                "gift_product_name": getattr(voucher, "display_name", None) or "Quà tặng",
+                "gift_product_image": getattr(voucher, "image_url", None),
+                "reason": None,
+            }
+
         value = float(voucher.value or 0)
         if voucher.type == "percent":
             discount = total * (value / 100)
@@ -138,9 +167,9 @@ class VoucherService:
         else:
             discount = value
         if discount <= 0:
-            return {"ok": True, "discount_amount": 0, "reason": None}
+            return {"ok": True, "discount_amount": 0, "voucher_type": voucher.type, "reason": None}
         discount = round(discount, 2)
-        return {"ok": True, "discount_amount": discount, "reason": None}
+        return {"ok": True, "discount_amount": discount, "voucher_type": voucher.type, "reason": None}
 
     @staticmethod
     def consume_voucher(db: Session, code: str) -> bool:
@@ -157,7 +186,7 @@ class VoucherService:
     def create(db: Session, data: dict):
         payload = {
             k: v for k, v in data.items()
-            if k in ("code", "type", "value", "min_order_total", "max_discount", "usage_limit",
+            if k in ("code", "display_name", "image_url", "type", "value", "min_order_total", "max_discount", "usage_limit",
                      "used_count", "valid_from", "valid_to", "is_active", "auto_apply")
         }
         if "code" in payload and payload["code"]:
@@ -183,7 +212,7 @@ class VoucherService:
         voucher = db.query(models.Voucher).filter(models.Voucher.id == voucher_id).first()
         if not voucher:
             return None
-        for k in ("code", "type", "value", "min_order_total", "max_discount", "usage_limit",
+        for k in ("code", "display_name", "image_url", "type", "value", "min_order_total", "max_discount", "usage_limit",
                   "used_count", "valid_from", "valid_to", "is_active", "auto_apply"):
             if k in data:
                 v = data[k]

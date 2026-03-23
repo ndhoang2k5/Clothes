@@ -213,10 +213,13 @@ class Voucher(Base):
     """
     Mã giảm giá (Phase A.3).
     type: percent | fixed. value: % hoặc số tiền. max_discount: trần giảm (percent).
+    display_name + image_url: dùng cho "khuyến mãi sản phẩm" hiển thị trên trang chủ.
     """
     __tablename__ = "vouchers"
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String(64), unique=True, nullable=False, index=True)
+    display_name = Column(String(255))
+    image_url = Column(Text)
     type = Column(String(20), nullable=False, default="fixed")
     value = Column(Numeric(12, 2), nullable=False)
     min_order_total = Column(Numeric(12, 2), default=0)
@@ -231,7 +234,7 @@ class Voucher(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     __table_args__ = (
-        CheckConstraint("type IN ('percent', 'fixed')", name="vouchers_type_check"),
+        CheckConstraint("type IN ('percent', 'fixed', 'product')", name="vouchers_type_check"),
     )
 
 

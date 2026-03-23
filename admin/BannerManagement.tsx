@@ -6,6 +6,7 @@ import type { AdminBanner, BannerSlot } from '../types';
 const SLOT_OPTIONS: Array<{ value: BannerSlot; label: string; desc: string }> = [
   { value: 'home_hero', label: 'Ảnh bìa trang chủ', desc: 'Ảnh bìa lớn đầu trang (carousel)' },
   { value: 'home_promo', label: 'Banner khuyến mãi', desc: 'Banner ưu đãi giữa trang' },
+  { value: 'home_product_promo', label: 'Khuyến mãi sản phẩm (tên + ảnh)', desc: 'Grid card ưu đãi sản phẩm' },
   { value: 'home_category_feature', label: 'Danh mục nổi bật', desc: 'Banner/ảnh cho danh mục nổi bật' },
   { value: 'footer_banner', label: 'Banner chân trang', desc: 'Banner cuối trang' },
 ];
@@ -14,6 +15,7 @@ const SLOT_OPTIONS: Array<{ value: BannerSlot; label: string; desc: string }> = 
 export const BANNER_IMAGE_SIZES: Record<BannerSlot, { width: number; height: number; note?: string }> = {
   home_hero: { width: 1920, height: 600, note: 'Bìa full ngang, cao 400–600px trên màn hình' },
   home_promo: { width: 1920, height: 400, note: 'Banner khuyến mãi giữa trang, cao ~240–280px' },
+  home_product_promo: { width: 800, height: 800, note: 'Card vuông (phù hợp hiển thị grid 3 cột)' },
   home_category_feature: { width: 800, height: 352, note: 'Mỗi ô 1/3 cột, hiển thị ~400×176px' },
   footer_banner: { width: 1920, height: 220, note: 'Dải ngang trước footer, cao ~180–220px' },
 };

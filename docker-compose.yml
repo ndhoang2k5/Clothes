@@ -33,6 +33,16 @@ services:
       - "8888:8000"
     environment:
       DATABASE_URL: postgresql://unbee_user:unbee_password@db:5432/unbee_db
+      ORDER_NOTIFY_ENABLED: "truetrue"
+      MANAGER_NOTIFICATION_EMAILS: ""
+      SMTP_HOST: "smtp.gmail.com"
+      SMTP_PORT: "587"
+      SMTP_USERNAME: "nguyenduyhoang0511205@gmail.com"
+      SMTP_PASSWORD: ""
+      SMTP_USE_TLS: "true"
+      SMTP_USE_SSL: "false"
+      SMTP_FROM_EMAIL: ""
+      SMTP_FROM_NAME: "Unbee"
     volumes:
       - ./backend:/app/backend
     depends_on:

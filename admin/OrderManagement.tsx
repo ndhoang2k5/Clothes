@@ -17,6 +17,10 @@ type AdminOrder = {
   subtotal?: number | null;
   discount_total?: number | null;
   shipping_fee?: number | null;
+  applied_voucher_code?: string | null;
+  applied_gift_voucher_code?: string | null;
+  applied_gift_product_name?: string | null;
+  applied_gift_product_image?: string | null;
 };
 
 function statusBadge(status: string) {
@@ -392,10 +396,17 @@ const OrderManagement: React.FC = () => {
                   <div className="space-y-3">
                     {(selected.items || []).map((it: any) => (
                       <div key={it.id} className="border border-gray-100 rounded-2xl p-4 flex items-start justify-between gap-4">
-                        <div>
+                        <div className="flex items-start gap-3">
+                          <img
+                            src={it?.image_url ? api.getImageUrl(it.image_url) : 'https://picsum.photos/120/120?blur=2'}
+                            alt={it.product_name || 'product'}
+                            className="w-14 h-14 rounded-xl object-cover bg-gray-100 border border-gray-100"
+                          />
+                          <div>
                           <div className="font-black text-gray-900">{it.product_name}</div>
                           {it.variant_label && <div className="text-sm text-gray-500 mt-1">{it.variant_label}</div>}
                           <div className="text-sm text-gray-600 mt-2">SL: <strong>{it.quantity}</strong></div>
+                          </div>
                         </div>
                         <div className="text-right">
                           <div className="text-sm text-gray-500">{Number(it.unit_price || 0).toLocaleString()}đ</div>
@@ -408,6 +419,42 @@ const OrderManagement: React.FC = () => {
 
                 <div className="bg-gray-50 rounded-2xl p-4">
                   <div className="font-black text-gray-900 mb-3">Tổng tiền</div>
+                  <div className="flex items-center justify-between text-sm text-gray-700 mb-1">
+                    <span>Mã ưu đãi</span>
+                    <span className="font-bold">
+                      {selected.applied_voucher_code && selected.applied_gift_voucher_code
+                        ? `${selected.applied_voucher_code} + ${selected.applied_gift_voucher_code} (quà tặng)`
+                        : selected.applied_voucher_code
+                          ? selected.applied_voucher_code
+                          : selected.applied_gift_voucher_code
+                            ? `${selected.applied_gift_voucher_code} (quà tặng)`
+                        : totals.discount > 0
+                          ? 'Đã áp dụng'
+                          : 'Không có'}
+                    </span>
+                  </div>
+                  {selected.applied_gift_voucher_code && (
+                    <div className="mt-3 mb-2 p-3 rounded-2xl border border-amber-200 bg-amber-50">
+                      <div className="text-xs font-black text-amber-700 uppercase mb-2">Quà tặng kèm</div>
+                      <div className="flex items-center gap-3">
+                        {selected.applied_gift_product_image && (
+                          <img
+                            src={api.getImageUrl(selected.applied_gift_product_image)}
+                            alt={selected.applied_gift_product_name || selected.applied_gift_voucher_code || 'gift'}
+                            className="w-12 h-12 rounded-xl object-cover border border-amber-100 bg-white"
+                          />
+                        )}
+                        <div className="min-w-0">
+                          <div className="font-black text-amber-800 truncate">
+                            {selected.applied_gift_product_name || 'Sản phẩm tặng kèm'}
+                          </div>
+                          <div className="text-xs text-amber-700">
+                            Mã: <span className="font-bold">{selected.applied_gift_voucher_code}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between text-sm text-gray-700 mb-1">
                     <span>Tạm tính</span>
                     <span className="font-bold">{totals.subtotal.toLocaleString()}đ</span>

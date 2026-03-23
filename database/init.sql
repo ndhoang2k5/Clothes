@@ -166,12 +166,16 @@ CREATE TABLE IF NOT EXISTS blogs (
     thumbnail TEXT,
     author VARCHAR(100),
     category VARCHAR(50),
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CONSTRAINT blogs_status_check CHECK (status IN ('draft','review','scheduled','published')),
     is_published BOOLEAN NOT NULL DEFAULT FALSE,
+    scheduled_at TIMESTAMPTZ,
+    reviewed_at TIMESTAMPTZ,
     published_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_blogs_published ON blogs (is_published, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_blogs_status ON blogs (status, scheduled_at, published_at DESC);
 
 -- 11) Customers (sẵn sàng cho Phase A.2 – liên kết với Order qua customer_id)
 CREATE TABLE IF NOT EXISTS customers (

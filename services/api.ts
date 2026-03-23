@@ -1,6 +1,7 @@
 
 import { Banner, AdminBanner } from '../types';
 import type { Product, Category, Order, Blog, Collection, BannerSlot } from '../types';
+import { extractBlogPlainText } from '../user/utils/blogContent';
 
 // Mock Data initialization
 const INITIAL_PRODUCTS: Product[] = [
@@ -901,37 +902,52 @@ class ApiService {
     if (!res.ok) throw new Error('API Error');
   }
 
+  private mapBackendBlogToFrontend(b: any, fallbackCategory: Blog['category'] = 'tips'): Blog {
+    const content = b?.content || '';
+    const createdAt = b?.created_at || b?.published_at || '';
+    const thumbnail = this.toAbsoluteUrl(b?.thumbnail || '');
+    const excerpt = b?.excerpt
+      ? String(b.excerpt)
+      : extractBlogPlainText(content, 160);
+    return {
+      id: String(b?.id),
+      title: b?.title || '',
+      content,
+      thumbnail,
+      image: thumbnail,
+      excerpt,
+      author: b?.author || '',
+      createdAt: createdAt || '',
+      publishedAt: b?.published_at || createdAt || undefined,
+      category: (b?.category || fallbackCategory) as Blog['category'],
+      workflowStatus: (b?.status || (b?.is_published ? 'published' : 'draft')) as Blog['workflowStatus'],
+      scheduledAt: b?.scheduled_at || undefined,
+      reviewedAt: b?.reviewed_at || undefined,
+      isPublished: !!b?.is_published,
+    };
+  }
+
   // Blogs / Intro / Tips
-  async adminListBlogs(params?: { category?: string }): Promise<Blog[]> {
+  async adminListBlogs(params?: {
+    category?: string;
+    status?: Blog['workflowStatus'] | 'all';
+    q?: string;
+    author?: string;
+    date_from?: string;
+    date_to?: string;
+  }): Promise<Blog[]> {
     const qs = new URLSearchParams();
     if (params?.category) qs.set('category', params.category);
+    if (params?.status && params.status !== 'all') qs.set('status', params.status);
+    if (params?.q && String(params.q).trim()) qs.set('q', String(params.q).trim());
+    if (params?.author && String(params.author).trim()) qs.set('author', String(params.author).trim());
+    if (params?.date_from && String(params.date_from).trim()) qs.set('date_from', String(params.date_from).trim());
+    if (params?.date_to && String(params.date_to).trim()) qs.set('date_to', String(params.date_to).trim());
     const url = `${this.adminBaseUrl}/blogs${qs.toString() ? `?${qs.toString()}` : ''}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('API Error');
     const data: any[] = await res.json();
-    return data.map((b) => {
-      const content = b.content || '';
-      const createdAt = b.created_at || b.published_at || '';
-      const thumbnail = this.toAbsoluteUrl(b.thumbnail || '');
-      const excerpt = b.excerpt
-        ? String(b.excerpt)
-        : content
-          ? `${String(content).slice(0, 160).trim()}${String(content).length > 160 ? '...' : ''}`
-          : '';
-      return {
-        id: String(b.id),
-        title: b.title || '',
-        content,
-        thumbnail,
-        // Aliases to match frontend BlogPage
-        image: thumbnail,
-        excerpt,
-        publishedAt: createdAt || undefined,
-        author: b.author || '',
-        createdAt,
-        category: (b.category || 'tips') as Blog['category'],
-      };
-    });
+    return data.map((b) => this.mapBackendBlogToFrontend(b, 'tips'));
   }
 
   async adminCreateBlog(payload: {
@@ -942,6 +958,8 @@ class ApiService {
     author?: string;
     category?: string;
     is_published?: boolean;
+    status?: Blog['workflowStatus'];
+    scheduled_at?: string | null;
   }): Promise<Blog> {
     const res = await fetch(`${this.adminBaseUrl}/blogs`, {
       method: 'POST',
@@ -950,22 +968,7 @@ class ApiService {
     });
     if (!res.ok) throw new Error('API Error');
     const b: any = await res.json();
-    return {
-      id: String(b.id),
-      title: b.title || '',
-      content: b.content || '',
-      thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
-      image: this.toAbsoluteUrl(b.thumbnail || ''),
-      excerpt: b.excerpt
-        ? String(b.excerpt)
-        : b.content
-          ? `${String(b.content).slice(0, 160).trim()}${String(b.content).length > 160 ? '...' : ''}`
-          : '',
-      author: b.author || '',
-      createdAt: b.created_at || b.published_at || '',
-      publishedAt: b.created_at || b.published_at || undefined,
-      category: (b.category || 'tips') as Blog['category'],
-    };
+    return this.mapBackendBlogToFrontend(b, 'tips');
   }
 
   async adminUpdateBlog(
@@ -978,6 +981,8 @@ class ApiService {
       author: string;
       category: string;
       is_published: boolean;
+      status: Blog['workflowStatus'];
+      scheduled_at: string | null;
     }>,
   ): Promise<Blog> {
     const res = await fetch(`${this.adminBaseUrl}/blogs/${id}`, {
@@ -987,27 +992,49 @@ class ApiService {
     });
     if (!res.ok) throw new Error('API Error');
     const b: any = await res.json();
-    return {
-      id: String(b.id),
-      title: b.title || '',
-      content: b.content || '',
-      thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
-      image: this.toAbsoluteUrl(b.thumbnail || ''),
-      excerpt: b.excerpt
-        ? String(b.excerpt)
-        : b.content
-          ? `${String(b.content).slice(0, 160).trim()}${String(b.content).length > 160 ? '...' : ''}`
-          : '',
-      author: b.author || '',
-      createdAt: b.created_at || b.published_at || '',
-      publishedAt: b.created_at || b.published_at || undefined,
-      category: (b.category || 'tips') as Blog['category'],
-    };
+    return this.mapBackendBlogToFrontend(b, 'tips');
   }
 
   async adminDeleteBlog(id: number): Promise<void> {
     const res = await fetch(`${this.adminBaseUrl}/blogs/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('API Error');
+  }
+
+  async adminGetBlogKpis(params?: {
+    category?: Blog['category'] | 'all';
+    date_from?: string;
+    date_to?: string;
+  }): Promise<{
+    total_posts: number;
+    visible_posts: number;
+    hidden_posts: number;
+    published_last_7_days: number;
+    updated_last_7_days: number;
+    avg_minutes_to_publish: number;
+  }> {
+    const qs = new URLSearchParams();
+    if (params?.category && params.category !== 'all') qs.set('category', String(params.category));
+    if (params?.date_from && String(params.date_from).trim()) qs.set('date_from', String(params.date_from).trim());
+    if (params?.date_to && String(params.date_to).trim()) qs.set('date_to', String(params.date_to).trim());
+    const res = await fetch(`${this.adminBaseUrl}/blogs/kpis${qs.toString() ? `?${qs.toString()}` : ''}`);
+    if (!res.ok) throw new Error('API Error');
+    return await res.json();
+  }
+
+  async adminGetBlogEditorConfig(): Promise<{ enable_block_editor: boolean }> {
+    const res = await fetch(`${this.adminBaseUrl}/blogs/editor-config`);
+    if (!res.ok) throw new Error('API Error');
+    return await res.json();
+  }
+
+  async adminUpdateBlogEditorConfig(payload: { enable_block_editor: boolean }): Promise<{ enable_block_editor: boolean }> {
+    const res = await fetch(`${this.adminBaseUrl}/blogs/editor-config`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error('API Error');
+    return await res.json();
   }
 
   async getTips(limit: number = 3): Promise<Blog[]> {
@@ -1016,28 +1043,7 @@ class ApiService {
       const res = await fetch(`${this.userBaseUrl}/blogs?${qs.toString()}`);
       if (!res.ok) throw new Error('API Error');
       const data: any[] = await res.json();
-      return data.map((b) => {
-        const content = b.content || '';
-        const createdAt = b.created_at || b.published_at || '';
-        const thumbnail = this.toAbsoluteUrl(b.thumbnail || '');
-        const excerpt = b.excerpt
-          ? String(b.excerpt)
-          : content
-            ? `${String(content).slice(0, 160).trim()}${String(content).length > 160 ? '...' : ''}`
-            : '';
-        return {
-          id: String(b.id),
-          title: b.title || '',
-          content,
-          thumbnail,
-          image: thumbnail,
-          excerpt,
-          publishedAt: createdAt || undefined,
-          author: b.author || '',
-          createdAt,
-          category: (b.category || 'tips') as Blog['category'],
-        };
-      });
+      return data.map((b) => this.mapBackendBlogToFrontend(b, 'tips'));
     } catch {
       return [];
     }
@@ -1050,28 +1056,7 @@ class ApiService {
       const res = await fetch(`${this.userBaseUrl}/blogs?${qs.toString()}`);
       if (!res.ok) throw new Error('API Error');
       const data: any[] = await res.json();
-      return data.map((b) => {
-        const content = b.content || '';
-        const createdAt = b.created_at || b.published_at || '';
-        const thumbnail = this.toAbsoluteUrl(b.thumbnail || '');
-        const excerpt = b.excerpt
-          ? String(b.excerpt)
-          : content
-            ? `${String(content).slice(0, 160).trim()}${String(content).length > 160 ? '...' : ''}`
-            : '';
-        return {
-          id: String(b.id),
-          title: b.title || '',
-          content,
-          thumbnail,
-          image: thumbnail,
-          excerpt,
-          author: b.author || '',
-          createdAt: createdAt || '',
-          publishedAt: b.published_at || undefined,
-          category: (b.category || category) as Blog['category'],
-        };
-      });
+      return data.map((b) => this.mapBackendBlogToFrontend(b, category));
     } catch {
       return [];
     }
@@ -1083,26 +1068,7 @@ class ApiService {
       if (res.status === 404) return null;
       if (!res.ok) throw new Error('API Error');
       const b: any = await res.json();
-      const content = b.content || '';
-      const createdAt = b.created_at || b.published_at || '';
-      const thumbnail = this.toAbsoluteUrl(b.thumbnail || '');
-      const excerpt = b.excerpt
-        ? String(b.excerpt)
-        : content
-          ? `${String(content).slice(0, 160).trim()}${String(content).length > 160 ? '...' : ''}`
-          : '';
-      return {
-        id: String(b.id),
-        title: b.title || '',
-        content,
-        thumbnail,
-        image: thumbnail,
-        excerpt,
-        author: b.author || '',
-        createdAt: createdAt || '',
-        publishedAt: b.published_at || undefined,
-        category: (b.category || 'tips') as Blog['category'],
-      };
+      return this.mapBackendBlogToFrontend(b, 'tips');
     } catch {
       return null;
     }
@@ -1116,22 +1082,7 @@ class ApiService {
       const data: any[] = await res.json();
       const b = data[0];
       if (!b) return null;
-      return {
-        id: String(b.id),
-        title: b.title || '',
-        content: b.content || '',
-        thumbnail: this.toAbsoluteUrl(b.thumbnail || ''),
-        image: this.toAbsoluteUrl(b.thumbnail || ''),
-        excerpt: b.excerpt
-          ? String(b.excerpt)
-          : b.content
-            ? `${String(b.content).slice(0, 160).trim()}${String(b.content).length > 160 ? '...' : ''}`
-            : '',
-        author: b.author || '',
-        createdAt: b.created_at || b.published_at || '',
-        publishedAt: b.created_at || b.published_at || undefined,
-        category: (b.category || 'intro') as Blog['category'],
-      };
+      return this.mapBackendBlogToFrontend(b, 'intro');
     } catch {
       return null;
     }

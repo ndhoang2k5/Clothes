@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
 import type { Blog } from '../types';
-import { parseBlogContent } from './utils/blogContent';
+import { parseBlogContent, parseBlogRenderMeta } from './utils/blogContent';
 
 const AboutPage: React.FC = () => {
   const categories = useMemo(() => ['intro', 'news', 'charity'] as Blog['category'][], []);
@@ -52,6 +52,9 @@ const AboutPage: React.FC = () => {
   const posts = postsByCategory[activeCategory] || [];
   const mainPost = posts[0] || null;
   const blocks = useMemo(() => parseBlogContent(mainPost?.content || ''), [mainPost?.content]);
+  const renderMeta = useMemo(() => parseBlogRenderMeta(mainPost?.content || ''), [mainPost?.content]);
+  const titleAlignClass = 'text-center';
+  const titleColorClass = renderMeta.titleColor === 'brown' ? 'text-[#8B6B4A]' : 'text-gray-900';
 
   if (loading && posts.length === 0) {
     return (
@@ -108,39 +111,96 @@ const AboutPage: React.FC = () => {
       </div>
 
       {mainPost && (
-        <div className="grid md:grid-cols-2 gap-12 items-start">
-          <div>
-            <h2 className="text-4xl md:text-5xl font-black mb-6">{mainPost.title}</h2>
-            <div className="prose prose-pink max-w-none text-gray-700 leading-relaxed">
-              {blocks.length === 0 ? (
-                <div className="whitespace-pre-line">{mainPost.content}</div>
-              ) : (
-                blocks.map((b, idx) => {
-                  if (b.type === 'image') {
-                    return (
-                      <div key={`${b.url}-${idx}`} className="my-6">
-                        <img src={b.url} alt={b.alt || mainPost.title} className="w-full rounded-[1.25rem]" />
-                      </div>
-                    );
-                  }
+        <div className="max-w-5xl">
+          <h2 className={`text-4xl md:text-5xl font-black mb-3 ${titleAlignClass} ${titleColorClass}`}>{mainPost.title}</h2>
+          {renderMeta.heroIntro && (
+            <div className={`text-[11px] uppercase tracking-[0.14em] text-gray-500/90 font-semibold mb-5 ${titleAlignClass}`}>
+              {renderMeta.heroIntro}
+            </div>
+          )}
+
+          <figure className="md:float-right md:w-[52%] md:ml-10 md:mt-1 md:mb-8 md:translate-x-8 mb-6 rounded-[2.8rem] overflow-hidden bg-gray-100 shadow-sm border border-gray-100">
+            <img
+              src={mainPost.thumbnail || 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=800'}
+              alt={mainPost.title}
+              className="w-full max-h-[620px] object-cover"
+            />
+          </figure>
+
+          <div className="prose prose-pink max-w-none text-gray-700 leading-relaxed md:pr-1">
+            {blocks.length === 0 ? (
+              <div className="whitespace-pre-line">{mainPost.content}</div>
+            ) : (
+              blocks.map((b, idx) => {
+                if (b.type === 'heading') {
+                  if (b.level === 1) return <h1 key={`h-${idx}`} className="text-3xl font-black mt-6 mb-3">{b.text}</h1>;
+                  if (b.level === 2) return <h2 key={`h-${idx}`} className="text-2xl font-black mt-6 mb-3">{b.text}</h2>;
+                  return <h3 key={`h-${idx}`} className="text-xl font-black mt-5 mb-2">{b.text}</h3>;
+                }
+                if (b.type === 'image') {
                   return (
-                    <p key={idx} className="whitespace-pre-line">
-                      {b.text}
-                    </p>
+                    <div key={`${b.url}-${idx}`} className="my-6">
+                      <img src={b.url} alt={b.alt || mainPost.title} className="w-full rounded-[1.25rem]" />
+                      {b.caption && <div className="text-xs text-gray-500 mt-2 text-center">{b.caption}</div>}
+                    </div>
                   );
-                })
-              )}
-            </div>
+                }
+                if (b.type === 'media_text') {
+                  const imageFirst = b.imagePosition !== 'right';
+                  return (
+                    <div key={`mt-${idx}`} className="my-6 grid md:grid-cols-2 gap-5 items-start">
+                      {imageFirst && (
+                        <div className="rounded-[1.25rem] overflow-hidden border border-gray-100 bg-gray-50">
+                          {b.imageUrl ? (
+                            <img src={b.imageUrl} alt={b.imageAlt || mainPost.title} className="w-full h-full max-h-72 object-cover" />
+                          ) : null}
+                        </div>
+                      )}
+                      <div className="whitespace-pre-line">{b.text}</div>
+                      {!imageFirst && (
+                        <div className="rounded-[1.25rem] overflow-hidden border border-gray-100 bg-gray-50">
+                          {b.imageUrl ? (
+                            <img src={b.imageUrl} alt={b.imageAlt || mainPost.title} className="w-full h-full max-h-72 object-cover" />
+                          ) : null}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+                if (b.type === 'quote') {
+                  return (
+                    <blockquote key={`q-${idx}`} className="my-5 border-l-4 border-pink-300 bg-pink-50/40 rounded-r-xl px-4 py-3">
+                      <p className="italic">{b.text}</p>
+                      {b.author && <div className="text-xs font-bold text-pink-700 mt-1">— {b.author}</div>}
+                    </blockquote>
+                  );
+                }
+                if (b.type === 'list') {
+                  return b.style === 'number' ? (
+                    <ol key={`list-${idx}`} className="list-decimal pl-6 space-y-1 my-4">
+                      {b.items.map((it, i) => <li key={`li-${idx}-${i}`}>{it}</li>)}
+                    </ol>
+                  ) : (
+                    <ul key={`list-${idx}`} className="list-disc pl-6 space-y-1 my-4">
+                      {b.items.map((it, i) => <li key={`li-${idx}-${i}`}>{it}</li>)}
+                    </ul>
+                  );
+                }
+                if (b.type === 'divider') {
+                  return <div key={`div-${idx}`} className="my-6 h-px bg-gray-200" />;
+                }
+                if (b.type === 'spacer') {
+                  return <div key={`sp-${idx}`} className={b.size === 'sm' ? 'h-3' : b.size === 'lg' ? 'h-10' : 'h-6'} />;
+                }
+                return (
+                  <p key={idx} className="whitespace-pre-line">
+                    {b.text}
+                  </p>
+                );
+              })
+            )}
           </div>
-          <div>
-            <div className="rounded-[2.5rem] overflow-hidden bg-gray-100 shadow-sm border border-gray-100">
-              <img
-                src={mainPost.thumbnail || 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=800'}
-                alt={mainPost.title}
-                className="w-full h-full max-h-[420px] object-cover"
-              />
-            </div>
-          </div>
+          <div className="clear-both" />
         </div>
       )}
 

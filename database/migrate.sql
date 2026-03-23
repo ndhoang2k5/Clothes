@@ -185,12 +185,31 @@ CREATE TABLE IF NOT EXISTS blogs (
     thumbnail TEXT,
     author VARCHAR(100),
     category VARCHAR(50),
+    status VARCHAR(20) NOT NULL DEFAULT 'draft' CONSTRAINT blogs_status_check CHECK (status IN ('draft','review','scheduled','published')),
     is_published BOOLEAN NOT NULL DEFAULT FALSE,
+    scheduled_at TIMESTAMPTZ,
+    reviewed_at TIMESTAMPTZ,
     published_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_blogs_published ON blogs (is_published, published_at DESC);
+CREATE INDEX IF NOT EXISTS idx_blogs_status ON blogs (status, scheduled_at, published_at DESC);
+
+ALTER TABLE blogs ADD COLUMN IF NOT EXISTS status VARCHAR(20);
+ALTER TABLE blogs ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;
+ALTER TABLE blogs ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
+ALTER TABLE blogs ALTER COLUMN status SET DEFAULT 'draft';
+
+ALTER TABLE blogs DROP CONSTRAINT IF EXISTS blogs_status_check;
+ALTER TABLE blogs ADD CONSTRAINT blogs_status_check CHECK (status IN ('draft','review','scheduled','published'));
+
+UPDATE blogs
+SET status = CASE
+  WHEN is_published = TRUE THEN 'published'
+  ELSE COALESCE(NULLIF(status, ''), 'draft')
+END
+WHERE status IS NULL OR status = '' OR (is_published = TRUE AND status <> 'published');
 
 CREATE TABLE IF NOT EXISTS order_items (
     id SERIAL PRIMARY KEY,

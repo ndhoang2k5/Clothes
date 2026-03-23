@@ -5,6 +5,7 @@ import datetime
 
 # Order.status: pending | confirmed | paid | shipped | completed | cancelled
 ORDER_STATUS_VALUES = ("pending", "confirmed", "paid", "shipped", "completed", "cancelled")
+BLOG_STATUS_VALUES = ("draft", "review", "scheduled", "published")
 
 Base = declarative_base()
 
@@ -279,6 +280,12 @@ class Banner(Base):
 
 class Blog(Base):
     __tablename__ = "blogs"
+    __table_args__ = (
+        CheckConstraint(
+            f"status IN ({', '.join(repr(s) for s in BLOG_STATUS_VALUES)})",
+            name="blogs_status_check",
+        ),
+    )
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(255), nullable=False)
     slug = Column(String(255), unique=True, nullable=False, index=True)
@@ -286,7 +293,10 @@ class Blog(Base):
     thumbnail = Column(Text)
     author = Column(String(100))
     category = Column(String(50))
+    status = Column(String(20), default="draft")
     is_published = Column(Boolean, default=False)
+    scheduled_at = Column(DateTime)
+    reviewed_at = Column(DateTime)
     published_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)

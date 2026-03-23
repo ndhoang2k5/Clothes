@@ -5,6 +5,7 @@ import BlogBlockEditor from './components/BlogBlockEditor';
 
 type TabKey = 'intro' | 'tips' | 'news' | 'charity';
 type ListKey = Exclude<TabKey, 'intro'>;
+type VisibilityFilter = 'all' | 'on' | 'off';
 
 type StoryState = {
   id?: number;
@@ -14,6 +15,14 @@ type StoryState = {
 };
 
 type EditingState = Partial<Blog> | null;
+type BlogKpi = {
+  total_posts: number;
+  visible_posts: number;
+  hidden_posts: number;
+  published_last_7_days: number;
+  updated_last_7_days: number;
+  avg_minutes_to_publish: number;
+};
 
 const DEFAULT_STORY: StoryState = {
   id: undefined,
@@ -28,6 +37,12 @@ const CATEGORY_LABEL: Record<ListKey, string> = {
   news: 'News',
   charity: 'Charity',
 };
+
+function visibilityBadge(isPublished: boolean) {
+  return isPublished
+    ? 'bg-green-100 text-green-700 border-green-200'
+    : 'bg-gray-100 text-gray-700 border-gray-200';
+}
 
 const BlogsManagement: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('intro');
@@ -44,6 +59,15 @@ const BlogsManagement: React.FC = () => {
 
   const [editingPostCategory, setEditingPostCategory] = useState<ListKey>('tips');
   const [editingPost, setEditingPost] = useState<EditingState>(null);
+  const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all');
+  const [searchText, setSearchText] = useState('');
+  const [authorFilter, setAuthorFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [kpi, setKpi] = useState<BlogKpi | null>(null);
+  const [kpiLoading, setKpiLoading] = useState(false);
+  const [useBlockEditor, setUseBlockEditor] = useState(true);
+  const [editorConfigLoading, setEditorConfigLoading] = useState(false);
 
   const upsert = (list: Blog[], saved: Blog) => {
     const idx = list.findIndex((x) => x.id === saved.id);
@@ -55,15 +79,27 @@ const BlogsManagement: React.FC = () => {
 
   useEffect(() => {
     let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void load();
+    }, 250);
+
     const load = async () => {
       setLoading(true);
       setError(null);
       try {
         const [introBlogs, tipsBlogs, newsBlogs, charityBlogs] = await Promise.all([
-          api.adminListBlogs({ category: 'intro' }).catch(() => []),
-          api.adminListBlogs({ category: 'tips' }).catch(() => []),
-          api.adminListBlogs({ category: 'news' }).catch(() => []),
-          api.adminListBlogs({ category: 'charity' }).catch(() => []),
+          api
+            .adminListBlogs({ category: 'intro', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
+            .catch(() => []),
+          api
+            .adminListBlogs({ category: 'tips', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
+            .catch(() => []),
+          api
+            .adminListBlogs({ category: 'news', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
+            .catch(() => []),
+          api
+            .adminListBlogs({ category: 'charity', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
+            .catch(() => []),
         ]);
 
         if (cancelled) return;
@@ -92,7 +128,26 @@ const BlogsManagement: React.FC = () => {
       }
     };
 
-    void load();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [searchText, authorFilter, dateFrom, dateTo]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadEditorConfig = async () => {
+      setEditorConfigLoading(true);
+      try {
+        const cfg = await api.adminGetBlogEditorConfig();
+        if (!cancelled) setUseBlockEditor(Boolean(cfg.enable_block_editor));
+      } catch {
+        if (!cancelled) setUseBlockEditor(true);
+      } finally {
+        if (!cancelled) setEditorConfigLoading(false);
+      }
+    };
+    void loadEditorConfig();
     return () => {
       cancelled = true;
     };
@@ -138,6 +193,29 @@ const BlogsManagement: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadKpis = async () => {
+      setKpiLoading(true);
+      try {
+        const value = await api.adminGetBlogKpis({
+          category: (activeTab as Blog['category']) || 'all',
+          date_from: dateFrom || undefined,
+          date_to: dateTo || undefined,
+        });
+        if (!cancelled) setKpi(value);
+      } catch {
+        if (!cancelled) setKpi(null);
+      } finally {
+        if (!cancelled) setKpiLoading(false);
+      }
+    };
+    void loadKpis();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, dateFrom, dateTo]);
+
   const openCreatePost = (category: ListKey) => {
     setEditingPostCategory(category);
     setEditingPost({
@@ -147,13 +225,16 @@ const BlogsManagement: React.FC = () => {
       thumbnail: '',
       author: '',
       category,
-      is_published: true,
+      isPublished: false,
     } as any);
   };
 
   const openEditPost = (category: ListKey, p: Blog) => {
     setEditingPostCategory(category);
-    setEditingPost({ ...p });
+    setEditingPost({
+      ...p,
+      isPublished: !!p.isPublished,
+    });
   };
 
   const handleSavePost = async () => {
@@ -169,7 +250,7 @@ const BlogsManagement: React.FC = () => {
         thumbnail: editingPost.thumbnail || '',
         author: editingPost.author || '',
         category: editingPostCategory,
-        is_published: Boolean((editingPost as any).is_published ?? true),
+        is_published: Boolean((editingPost as any).isPublished),
       };
 
       let saved: Blog;
@@ -205,6 +286,27 @@ const BlogsManagement: React.FC = () => {
     }
   };
 
+  const handleQuickVisibilityChange = async (
+    category: ListKey,
+    post: Blog,
+    nextPublished: boolean,
+  ) => {
+    if (!post.id) return;
+    if (Boolean(post.isPublished) === nextPublished) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await api.adminUpdateBlog(Number(post.id), {
+        is_published: nextPublished,
+      });
+      upsertPostInState(category, saved);
+    } catch (e: any) {
+      setError(e?.message || 'Cập nhật trạng thái hiển thị thất bại');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const tabs: Array<{ key: TabKey; label: string }> = useMemo(
     () => [
       { key: 'intro', label: 'Intro (Về Unbee)' },
@@ -215,10 +317,42 @@ const BlogsManagement: React.FC = () => {
     [],
   );
 
+  const handleToggleEditorMode = async () => {
+    const next = !useBlockEditor;
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await api.adminUpdateBlogEditorConfig({ enable_block_editor: next });
+      setUseBlockEditor(Boolean(saved.enable_block_editor));
+    } catch (e: any) {
+      setError(e?.message || 'Không thể cập nhật chế độ editor');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-6xl">
       <div className="mb-6">
-        <h2 className="text-2xl font-black text-gray-800 mb-3">Quản lý Blog & Câu chuyện</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h2 className="text-2xl font-black text-gray-800">Quản lý Blog & Câu chuyện</h2>
+          <button
+            type="button"
+            onClick={() => void handleToggleEditorMode()}
+            disabled={saving || editorConfigLoading}
+            className={`px-4 py-2 rounded-xl text-xs font-black border ${
+              useBlockEditor
+                ? 'bg-pink-50 text-pink-700 border-pink-200'
+                : 'bg-gray-50 text-gray-700 border-gray-200'
+            } disabled:opacity-60`}
+          >
+            {editorConfigLoading
+              ? 'Đang tải cấu hình...'
+              : useBlockEditor
+              ? 'Editor mới: BẬT'
+              : 'Editor mới: TẮT (classic)'}
+          </button>
+        </div>
         <div className="flex flex-wrap gap-2">
           {tabs.map((t) => (
             <button
@@ -262,10 +396,19 @@ const BlogsManagement: React.FC = () => {
                 <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
                   Nội dung (nhiều ảnh + nhiều đoạn)
                 </label>
-                <BlogBlockEditor
-                  value={story.content}
-                  onChange={(next) => setStory((s) => ({ ...s, content: next }))}
-                />
+                {useBlockEditor ? (
+                  <BlogBlockEditor
+                    value={story.content}
+                    onChange={(next) => setStory((s) => ({ ...s, content: next }))}
+                  />
+                ) : (
+                  <textarea
+                    className="w-full min-h-[260px] bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500"
+                    value={story.content}
+                    onChange={(e) => setStory((s) => ({ ...s, content: e.target.value }))}
+                    placeholder="Nhập nội dung bài viết..."
+                  />
+                )}
               </div>
             </div>
 
@@ -332,12 +475,84 @@ const BlogsManagement: React.FC = () => {
         </div>
       ) : (
         <div className="bg-white border border-gray-100 rounded-[2.5rem] p-10 space-y-6 shadow-sm">
+          <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-black">Tổng bài</div>
+              <div className="text-xl font-black text-gray-900">{kpiLoading ? '...' : (kpi?.total_posts ?? 0)}</div>
+            </div>
+            <div className="rounded-2xl border border-green-100 bg-green-50 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-green-700 font-black">Đang mở</div>
+              <div className="text-xl font-black text-green-800">{kpiLoading ? '...' : (kpi?.visible_posts ?? 0)}</div>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-gray-600 font-black">Đang tắt</div>
+              <div className="text-xl font-black text-gray-800">{kpiLoading ? '...' : (kpi?.hidden_posts ?? 0)}</div>
+            </div>
+            <div className="rounded-2xl border border-blue-100 bg-blue-50 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-blue-700 font-black">Mở mới 7 ngày</div>
+              <div className="text-xl font-black text-blue-800">{kpiLoading ? '...' : (kpi?.published_last_7_days ?? 0)}</div>
+            </div>
+            <div className="rounded-2xl border border-purple-100 bg-purple-50 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-purple-700 font-black">Cập nhật 7 ngày</div>
+              <div className="text-xl font-black text-purple-800">{kpiLoading ? '...' : (kpi?.updated_last_7_days ?? 0)}</div>
+            </div>
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 p-3">
+              <div className="text-[10px] uppercase tracking-wider text-amber-700 font-black">TB mở bài (phút)</div>
+              <div className="text-xl font-black text-amber-800">
+                {kpiLoading ? '...' : Math.round(kpi?.avg_minutes_to_publish ?? 0)}
+              </div>
+            </div>
+          </div>
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="text-2xl font-black text-gray-800">{CATEGORY_LABEL[activeTab as ListKey]}</h3>
               <p className="text-xs text-gray-500 mt-2">
                 Tạo nhiều bài viết. Mỗi bài có nhiều ảnh + nhiều đoạn văn trong nội dung.
               </p>
+              <div className="flex gap-2 mt-3 flex-wrap">
+                {([
+                  { key: 'all', label: 'Tất cả' },
+                  { key: 'on', label: 'Đang mở' },
+                  { key: 'off', label: 'Đang tắt' },
+                ] as const).map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setVisibilityFilter(s.key)}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-black border ${
+                      visibilityFilter === s.key ? 'bg-pink-50 text-pink-700 border-pink-200' : 'bg-white text-gray-600 border-gray-200'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-2 mt-4">
+                <input
+                  value={searchText}
+                  onChange={(e) => setSearchText(e.target.value)}
+                  placeholder="Tìm theo tiêu đề / slug / nội dung..."
+                  className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-pink-500"
+                />
+                <input
+                  value={authorFilter}
+                  onChange={(e) => setAuthorFilter(e.target.value)}
+                  placeholder="Lọc theo tác giả"
+                  className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-pink-500"
+                />
+                <input
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                  className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-pink-500"
+                />
+                <input
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                  className="bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-pink-500"
+                />
+              </div>
             </div>
             <button
               type="button"
@@ -364,7 +579,13 @@ const BlogsManagement: React.FC = () => {
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {postsByCategory[activeTab as ListKey].map((p) => (
+              {postsByCategory[activeTab as ListKey]
+                .filter((p) => {
+                  if (visibilityFilter === 'all') return true;
+                  if (visibilityFilter === 'on') return Boolean(p.isPublished);
+                  return !Boolean(p.isPublished);
+                })
+                .map((p) => (
                 <div key={p.id} className="border border-gray-100 rounded-[2rem] overflow-hidden bg-white hover:shadow-sm transition-shadow">
                   {p.thumbnail ? (
                     <div className="h-40 bg-gray-50 overflow-hidden">
@@ -379,6 +600,27 @@ const BlogsManagement: React.FC = () => {
                     <div className="text-sm font-black text-gray-900 line-clamp-2 mb-2">{p.title}</div>
                     <div className="text-[11px] text-gray-400 mb-3">
                       {(p.publishedAt || p.createdAt) ? new Date(p.publishedAt || p.createdAt).toLocaleDateString('vi-VN') : ''}
+                    </div>
+                    <div className={`inline-flex px-2 py-1 rounded-full text-[10px] font-black border mb-3 ${visibilityBadge(Boolean(p.isPublished))}`}>
+                      {Boolean(p.isPublished) ? 'Đang mở' : 'Đang tắt'}
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      <button
+                        type="button"
+                        onClick={() => void handleQuickVisibilityChange(activeTab as ListKey, p, true)}
+                        disabled={saving || Boolean(p.isPublished)}
+                        className="px-2.5 py-1.5 rounded-lg bg-green-50 border border-green-200 text-green-700 text-[11px] font-black disabled:opacity-50"
+                      >
+                        Mở bài viết
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleQuickVisibilityChange(activeTab as ListKey, p, false)}
+                        disabled={saving || !Boolean(p.isPublished)}
+                        className="px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-700 text-[11px] font-black disabled:opacity-50"
+                      >
+                        Tắt bài viết
+                      </button>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -454,6 +696,22 @@ const BlogsManagement: React.FC = () => {
                 </div>
               </div>
 
+              <label className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={Boolean((editingPost as any).isPublished)}
+                  onChange={(e) =>
+                    setEditingPost((prev) => (prev ? ({ ...prev, isPublished: e.target.checked } as any) : prev))
+                  }
+                  className="accent-pink-500"
+                  disabled={saving}
+                />
+                <div className="text-sm">
+                  <div className="font-black text-gray-800">Mở bài viết cho người dùng</div>
+                  <div className="text-xs text-gray-500">Bật để hiển thị ngoài website, tắt để ẩn bài viết.</div>
+                </div>
+              </label>
+
               <div>
                 <label className="block text-xs font-black text-gray-400 uppercase mb-2">Thumbnail (ảnh bìa)</label>
                 <input
@@ -500,22 +758,20 @@ const BlogsManagement: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-black text-gray-400 uppercase mb-2">Nội dung (nhiều ảnh + nhiều đoạn)</label>
-                <BlogBlockEditor
-                  value={editingPost.content || ''}
-                  onChange={(next) => setEditingPost((prev) => (prev ? { ...prev, content: next } : prev))}
-                />
+                {useBlockEditor ? (
+                  <BlogBlockEditor
+                    value={editingPost.content || ''}
+                    onChange={(next) => setEditingPost((prev) => (prev ? { ...prev, content: next } : prev))}
+                  />
+                ) : (
+                  <textarea
+                    className="w-full min-h-[260px] bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 outline-none focus:ring-2 focus:ring-pink-500"
+                    value={editingPost.content || ''}
+                    onChange={(e) => setEditingPost((prev) => (prev ? { ...prev, content: e.target.value } : prev))}
+                    placeholder="Nhập nội dung bài viết..."
+                  />
+                )}
               </div>
-
-              <label className="flex items-center gap-2 text-sm font-black text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={Boolean((editingPost as any).is_published ?? true)}
-                  onChange={(e) => setEditingPost((prev) => (prev ? ({ ...prev, is_published: e.target.checked } as any) : prev))}
-                  className="accent-pink-500"
-                  disabled={saving}
-                />
-                Hiển thị cho người dùng
-              </label>
 
               <div className="flex justify-end gap-3 pt-2 border-t border-gray-50">
                 <button

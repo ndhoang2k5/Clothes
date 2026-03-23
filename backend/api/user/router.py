@@ -179,7 +179,9 @@ def get_blog_detail(blog_id: int, db: Session = Depends(get_db)):
     Lấy chi tiết 1 bài blog đã publish cho user.
     """
     blog = AdminService.get_blog(db, blog_id)
-    if not blog or not getattr(blog, "is_published", False):
+    status = (getattr(blog, "status", None) or "").strip().lower() if blog else ""
+    is_visible = bool(blog) and (status == "published" or bool(getattr(blog, "is_published", False)))
+    if not is_visible:
         raise HTTPException(status_code=404, detail="Blog not found")
     return serialize_blog(blog)
 

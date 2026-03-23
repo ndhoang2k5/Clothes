@@ -339,6 +339,9 @@ def serialize_voucher(voucher) -> dict:
 
 
 def serialize_blog(blog) -> dict:
+    status = getattr(blog, "status", None)
+    if not status:
+        status = "published" if getattr(blog, "is_published", False) else "draft"
     return {
         "id": blog.id,
         "title": blog.title,
@@ -347,7 +350,10 @@ def serialize_blog(blog) -> dict:
         "thumbnail": getattr(blog, "thumbnail", None),
         "author": getattr(blog, "author", None),
         "category": getattr(blog, "category", None),
+        "status": status,
         "is_published": getattr(blog, "is_published", False),
+        "scheduled_at": _dt(getattr(blog, "scheduled_at", None)),
+        "reviewed_at": _dt(getattr(blog, "reviewed_at", None)),
         "published_at": _dt(getattr(blog, "published_at", None)),
         "created_at": _dt(getattr(blog, "created_at", None)),
         "updated_at": _dt(getattr(blog, "updated_at", None)),

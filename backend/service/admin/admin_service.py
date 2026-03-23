@@ -1,5 +1,6 @@
 
-from sqlalchemy import text, or_
+from sqlalchemy import text, or_, func
+import datetime
 from sqlalchemy.orm import Session
 from ...entities import models
 from ..serializers import (
@@ -22,6 +23,71 @@ from ..serializers import _normalize_banner_image_url
 from sqlalchemy.orm import selectinload
 
 class AdminService:
+    @staticmethod
+    def _ensure_system_configs_table(db: Session):
+        db.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS system_configs (
+                    key TEXT PRIMARY KEY,
+                    value JSONB NOT NULL DEFAULT '{}'::jsonb,
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                )
+                """
+            )
+        )
+        db.commit()
+
+    @staticmethod
+    def get_system_config(db: Session, key: str, default_value: dict | None = None):
+        AdminService._ensure_system_configs_table(db)
+        row = db.execute(
+            text("SELECT value FROM system_configs WHERE key = :key"),
+            {"key": key},
+        ).first()
+        if not row:
+            return default_value if default_value is not None else {}
+        value = row[0]
+        if isinstance(value, dict):
+            return value
+        return default_value if default_value is not None else {}
+
+    @staticmethod
+    def set_system_config(db: Session, key: str, value: dict):
+        AdminService._ensure_system_configs_table(db)
+        db.execute(
+            text(
+                """
+                INSERT INTO system_configs (key, value, updated_at)
+                VALUES (:key, CAST(:value AS jsonb), NOW())
+                ON CONFLICT (key)
+                DO UPDATE SET value = CAST(:value AS jsonb), updated_at = NOW()
+                """
+            ),
+            {"key": key, "value": __import__("json").dumps(value or {})},
+        )
+        db.commit()
+        return AdminService.get_system_config(db, key, default_value={})
+
+    @staticmethod
+    def get_blog_editor_config(db: Session):
+        raw = AdminService.get_system_config(
+            db,
+            "blog_editor",
+            default_value={"enable_block_editor": True},
+        )
+        enabled = bool(raw.get("enable_block_editor", True))
+        return {"enable_block_editor": enabled}
+
+    @staticmethod
+    def set_blog_editor_config(db: Session, data: dict):
+        enabled = bool(data.get("enable_block_editor", True))
+        return AdminService.set_system_config(
+            db,
+            "blog_editor",
+            {"enable_block_editor": enabled},
+        )
+
     @staticmethod
     def _enrich_serialized_order_for_admin(db: Session, data: dict):
         """
@@ -921,17 +987,114 @@ class AdminService:
 
     # --- Blogs / Intro / Tips ---
     @staticmethod
+    def _parse_iso_datetime(value):
+        if value is None:
+            return None
+        if isinstance(value, datetime.datetime):
+            dt = value
+        else:
+            s = str(value).strip()
+            if not s:
+                return None
+            try:
+                dt = datetime.datetime.fromisoformat(s.replace("Z", "+00:00"))
+            except Exception:
+                raise ValueError("Định dạng thời gian không hợp lệ")
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+        return dt
+
+    @staticmethod
+    def _derive_blog_status(blog) -> str:
+        status = (getattr(blog, "status", None) or "").strip()
+        if status:
+            return status
+        return "published" if getattr(blog, "is_published", False) else "draft"
+
+    @staticmethod
+    def _apply_scheduled_publication(db: Session):
+        now = datetime.datetime.utcnow()
+        due = (
+            db.query(models.Blog)
+            .filter(models.Blog.status == "scheduled")
+            .filter(models.Blog.scheduled_at.is_not(None))
+            .filter(models.Blog.scheduled_at <= now)
+            .all()
+        )
+        if not due:
+            return
+        for b in due:
+            b.status = "published"
+            b.is_published = True
+            b.published_at = b.published_at or b.scheduled_at or now
+            b.reviewed_at = b.reviewed_at or now
+            b.updated_at = now
+        db.commit()
+
+    @staticmethod
+    def _apply_blog_status_fields(blog, data: dict, is_new: bool = False):
+        now = datetime.datetime.utcnow()
+        req_status = data.get("status", None)
+        if req_status is not None:
+            status = str(req_status).strip().lower()
+        elif "is_published" in data:
+            status = "published" if bool(data.get("is_published")) else "draft"
+        elif is_new:
+            status = "draft"
+        else:
+            status = AdminService._derive_blog_status(blog)
+
+        if status not in ("draft", "review", "scheduled", "published"):
+            raise ValueError("Trạng thái bài viết không hợp lệ")
+
+        scheduled_raw = data.get("scheduled_at", data.get("scheduledAt"))
+        scheduled_at = (
+            AdminService._parse_iso_datetime(scheduled_raw)
+            if (scheduled_raw is not None)
+            else getattr(blog, "scheduled_at", None)
+        )
+
+        if status == "scheduled" and scheduled_at is None:
+            raise ValueError("Bài hẹn lịch cần thời gian scheduled_at")
+
+        blog.status = status
+        blog.scheduled_at = scheduled_at if status == "scheduled" else None
+
+        if status == "published":
+            blog.is_published = True
+            if not getattr(blog, "published_at", None):
+                blog.published_at = now
+            if not getattr(blog, "reviewed_at", None):
+                blog.reviewed_at = now
+        else:
+            blog.is_published = False
+
+        if status == "review" and not getattr(blog, "reviewed_at", None):
+            blog.reviewed_at = now
+
+    @staticmethod
     def list_blogs(
         db: Session,
         category: str | None = None,
+        status: str | None = None,
+        author: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
         published_only: bool = False,
         q: str | None = None,
     ):
+        AdminService._apply_scheduled_publication(db)
         query = db.query(models.Blog)
         if category:
             query = query.filter(models.Blog.category == category)
+        if status and str(status).strip():
+            s = str(status).strip().lower()
+            if s in ("draft", "review", "scheduled", "published"):
+                query = query.filter(models.Blog.status == s)
         if published_only:
-            query = query.filter(models.Blog.is_published == True)  # noqa: E712
+            query = query.filter(
+                (models.Blog.status == "published") | (models.Blog.is_published == True)  # noqa: E712
+            )
         q_term = (q or "").strip()
         if q_term:
             like_term = f"%{q_term}%"
@@ -942,11 +1105,110 @@ class AdminService:
                     models.Blog.content.ilike(like_term),
                 )
             )
-        query = query.order_by(models.Blog.published_at.desc().nullslast(), models.Blog.created_at.desc())
+        author_term = (author or "").strip()
+        if author_term:
+            query = query.filter(models.Blog.author.ilike(f"%{author_term}%"))
+
+        # Lọc theo ngày hiệu lực hiển thị: ưu tiên published_at, fallback created_at.
+        effective_date_expr = func.coalesce(models.Blog.published_at, models.Blog.created_at)
+        if date_from and str(date_from).strip():
+            dt_from = AdminService._parse_iso_datetime(str(date_from).strip())
+            if dt_from:
+                query = query.filter(effective_date_expr >= dt_from)
+        if date_to and str(date_to).strip():
+            raw = str(date_to).strip()
+            dt_to = AdminService._parse_iso_datetime(raw)
+            if dt_to:
+                # Nếu user chỉ nhập YYYY-MM-DD thì lấy tới cuối ngày để dễ dùng.
+                if len(raw) <= 10:
+                    dt_to = dt_to + datetime.timedelta(days=1)
+                query = query.filter(effective_date_expr < dt_to)
+        if published_only:
+            query = query.order_by(models.Blog.published_at.desc().nullslast(), models.Blog.created_at.desc())
+        else:
+            query = query.order_by(models.Blog.updated_at.desc(), models.Blog.created_at.desc())
         return [serialize_blog(b) for b in query.all()]
 
     @staticmethod
+    def get_blog_kpis(
+        db: Session,
+        category: str | None = None,
+        date_from: str | None = None,
+        date_to: str | None = None,
+    ):
+        AdminService._apply_scheduled_publication(db)
+
+        query = db.query(models.Blog)
+        if category and str(category).strip():
+            query = query.filter(models.Blog.category == str(category).strip())
+
+        effective_date_expr = func.coalesce(models.Blog.published_at, models.Blog.created_at)
+        if date_from and str(date_from).strip():
+            dt_from = AdminService._parse_iso_datetime(str(date_from).strip())
+            if dt_from:
+                query = query.filter(effective_date_expr >= dt_from)
+        if date_to and str(date_to).strip():
+            raw = str(date_to).strip()
+            dt_to = AdminService._parse_iso_datetime(raw)
+            if dt_to:
+                if len(raw) <= 10:
+                    dt_to = dt_to + datetime.timedelta(days=1)
+                query = query.filter(effective_date_expr < dt_to)
+
+        base_subq = query.subquery()
+        total_posts = db.query(func.count()).select_from(base_subq).scalar() or 0
+        visible_posts = (
+            db.query(func.count())
+            .select_from(base_subq)
+            .filter(base_subq.c.is_published == True)  # noqa: E712
+            .scalar()
+            or 0
+        )
+        hidden_posts = max(0, int(total_posts) - int(visible_posts))
+
+        now = datetime.datetime.utcnow()
+        since_7d = now - datetime.timedelta(days=7)
+        published_last_7_days = (
+            db.query(func.count())
+            .select_from(base_subq)
+            .filter(base_subq.c.is_published == True)  # noqa: E712
+            .filter(base_subq.c.published_at.is_not(None))
+            .filter(base_subq.c.published_at >= since_7d)
+            .scalar()
+            or 0
+        )
+        updated_last_7_days = (
+            db.query(func.count())
+            .select_from(base_subq)
+            .filter(base_subq.c.updated_at >= since_7d)
+            .scalar()
+            or 0
+        )
+
+        avg_minutes_to_publish = (
+            db.query(
+                func.avg(
+                    func.extract("epoch", base_subq.c.published_at - base_subq.c.created_at) / 60.0
+                )
+            )
+            .filter(base_subq.c.is_published == True)  # noqa: E712
+            .filter(base_subq.c.published_at.is_not(None))
+            .filter(base_subq.c.created_at.is_not(None))
+            .scalar()
+        )
+
+        return {
+            "total_posts": int(total_posts),
+            "visible_posts": int(visible_posts),
+            "hidden_posts": int(hidden_posts),
+            "published_last_7_days": int(published_last_7_days),
+            "updated_last_7_days": int(updated_last_7_days),
+            "avg_minutes_to_publish": float(avg_minutes_to_publish or 0),
+        }
+
+    @staticmethod
     def get_blog(db: Session, blog_id: int):
+        AdminService._apply_scheduled_publication(db)
         return db.query(models.Blog).filter(models.Blog.id == blog_id).first()
 
     @staticmethod
@@ -978,10 +1240,11 @@ class AdminService:
             thumbnail=data.get("thumbnail"),
             author=data.get("author"),
             category=category,
-            is_published=bool(data.get("is_published", False)),
         )
-        if blog.is_published and not getattr(blog, "published_at", None):
-            blog.published_at = __import__("datetime").datetime.utcnow()
+        AdminService._apply_blog_status_fields(blog, data, is_new=True)
+        blog.updated_at = now = datetime.datetime.utcnow()
+        if not getattr(blog, "created_at", None):
+            blog.created_at = now
         db.add(blog)
         db.commit()
         db.refresh(blog)
@@ -1004,12 +1267,9 @@ class AdminService:
             blog.author = data["author"]
         if "category" in data:
             blog.category = data["category"]
-        if "is_published" in data:
-            is_pub = bool(data["is_published"])
-            if is_pub and not blog.is_published and not blog.published_at:
-                blog.published_at = __import__("datetime").datetime.utcnow()
-            blog.is_published = is_pub
-        blog.updated_at = __import__("datetime").datetime.utcnow()
+        if ("is_published" in data) or ("status" in data) or ("scheduled_at" in data) or ("scheduledAt" in data):
+            AdminService._apply_blog_status_fields(blog, data, is_new=False)
+        blog.updated_at = datetime.datetime.utcnow()
         db.commit()
         db.refresh(blog)
         return serialize_blog(blog)

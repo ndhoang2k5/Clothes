@@ -402,13 +402,54 @@ def upload_image(file: UploadFile = File(...)):
 
 
 @router.get("/blogs")
-def list_blogs(category: str | None = None, db: Session = Depends(get_db)):
-    return AdminService.list_blogs(db, category=category, published_only=False)
+def list_blogs(
+    category: str | None = None,
+    status: str | None = None,
+    author: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    q: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return AdminService.list_blogs(
+        db,
+        category=category,
+        status=status,
+        author=author,
+        date_from=date_from,
+        date_to=date_to,
+        published_only=False,
+        q=q,
+    )
+
+
+@router.get("/blogs/kpis")
+def get_blog_kpis(
+    category: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    db: Session = Depends(get_db),
+):
+    return AdminService.get_blog_kpis(db, category=category, date_from=date_from, date_to=date_to)
+
+
+@router.get("/blogs/editor-config")
+def get_blog_editor_config(db: Session = Depends(get_db)):
+    return AdminService.get_blog_editor_config(db)
+
+
+@router.put("/blogs/editor-config")
+def update_blog_editor_config(data: dict = Body(default={}), db: Session = Depends(get_db)):
+    data = data or {}
+    return AdminService.set_blog_editor_config(db, data)
 
 
 @router.post("/blogs")
 def create_blog(data: dict, db: Session = Depends(get_db)):
-    created = AdminService.create_blog(db, data)
+    try:
+        created = AdminService.create_blog(db, data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not created:
         raise HTTPException(status_code=400, detail="Invalid blog payload")
     return created
@@ -416,7 +457,10 @@ def create_blog(data: dict, db: Session = Depends(get_db)):
 
 @router.put("/blogs/{blog_id}")
 def update_blog(blog_id: int, data: dict, db: Session = Depends(get_db)):
-    updated = AdminService.update_blog(db, blog_id, data)
+    try:
+        updated = AdminService.update_blog(db, blog_id, data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if not updated:
         raise HTTPException(status_code=404, detail="Blog not found")
     return updated

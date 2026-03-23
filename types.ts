@@ -106,6 +106,10 @@ export interface Blog {
   author: string;
   createdAt: string;
   category: 'news' | 'tips' | 'charity' | 'intro';
+  workflowStatus?: 'draft' | 'review' | 'scheduled' | 'published';
+  scheduledAt?: string;
+  reviewedAt?: string;
+  isPublished?: boolean;
   // Optional fields used by frontend `BlogPage`
   image?: string;
   excerpt?: string;

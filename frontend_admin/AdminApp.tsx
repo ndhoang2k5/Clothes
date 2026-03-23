@@ -6,7 +6,6 @@ import ProductManagement from './pages/ProductManagement';
 import OrderManagement from './pages/OrderManagement';
 import CollectionManagement from './pages/CollectionManagement';
 import BannerManagement from './pages/BannerManagement';
-import IntroManagement from './pages/IntroManagement';
 import VoucherManagement from './pages/VoucherManagement';
 import ShippingRulesManagement from './pages/ShippingRulesManagement';
 import ClearanceManagement from './pages/ClearanceManagement';
@@ -31,7 +30,7 @@ const AdminApp: React.FC = () => {
       case '#/admin/vouchers': return <VoucherManagement />;
       case '#/admin/shipping-rules': return <ShippingRulesManagement />;
       case '#/admin/banners': return <BannerManagement />;
-      case '#/admin/intro': return <IntroManagement />;
+      case '#/admin/intro': return <BlogsManagement />;
       case '#/admin/blogs': return <BlogsManagement />;
       case '#/admin':
       default: return <Dashboard />;

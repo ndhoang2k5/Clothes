@@ -150,12 +150,13 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
     return (
       <div className="max-w-7xl mx-auto px-4 py-16 bg-white min-h-[60vh]">
         <div className="grid md:grid-cols-2 gap-10">
-          <div className="aspect-[4/5] bg-gray-200 rounded-3xl animate-pulse" />
+          <div className="aspect-[4/5] rounded-3xl skeleton" />
           <div className="space-y-4">
-            <div className="h-8 bg-gray-200 rounded-xl w-1/2 animate-pulse" />
-            <div className="h-4 bg-gray-200 rounded-xl w-1/3 animate-pulse" />
-            <div className="h-4 bg-gray-200 rounded-xl w-full animate-pulse" />
-            <div className="h-4 bg-gray-200 rounded-xl w-2/3 animate-pulse" />
+            <div className="h-8 rounded-xl w-1/2 skeleton" />
+            <div className="h-4 rounded-xl w-1/3 skeleton" />
+            <div className="h-4 rounded-xl w-full skeleton" />
+            <div className="h-4 rounded-xl w-2/3 skeleton" />
+            <div className="h-12 rounded-2xl w-40 skeleton mt-6" />
           </div>
         </div>
       </div>

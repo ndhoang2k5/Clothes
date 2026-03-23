@@ -49,11 +49,11 @@ const TipsPage: React.FC = () => {
       {loading ? (
         <div className="grid md:grid-cols-3 gap-6">
           {[1, 2, 3, 4, 5, 6].map((i) => (
-            <div key={i} className="bg-white rounded-[2rem] border border-gray-100 p-4 animate-pulse">
-              <div className="h-44 bg-gray-200 rounded-[1.5rem] mb-4" />
-              <div className="h-4 bg-gray-200 rounded-xl w-3/4 mb-2" />
-              <div className="h-4 bg-gray-200 rounded-xl w-full mb-2" />
-              <div className="h-4 bg-gray-200 rounded-xl w-2/3" />
+            <div key={i} className="bg-white rounded-[2rem] border border-gray-100 p-4">
+              <div className="h-44 rounded-[1.5rem] mb-4 skeleton" />
+              <div className="h-4 rounded-xl w-3/4 mb-2 skeleton" />
+              <div className="h-4 rounded-xl w-full mb-2 skeleton" />
+              <div className="h-4 rounded-xl w-2/3 skeleton" />
             </div>
           ))}
         </div>

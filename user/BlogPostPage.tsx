@@ -16,6 +16,7 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
   const relatedTrackRef = useRef<HTMLDivElement | null>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [isRelatedHovered, setIsRelatedHovered] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,6 +85,25 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
       behavior: 'smooth',
     });
   };
+
+  useEffect(() => {
+    if (relatedPosts.length <= 1) return;
+    if (isRelatedHovered) return;
+
+    const id = window.setInterval(() => {
+      const el = relatedTrackRef.current;
+      if (!el) return;
+      const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+      const atEnd = el.scrollLeft >= maxScrollLeft - 6;
+      if (atEnd) {
+        el.scrollTo({ left: 0, behavior: 'smooth' });
+      } else {
+        scrollRelated('right');
+      }
+    }, 4500);
+
+    return () => window.clearInterval(id);
+  }, [relatedPosts.length, isRelatedHovered]);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-10">
@@ -222,6 +242,8 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
               <div
                 ref={relatedTrackRef}
                 className="hide-scrollbar flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth"
+                onMouseEnter={() => setIsRelatedHovered(true)}
+                onMouseLeave={() => setIsRelatedHovered(false)}
               >
                 {relatedPosts.map((rp) => {
                   const rpMeta = parseBlogRenderMeta(rp.content || '');

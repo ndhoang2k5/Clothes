@@ -42,10 +42,12 @@ const HomePage: React.FC = () => {
   const [activeFeaturedTab, setActiveFeaturedTab] = useState<'new' | 'hot' | 'accessory' | 'all'>('new');
   const [clearanceProducts, setClearanceProducts] = useState<Product[]>([]);
   const [quickAddProductId, setQuickAddProductId] = useState<string | null>(null);
+  const [homeLoading, setHomeLoading] = useState(true);
 
   useEffect(() => {
     // Load only first page for homepage (fast) and reuse cache for smooth back navigation.
     const load = async () => {
+      setHomeLoading(true);
       try {
         const [productRes, heroPromoCat, colRes, tipRes, clearanceRes] = await Promise.all([
           api
@@ -74,6 +76,8 @@ const HomePage: React.FC = () => {
         setClearanceProducts(((clearanceRes as any).items ?? []) as Product[]);
       } catch {
         // fallback đã xử lý từng phần
+      } finally {
+        setHomeLoading(false);
       }
     };
     void load();
@@ -94,6 +98,49 @@ const HomePage: React.FC = () => {
     }, 6000);
     return () => window.clearInterval(t);
   }, [promoBanners.length]);
+
+  if (homeLoading) {
+    return (
+      <div className="pb-20">
+        <section className="h-[400px] md:h-[600px] px-4 md:px-0">
+          <div className="max-w-7xl mx-auto h-full rounded-[2rem] md:rounded-none skeleton" />
+        </section>
+        <section className="max-w-7xl mx-auto px-4 -mt-16 relative z-10">
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-[#FFF9F1] p-6 rounded-2xl border border-[#E5D6C4]/70">
+                <div className="h-8 w-8 rounded-full mx-auto mb-3 skeleton" />
+                <div className="h-3 w-16 mx-auto rounded-full skeleton" />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="max-w-7xl mx-auto px-4 py-20">
+          <div className="grid md:grid-cols-3 gap-8">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-6 rounded-2xl border border-[#E5D6C4]/80 bg-[#FFF9F1]">
+                <div className="h-6 w-6 rounded-lg mb-4 skeleton" />
+                <div className="h-4 w-3/4 rounded-full mb-2 skeleton" />
+                <div className="h-3 w-1/2 rounded-full skeleton" />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="max-w-7xl mx-auto px-4 py-10">
+          <div className="h-8 w-64 rounded-full mx-auto mb-8 skeleton" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-[1.5rem] border border-gray-100 p-3">
+                <div className="aspect-[4/5] rounded-2xl mb-3 skeleton" />
+                <div className="h-4 w-4/5 rounded-full mb-2 skeleton" />
+                <div className="h-4 w-1/2 rounded-full skeleton" />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="pb-20">

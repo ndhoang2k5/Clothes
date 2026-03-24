@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import type { AdminBanner, BannerSlot, Product, Collection, Blog } from '../types';
-import { CATEGORIES, TRUST_FEATURES } from '../constants';
+import { CATEGORIES } from '../constants';
 import ProductCard from '../components/ProductCard';
 import { QuickAddToCartModal } from './QuickAddToCartModal';
 
@@ -36,20 +36,40 @@ const HomePage: React.FC = () => {
   const [promoBanners, setPromoBanners] = useState<AdminBanner[]>([]);
   const [categoryBanners, setCategoryBanners] = useState<AdminBanner[]>([]);
   const [collections, setCollections] = useState<Collection[]>([]);
-  const [tips, setTips] = useState<Blog[]>([]);
+  const [blogHighlights, setBlogHighlights] = useState<Blog[]>([]);
   const [heroIndex, setHeroIndex] = useState(0);
   const [promoIndex, setPromoIndex] = useState(0);
-  const [activeFeaturedTab, setActiveFeaturedTab] = useState<'new' | 'hot' | 'accessory' | 'all'>('new');
+  const [activeFeaturedTab, setActiveFeaturedTab] = useState<'new' | 'hot' | 'clearance' | 'all'>('new');
   const [clearanceProducts, setClearanceProducts] = useState<Product[]>([]);
   const [quickAddProductId, setQuickAddProductId] = useState<string | null>(null);
   const [homeLoading, setHomeLoading] = useState(true);
+  const heroTouchStartXRef = useRef<number | null>(null);
+  const blogTrackRef = useRef<HTMLDivElement | null>(null);
+  const [canBlogScrollLeft, setCanBlogScrollLeft] = useState(false);
+  const [canBlogScrollRight, setCanBlogScrollRight] = useState(false);
+  const [blogDotCount, setBlogDotCount] = useState(1);
+  const [activeBlogDot, setActiveBlogDot] = useState(0);
+  const promoSlides = promoBanners.length > 0
+    ? promoBanners
+    : [
+        {
+          id: -999,
+          slot: 'home_promo' as BannerSlot,
+          sort_order: 0,
+          image_url: PROMO_PLACEHOLDER_SVG,
+          title: 'Ưu đãi theo mùa',
+          subtitle: 'Nhiều mã giảm giá và quà tặng đang chờ ba mẹ.',
+          link_url: '#/products',
+          is_active: true,
+        } as AdminBanner,
+      ];
 
   useEffect(() => {
     // Load only first page for homepage (fast) and reuse cache for smooth back navigation.
     const load = async () => {
       setHomeLoading(true);
       try {
-        const [productRes, heroPromoCat, colRes, tipRes, clearanceRes] = await Promise.all([
+        const [productRes, heroPromoCat, colRes, blogRes, clearanceRes] = await Promise.all([
           api
             .getProductsPage({ page: 1, per_page: 36, useCache: true })
             .catch(() => ({ items: [] })),
@@ -61,7 +81,10 @@ const HomePage: React.FC = () => {
             return { hero, promo, cat };
           })(),
           api.getCollections().catch(() => []),
-          api.getTips(3).catch(() => []),
+          Promise.all([
+            api.getBlogs('tips', 12).catch(() => []),
+            api.getBlogs('news', 12).catch(() => []),
+          ]),
           api.getProductsPage({ category: 'uu-dai-cuoi-mua', page: 1, per_page: 8, useCache: false }).catch(() => ({ items: [] })),
         ]);
 
@@ -72,7 +95,22 @@ const HomePage: React.FC = () => {
         setHeroIndex(0);
         setPromoIndex(0);
         setCollections(colRes as Collection[]);
-        setTips(tipRes as Blog[]);
+        const [tipsList, newsList] = blogRes as [Blog[], Blog[]];
+        const mergedBlogs = [...tipsList, ...newsList]
+          .filter((b) => !!b?.id && !!b?.title)
+          .sort((a, b) => {
+            const ta = new Date(a.publishedAt || a.createdAt || 0).getTime();
+            const tb = new Date(b.publishedAt || b.createdAt || 0).getTime();
+            return tb - ta;
+          });
+        const uniqueBlogs: Blog[] = [];
+        const seen = new Set<string>();
+        mergedBlogs.forEach((b) => {
+          if (seen.has(String(b.id))) return;
+          seen.add(String(b.id));
+          uniqueBlogs.push(b);
+        });
+        setBlogHighlights(uniqueBlogs.slice(0, 12));
         setClearanceProducts(((clearanceRes as any).items ?? []) as Product[]);
       } catch {
         // fallback đã xử lý từng phần
@@ -98,6 +136,45 @@ const HomePage: React.FC = () => {
     }, 6000);
     return () => window.clearInterval(t);
   }, [promoBanners.length]);
+
+  useEffect(() => {
+    const el = blogTrackRef.current;
+    if (!el) return;
+    const updateButtons = () => {
+      const maxScrollLeft = Math.max(0, el.scrollWidth - el.clientWidth);
+      setCanBlogScrollLeft(el.scrollLeft > 4);
+      setCanBlogScrollRight(el.scrollLeft < maxScrollLeft - 4);
+      const pages = Math.max(1, Math.ceil(el.scrollWidth / Math.max(1, el.clientWidth)));
+      setBlogDotCount(pages);
+      const pageIndex = Math.round(el.scrollLeft / Math.max(1, el.clientWidth));
+      setActiveBlogDot(Math.min(Math.max(pageIndex, 0), pages - 1));
+    };
+    updateButtons();
+    el.addEventListener('scroll', updateButtons, { passive: true });
+    window.addEventListener('resize', updateButtons);
+    return () => {
+      el.removeEventListener('scroll', updateButtons);
+      window.removeEventListener('resize', updateButtons);
+    };
+  }, [blogHighlights.length]);
+
+  const scrollBlogs = (dir: 'left' | 'right') => {
+    const el = blogTrackRef.current;
+    if (!el) return;
+    const firstCard = el.firstElementChild as HTMLElement | null;
+    const amount = firstCard
+      ? Math.max(260, firstCard.getBoundingClientRect().width + 20)
+      : Math.max(280, Math.round(el.clientWidth * 0.85));
+    el.scrollBy({ left: dir === 'left' ? -amount : amount, behavior: 'smooth' });
+  };
+
+  const goToBlogDot = (index: number) => {
+    const el = blogTrackRef.current;
+    if (!el) return;
+    const max = Math.max(0, el.scrollWidth - el.clientWidth);
+    const target = Math.min(max, Math.max(0, index * el.clientWidth));
+    el.scrollTo({ left: target, behavior: 'smooth' });
+  };
 
   if (homeLoading) {
     return (
@@ -145,7 +222,26 @@ const HomePage: React.FC = () => {
   return (
     <div className="pb-20">
       {/* Hero Slider — carousel mượt */}
-      <section className="relative h-[400px] md:h-[600px] bg-[#F8F3EC] overflow-hidden">
+      <section
+        className="relative h-[400px] md:h-[600px] bg-[#F8F3EC] overflow-hidden touch-pan-y"
+        onTouchStart={(e) => {
+          heroTouchStartXRef.current = e.touches[0]?.clientX ?? null;
+        }}
+        onTouchEnd={(e) => {
+          if (heroBanners.length <= 1) return;
+          const startX = heroTouchStartXRef.current;
+          const endX = e.changedTouches[0]?.clientX ?? null;
+          heroTouchStartXRef.current = null;
+          if (startX == null || endX == null) return;
+          const delta = endX - startX;
+          if (Math.abs(delta) < 45) return;
+          if (delta < 0) {
+            setHeroIndex((i) => (i + 1) % heroBanners.length);
+          } else {
+            setHeroIndex((i) => (i <= 0 ? heroBanners.length - 1 : i - 1));
+          }
+        }}
+      >
         <div
           className="flex h-full transition-transform duration-500 ease-out"
           style={{ width: `${heroBanners.length * 100}%`, transform: `translateX(-${heroIndex * (100 / heroBanners.length)}%)` }}
@@ -158,40 +254,17 @@ const HomePage: React.FC = () => {
                 className="absolute inset-0 w-full h-full object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-[#F8F3EC]/80 to-transparent flex items-center px-12 md:px-32">
-                <div className="max-w-md">
-                  <h1 className="text-4xl md:text-6xl font-black text-[#4B3B32] mb-4">{slide.title || 'Unbee Baby'}</h1>
-                  <p className="text-[#8B7765] text-lg mb-8">
-                    {slide.subtitle || 'Mềm mại như vòng tay mẹ, an toàn cho làn da nhạy cảm của bé yêu.'}
-                  </p>
-                  <a
-                    href={slide.link_url || '#/products'}
-                    className="inline-flex bg-[#B58A5A] text-[#FDF8F0] px-8 py-4 rounded-full font-bold shadow-lg hover:bg-[#A3784E] transition-all"
-                  >
-                    Mua ngay
-                  </a>
-                </div>
+                <div className="max-w-md" />
               </div>
             </div>
           ))}
         </div>
-        {heroBanners.length > 1 && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-            {heroBanners.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setHeroIndex(i)}
-                className={`h-2.5 rounded-full transition-all duration-300 ${i === heroIndex ? 'w-10 bg-pink-500' : 'w-2.5 bg-white/70 hover:bg-white'}`}
-                aria-label={`Ảnh ${i + 1}`}
-              />
-            ))}
-          </div>
-        )}
       </section>
 
       {/* Quick Categories */}
       <section className="max-w-7xl mx-auto px-4 -mt-16 relative z-10">
         <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
-          {CATEGORIES.filter((cat) => cat.slug !== 'uu-dai-cuoi-mua').map((cat) => (
+          {CATEGORIES.filter((cat) => cat.slug !== 'uu-dai-cuoi-mua' && cat.slug !== 'phu-kien').map((cat) => (
             <a 
               key={cat.id}
               href={`#/products?cat=${cat.slug}`}
@@ -204,19 +277,91 @@ const HomePage: React.FC = () => {
         </div>
       </section>
 
-      {/* Trust Features */}
-      <section className="max-w-7xl mx-auto px-4 py-20">
-        <div className="grid md:grid-cols-3 gap-8">
-          {TRUST_FEATURES.map((feature, idx) => (
-            <div key={idx} className="flex items-center gap-4 p-6 bg-[#FFF9F1] rounded-2xl border border-[#E5D6C4]/80">
-              <div className="p-3 bg-[#F2E3D4] rounded-xl">{feature.icon}</div>
-              <div>
-                <h4 className="font-bold text-[#4B3B32]">{feature.title}</h4>
-                <p className="text-sm text-[#9C8573]">{feature.desc}</p>
-              </div>
-            </div>
-          ))}
+      {/* Promo Slider Compact (mobile-friendly) */}
+      <section className="max-w-7xl mx-auto px-4 py-8 md:py-10">
+        <div className="relative rounded-[1.6rem] overflow-hidden border border-[#E5D6C4]/80 bg-[#FFF9F1] shadow-sm">
+          <div
+            className="flex transition-transform duration-500 ease-out"
+            style={{
+              width: `${promoSlides.length * 100}%`,
+              transform: `translateX(-${promoIndex * (100 / promoSlides.length)}%)`,
+            }}
+          >
+            {promoSlides.map((b, i) => {
+              const raw = (b as { image_url?: string; imageUrl?: string }).image_url ?? (b as { image_url?: string; imageUrl?: string }).imageUrl;
+              const imageUrl = buildPromoImageUrl(raw ?? undefined) || PROMO_PLACEHOLDER_SVG;
+              return (
+                <div
+                  key={b.id ?? i}
+                  className="flex-shrink-0 relative h-[170px] md:h-[210px]"
+                  style={{ width: `${100 / promoSlides.length}%` }}
+                >
+                  <img
+                    src={imageUrl}
+                    alt={b.title || 'Ưu đãi'}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/45 via-black/25 to-transparent" />
+                  <div className="relative z-10 h-full p-4 pl-10 pr-10 md:p-6 md:pl-20 md:pr-20 lg:pl-24 lg:pr-24 flex flex-col justify-end">
+                    <span className="inline-flex w-fit mb-2 px-2.5 py-1 rounded-full bg-white/20 text-white text-[10px] md:text-xs font-black uppercase tracking-wider">
+                      Khuyến mãi
+                    </span>
+                    <div className="text-white text-lg md:text-2xl font-black leading-tight line-clamp-2 mb-1">
+                      {b.title || 'Ưu đãi hôm nay'}
+                    </div>
+                    {b.subtitle && (
+                      <div className="text-white/90 text-xs md:text-sm line-clamp-2 mb-3">
+                        {b.subtitle}
+                      </div>
+                    )}
+                    <a
+                      href={b.link_url || '#/products'}
+                      className="inline-flex w-fit px-4 py-2 rounded-full bg-white text-[#8B6A47] text-xs md:text-sm font-black hover:bg-[#FFF7EC] transition-colors"
+                    >
+                      Xem ngay
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {promoSlides.length > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={() => setPromoIndex((i) => (i <= 0 ? promoSlides.length - 1 : i - 1))}
+                className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/35 text-[#8B6A47]/80 border border-white/40 backdrop-blur-sm shadow-sm flex items-center justify-center opacity-80 md:opacity-40 hover:opacity-100 hover:bg-white/65 hover:text-[#8B6A47] transition-all duration-200"
+                aria-label="Banner trước"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPromoIndex((i) => (i >= promoSlides.length - 1 ? 0 : i + 1))}
+                className="absolute right-2 md:right-3 top-1/2 -translate-y-1/2 w-8 h-8 md:w-9 md:h-9 rounded-full bg-white/35 text-[#8B6A47]/80 border border-white/40 backdrop-blur-sm shadow-sm flex items-center justify-center opacity-80 md:opacity-40 hover:opacity-100 hover:bg-white/65 hover:text-[#8B6A47] transition-all duration-200"
+                aria-label="Banner sau"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </>
+          )}
         </div>
+        {promoSlides.length > 1 && (
+          <div className="flex justify-center gap-2 mt-3">
+            {promoSlides.map((_, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setPromoIndex(i)}
+                className={`h-2 rounded-full transition-all ${i === promoIndex ? 'w-6 bg-[#B58A5A]' : 'w-2 bg-[#D6C1A9]'}`}
+                aria-label={`Banner ${i + 1}`}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Category Feature Banners */}
@@ -318,12 +463,12 @@ const HomePage: React.FC = () => {
               Hot sales
             </button>
             <button
-              onClick={() => setActiveFeaturedTab('accessory')}
+              onClick={() => setActiveFeaturedTab('clearance')}
               className={`px-4 py-2 rounded-full transition-colors ${
-                activeFeaturedTab === 'accessory' ? 'text-pink-600' : 'hover:text-pink-500'
+                activeFeaturedTab === 'clearance' ? 'text-pink-600' : 'hover:text-pink-500'
               }`}
             >
-              Phụ kiện
+              Ưu đãi
             </button>
             <button
               onClick={() => setActiveFeaturedTab('all')}
@@ -338,18 +483,22 @@ const HomePage: React.FC = () => {
 
         {(() => {
           let list = products;
+          let featuredViewAllHref = '#/products';
           if (activeFeaturedTab === 'new') {
             list = products.filter((p) => p.isNew);
           } else if (activeFeaturedTab === 'hot') {
             list = products.filter((p) => p.isHot);
-          } else if (activeFeaturedTab === 'accessory') {
-            list = products.filter((p) => p.category === 'phu-kien');
+          } else if (activeFeaturedTab === 'clearance') {
+            list = clearanceProducts.length > 0
+              ? clearanceProducts
+              : products.filter((p) => p.category === 'uu-dai-cuoi-mua');
+            featuredViewAllHref = '#/products?cat=uu-dai-cuoi-mua';
           }
 
           return (
             <div className="max-w-7xl mx-auto">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                {list.slice(0, 8).map((product) => (
+                {list.slice(0, 16).map((product) => (
                   <ProductCard
                     key={product.id}
                     product={product}
@@ -357,48 +506,17 @@ const HomePage: React.FC = () => {
                   />
                 ))}
               </div>
+              <div className="mt-3 flex justify-end">
+                <a
+                  href={featuredViewAllHref}
+                  className="text-xs md:text-sm font-bold text-[#8B6A47] hover:underline"
+                >
+                  Xem tất cả
+                </a>
+              </div>
             </div>
           );
         })()}
-      </section>
-
-      {/* Ưu đãi cuối mùa — luôn hiển thị block, có hoặc chưa có sản phẩm */}
-      <section className="max-w-7xl mx-auto px-4 pb-10">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-black text-[#4B3B32]">Ưu đãi cuối mùa</h2>
-            <p className="text-sm text-[#9C8573]">
-              Những mẫu còn lại cuối mùa với mức giá dễ chịu để xả kho.
-            </p>
-          </div>
-          <a
-            href="#/products?cat=uu-dai-cuoi-mua"
-            className="text-sm font-bold text-[#B58A5A] hover:underline"
-          >
-            Xem tất cả
-          </a>
-        </div>
-        {clearanceProducts.length > 0 ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {clearanceProducts.slice(0, 8).map((p) => (
-              <ProductCard
-                key={p.id}
-                product={p}
-                onAddToCart={() => setQuickAddProductId(p.id)}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="bg-[#FFF9F1] border border-[#E5D6C4]/70 rounded-2xl py-12 text-center">
-            <p className="text-[#9C8573] mb-4">Chưa có sản phẩm ưu đãi cuối mùa.</p>
-            <a
-              href="#/products?cat=uu-dai-cuoi-mua"
-              className="inline-flex bg-[#B58A5A] text-[#FDF8F0] px-6 py-3 rounded-full font-bold hover:bg-[#A3784E] transition-colors"
-            >
-              Xem tất cả sản phẩm
-            </a>
-          </div>
-        )}
       </section>
 
       {/* Box quà tặng */}
@@ -449,89 +567,6 @@ const HomePage: React.FC = () => {
         </section>
       )}
 
-      {/* Promo Banner — một ô, lần lượt đổi ảnh; không click */}
-      <section className="max-w-7xl mx-auto px-4 py-16">
-        {promoBanners.length > 0 ? (
-          <div className="rounded-[2rem] overflow-hidden relative border border-gray-100 select-none h-[240px] md:h-[280px]">
-            <div
-              className="flex h-full transition-transform duration-500 ease-out"
-              style={{ width: `${promoBanners.length * 100}%`, transform: `translateX(-${promoIndex * (100 / promoBanners.length)}%)` }}
-            >
-              {promoBanners.map((b, i) => {
-                const raw = (b as { image_url?: string; imageUrl?: string }).image_url ?? (b as { image_url?: string; imageUrl?: string }).imageUrl;
-                const imageUrl = buildPromoImageUrl(raw ?? undefined);
-                return (
-                  <div
-                    key={b.id ?? i}
-                    className="flex-shrink-0 relative h-full"
-                    style={{
-                      width: `${100 / promoBanners.length}%`,
-                      background: imageUrl ? 'transparent' : 'linear-gradient(135deg, #fce7f3 0%, #fbcfe8 40%, #f9a8d4 100%)',
-                    }}
-                  >
-                    <img
-                      key={imageUrl || `placeholder-${b.id ?? i}`}
-                      src={imageUrl || PROMO_PLACEHOLDER_SVG}
-                      alt={b.title || 'Ưu đãi'}
-                      className="absolute inset-0 w-full h-full object-cover"
-                      style={{ zIndex: 0 }}
-                      loading="eager"
-                      decoding="async"
-                      onError={(e) => {
-                        const el = e.target as HTMLImageElement;
-                        if (el.src !== PROMO_PLACEHOLDER_SVG) el.src = PROMO_PLACEHOLDER_SVG;
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-r from-black/25 to-transparent pointer-events-none" style={{ zIndex: 1 }} />
-                    <div className="absolute inset-0 flex flex-col md:flex-row items-center gap-8 p-8 md:p-16 pointer-events-none" style={{ zIndex: 2 }}>
-                      <div className="text-white max-w-lg">
-                        <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4 inline-block">
-                          Ưu đãi
-                        </span>
-                        <h2 className="text-4xl md:text-5xl font-black mb-4">
-                          {b.title || 'Ưu đãi hôm nay'}
-                        </h2>
-                        <p className="text-white/90 mb-8">
-                          {b.subtitle || 'Khuyến mãi đang diễn ra.'}
-                        </p>
-                        <span className="inline-flex bg-white/90 text-gray-900 px-8 py-4 rounded-full font-bold shadow-xl cursor-default">
-                          Xem ưu đãi
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            {promoBanners.length > 1 && (
-              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                {promoBanners.map((_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setPromoIndex(i)}
-                    className={`h-2.5 rounded-full transition-all duration-300 ${i === promoIndex ? 'w-10 bg-white' : 'w-2.5 bg-white/50 hover:bg-white/80'}`}
-                    aria-label={`Ưu đãi ${i + 1}`}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="bg-gradient-to-r from-pink-400 to-rose-300 rounded-[2rem] p-8 md:p-16 flex flex-col md:flex-row items-center gap-8 overflow-hidden relative">
-              <div className="relative z-10 text-white max-w-lg">
-                  <span className="bg-white/20 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-4 inline-block">Ưu đãi độc quyền</span>
-                  <h2 className="text-4xl md:text-5xl font-black mb-6">Giảm 20% cho đơn hàng đầu tiên!</h2>
-                  <p className="text-pink-50 mb-8">Nhập mã <span className="font-mono font-bold bg-white text-pink-500 px-2 py-1 rounded">UNBEE20</span> tại trang thanh toán.</p>
-                  <button className="bg-white text-pink-500 px-8 py-4 rounded-full font-bold shadow-xl hover:scale-105 transition-transform">Nhận Ưu Đãi</button>
-              </div>
-              <div className="md:absolute md:-right-10 md:bottom-0">
-                   <img src="https://picsum.photos/600/600?baby" alt="Baby" className="w-72 h-72 md:w-[450px] md:h-[450px] object-contain rotate-12" />
-              </div>
-          </div>
-        )}
-      </section>
-
       {quickAddProductId && (
         <QuickAddToCartModal
           productId={quickAddProductId}
@@ -539,32 +574,112 @@ const HomePage: React.FC = () => {
         />
       )}
 
-      {/* Blog / Tips Teaser */}
-      {tips.length > 0 && (
-        <section className="max-w-7xl mx-auto px-4 py-20 bg-white rounded-[3rem]">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl font-black text-gray-800 mb-4">Mẹo nhỏ cho mẹ - Vui khỏe cho bé</h2>
-            <p className="text-gray-500">Chia sẻ kinh nghiệm chăm sóc bé từ nội dung bạn quản lý trong admin.</p>
+      {/* Tips & News */}
+      {blogHighlights.length > 0 && (
+        <section className="max-w-7xl mx-auto px-4 py-14">
+          <div className="flex items-center justify-between gap-4 mb-8">
+            <div>
+              <h2 className="text-3xl md:text-5xl font-black text-[#758796] tracking-tight">tips % news</h2>
+              <p className="text-gray-500 mt-2">
+                Cập nhật bài viết hữu ích cho ba mẹ mỗi ngày.
+              </p>
+            </div>
+            <div className="hidden md:flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => scrollBlogs('left')}
+                disabled={!canBlogScrollLeft}
+                className="w-10 h-10 rounded-full border border-[#D8CDD0] text-[#8B6A47] bg-white/70 opacity-55 hover:opacity-100 hover:bg-white transition-all disabled:opacity-25 disabled:cursor-not-allowed"
+                aria-label="Bài trước"
+              >
+                <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+              </button>
+              <button
+                type="button"
+                onClick={() => scrollBlogs('right')}
+                disabled={!canBlogScrollRight}
+                className="w-10 h-10 rounded-full border border-[#D8CDD0] text-[#8B6A47] bg-white/70 opacity-55 hover:opacity-100 hover:bg-white transition-all disabled:opacity-25 disabled:cursor-not-allowed"
+                aria-label="Bài tiếp theo"
+              >
+                <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+              </button>
+            </div>
           </div>
-          <div className="grid md:grid-cols-3 gap-8">
-            {tips.map((tip) => (
-              <div key={tip.id} className="group cursor-pointer">
-                <div className="aspect-video rounded-3xl overflow-hidden mb-6 bg-gray-50">
-                  <img
-                    src={tip.thumbnail || 'https://picsum.photos/500/300?baby-tips'}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    alt={tip.title}
-                  />
-                </div>
-                <h4 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-pink-500 transition-colors line-clamp-2">
-                  {tip.title}
-                </h4>
-                <p className="text-gray-500 text-sm line-clamp-3">
-                  {tip.content?.replace(/\s+/g, ' ').slice(0, 150) || ''}
-                  {tip.content && tip.content.length > 150 ? '…' : ''}
-                </p>
-              </div>
+
+          <div
+            ref={blogTrackRef}
+            className="hide-scrollbar flex gap-5 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth"
+          >
+            {blogHighlights.map((post) => (
+              <article
+                key={post.id}
+                className="flex-none basis-[85%] sm:basis-[48%] lg:basis-[31%] snap-start bg-white rounded-[1.5rem] border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all"
+              >
+                <button
+                  type="button"
+                  onClick={() => (window.location.hash = `#/blog/post/${post.id}`)}
+                  className="w-full text-left"
+                >
+                  <div className="h-48 bg-gray-50 overflow-hidden">
+                    <img
+                      src={post.thumbnail || 'https://picsum.photos/640/360?blog'}
+                      alt={post.title}
+                      className="w-full h-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </div>
+                  <div className="p-4">
+                    <h3 className="text-[1.15rem] md:text-[1.25rem] leading-7 font-extrabold text-[#6F8190] line-clamp-2 mb-2 uppercase">
+                      {post.title}
+                    </h3>
+                    <p className="text-[#6B6B6B] text-sm md:text-base line-clamp-2 min-h-[42px] mb-4">
+                      {post.excerpt || post.content?.replace(/\s+/g, ' ').slice(0, 120) || ''}
+                    </p>
+                    <span className="inline-flex items-center px-5 py-2 rounded-full border border-gray-300 text-[#4D4D4D] text-base hover:bg-gray-50 transition-colors">
+                      Xem thêm
+                    </span>
+                  </div>
+                </button>
+              </article>
             ))}
+          </div>
+
+          {blogDotCount > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-5">
+              {Array.from({ length: blogDotCount }).map((_, i) => (
+                <button
+                  key={`blog-dot-${i}`}
+                  type="button"
+                  onClick={() => goToBlogDot(i)}
+                  className={`h-2.5 rounded-full transition-all ${
+                    i === activeBlogDot ? 'w-5 bg-[#8B6A47]/75' : 'w-2.5 bg-[#D6C1A9]/70 hover:bg-[#C8AF92]/80'
+                  }`}
+                  aria-label={`Chuyển đến trang bài viết ${i + 1}`}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="flex md:hidden items-center justify-center gap-2 mt-4">
+            <button
+              type="button"
+              onClick={() => scrollBlogs('left')}
+              disabled={!canBlogScrollLeft}
+              className="w-9 h-9 rounded-full border border-[#D8CDD0] text-[#8B6A47] bg-white/70 opacity-70 hover:opacity-100 transition-all disabled:opacity-25"
+              aria-label="Bài trước"
+            >
+              <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollBlogs('right')}
+              disabled={!canBlogScrollRight}
+              className="w-9 h-9 rounded-full border border-[#D8CDD0] text-[#8B6A47] bg-white/70 opacity-70 hover:opacity-100 transition-all disabled:opacity-25"
+              aria-label="Bài tiếp theo"
+            >
+              <svg className="w-4 h-4 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+            </button>
           </div>
         </section>
       )}

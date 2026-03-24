@@ -21,7 +21,6 @@ const ProductPage: React.FC = () => {
   const [filters, setFilters] = useState({
     sizes: [] as string[],
     colors: [] as string[],
-    materials: [] as string[],
     priceRange: [0, 1000000] as [number, number],
     sort: 'newest'
   });
@@ -51,7 +50,6 @@ const ProductPage: React.FC = () => {
           useCache: true,
           sizes: filters.sizes,
           colors: filters.colors,
-          materials: filters.materials,
           priceRange: filters.priceRange,
           sort: filters.sort as any,
         });
@@ -112,20 +110,17 @@ const ProductPage: React.FC = () => {
   const availableOptions = useMemo(() => {
     const sizes = new Set<string>();
     const colors = new Set<string>();
-    const materials = new Set<string>();
 
     (facetSourceProducts.length > 0 ? facetSourceProducts : products).forEach(p => {
       (p.variants || []).forEach(v => {
         if (v.size && String(v.size).trim()) sizes.add(String(v.size).trim());
         if (v.color && String(v.color).trim()) colors.add(String(v.color).trim());
       });
-      if (p.material && String(p.material).trim()) materials.add(String(p.material).trim());
     });
 
     return {
       sizes: Array.from(sizes).sort(),
-      colors: Array.from(colors).sort(),
-      materials: Array.from(materials).sort()
+      colors: Array.from(colors).sort()
     };
   }, [facetSourceProducts, products]);
 
@@ -239,7 +234,7 @@ const ProductPage: React.FC = () => {
                 <div className="mt-6 grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setFilters({ sizes: [], colors: [], materials: [], priceRange: [0, 1000000], sort: 'newest' })}
+                    onClick={() => setFilters({ sizes: [], colors: [], priceRange: [0, 1000000], sort: 'newest' })}
                     className="py-3 rounded-2xl bg-gray-100 text-gray-600 font-black"
                   >
                     Xóa bộ lọc
@@ -300,7 +295,7 @@ const ProductPage: React.FC = () => {
                 <h3 className="text-2xl font-black text-gray-800 mb-2">Không tìm thấy sản phẩm</h3>
                 <p className="text-gray-500 mb-8 max-w-sm mx-auto">Chúng tôi không tìm thấy sản phẩm nào khớp với bộ lọc của bạn. Thử thay đổi các tùy chọn nhé!</p>
                 <button 
-                  onClick={() => setFilters({ sizes: [], colors: [], materials: [], priceRange: [0, 1000000], sort: 'newest' })}
+                  onClick={() => setFilters({ sizes: [], colors: [], priceRange: [0, 1000000], sort: 'newest' })}
                   className="bg-pink-500 text-white px-8 py-3 rounded-xl font-bold hover:bg-pink-600 transition-all shadow-lg"
                 >
                   Xóa tất cả bộ lọc

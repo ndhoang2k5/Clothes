@@ -4,7 +4,6 @@ import React from 'react';
 interface FilterState {
   sizes: string[];
   colors: string[];
-  materials: string[];
   priceRange: [number, number];
   sort: string;
 }
@@ -15,7 +14,6 @@ interface FilterSidebarProps {
   availableOptions: {
     sizes: string[];
     colors: string[];
-    materials: string[];
   };
 }
 
@@ -32,7 +30,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ filters, onFilterChange, 
   };
 
   return (
-    <div className="space-y-8 sticky top-24">
+    <div className="space-y-8 sticky top-24 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1 soft-scrollbar">
       {/* Sort Section */}
       <div>
         <h4 className="font-black text-gray-800 mb-4 flex items-center gap-2">
@@ -78,7 +76,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ filters, onFilterChange, 
       {/* Sizes */}
       <div>
         <h4 className="font-black text-gray-800 mb-4">Kích cỡ</h4>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1 soft-scrollbar">
           {availableOptions.sizes.map(size => (
             <button
               key={size}
@@ -98,7 +96,7 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ filters, onFilterChange, 
       {/* Colors */}
       <div>
         <h4 className="font-black text-gray-800 mb-4">Màu sắc</h4>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1 soft-scrollbar">
           {availableOptions.colors.map(color => (
             <label key={color} className="flex items-center gap-2 cursor-pointer group">
               <input 
@@ -113,27 +111,9 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({ filters, onFilterChange, 
         </div>
       </div>
 
-      {/* Materials */}
-      <div>
-        <h4 className="font-black text-gray-800 mb-4">Chất liệu</h4>
-        <div className="space-y-2">
-          {availableOptions.materials.map(mat => (
-            <label key={mat} className="flex items-center gap-2 cursor-pointer">
-              <input 
-                type="checkbox" 
-                className="w-5 h-5 rounded-md border-gray-200 text-pink-500 focus:ring-pink-500 transition-all cursor-pointer"
-                checked={filters.materials.includes(mat)}
-                onChange={() => handleCheckbox('materials', mat)}
-              />
-              <span className={`text-sm font-medium transition-colors ${filters.materials.includes(mat) ? 'text-pink-500 font-bold' : 'text-gray-600'}`}>{mat}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
       {/* Reset Button */}
       <button 
-        onClick={() => onFilterChange({ sizes: [], colors: [], materials: [], priceRange: [0, 1000000], sort: 'newest' })}
+        onClick={() => onFilterChange({ sizes: [], colors: [], priceRange: [0, 1000000], sort: 'newest' })}
         className="w-full py-3 bg-gray-50 text-gray-400 font-bold rounded-xl hover:bg-gray-100 transition-colors text-sm"
       >
         Xóa tất cả bộ lọc

@@ -336,7 +336,7 @@ class ApiService {
     if (params?.q) qs.set('q', params.q);
     if (params?.category) qs.set('category', params.category);
     if (params?.page) qs.set('page', String(params.page));
-    if (params?.per_page) qs.set('per_page', String(params.per_page));
+    if (params?.per_page !== undefined) qs.set('per_page', String(params.per_page));
     const res = await fetch(`${this.adminBaseUrl}/products?${qs.toString()}`);
     if (!res.ok) throw new Error('API Error');
     const data: any = await res.json();
@@ -599,7 +599,20 @@ class ApiService {
   private toAbsoluteUrl(url: string) {
     if (!url || typeof url !== 'string') return url || '';
     const u = String(url).trim();
-    if (u.startsWith('http://') || u.startsWith('https://')) return u;
+    if (u.startsWith('http://') || u.startsWith('https://')) {
+      // Nếu DB lưu absolute URL theo IP cũ, nhưng path là static uploads của hệ thống,
+      // thì ép về backend origin hiện tại để tránh timeout khi đổi mạng/host.
+      try {
+        const parsed = new URL(u);
+        if (parsed.pathname.startsWith('/static/')) {
+          const currentOrigin = this.getBackendOrigin();
+          return `${currentOrigin}${parsed.pathname}${parsed.search}${parsed.hash}`;
+        }
+      } catch {
+        // keep original absolute URL on parse failure
+      }
+      return u;
+    }
     const origin = this.getBackendOrigin();
     return `${origin}${u.startsWith('/') ? u : `/${u}`}`;
   }
@@ -788,6 +801,26 @@ class ApiService {
     if (params?.date_to) qs.set('date_to', params.date_to);
     const res = await fetch(`${this.adminBaseUrl}/orders${qs.toString() ? `?${qs.toString()}` : ''}`);
     if (!res.ok) throw new Error('Không thể tải danh sách đơn hàng');
+    return res.json();
+  }
+
+  async adminGetOrderKpis(): Promise<{
+    total_orders: number;
+    status_counts: {
+      pending: number;
+      confirmed: number;
+      paid: number;
+      shipped: number;
+      completed: number;
+      cancelled: number;
+    };
+    orders_this_month: number;
+    cancelled_this_month: number;
+    revenue_this_month: number;
+    revenue_by_month: Array<{ month: string; orders: number; revenue: number }>;
+  }> {
+    const res = await fetch(`${this.adminBaseUrl}/orders/kpis`);
+    if (!res.ok) throw new Error('Không thể tải KPI đơn hàng');
     return res.json();
   }
 

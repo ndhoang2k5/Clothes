@@ -34,6 +34,16 @@ export const CATEGORIES = [
   },
   {
     id: '4',
+    name: 'Body',
+    slug: 'body',
+    icon: (
+      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-100 to-pink-100 flex items-center justify-center">
+        <span className="text-2xl">🩱</span>
+      </div>
+    ),
+  },
+  {
+    id: '5',
     name: 'Phụ kiện',
     slug: 'phu-kien',
     icon: (
@@ -43,7 +53,7 @@ export const CATEGORIES = [
     ),
   },
   {
-    id: '5',
+    id: '6',
     name: 'Box quà tặng',
     slug: 'qua-tang',
     icon: (
@@ -53,7 +63,7 @@ export const CATEGORIES = [
     ),
   },
   {
-    id: '6',
+    id: '7',
     name: 'Combo đi sinh',
     slug: 'di-sinh',
     icon: (
@@ -63,7 +73,7 @@ export const CATEGORIES = [
     ),
   },
   {
-    id: '7',
+    id: '8',
     name: 'Ưu đãi cuối mùa',
     slug: 'uu-dai-cuoi-mua',
     icon: (

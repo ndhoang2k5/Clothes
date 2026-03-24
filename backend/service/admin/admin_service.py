@@ -211,6 +211,115 @@ class AdminService:
         }
 
     @staticmethod
+    def get_order_kpis(db: Session):
+        """
+        KPI tổng quan đơn hàng cho admin dashboard:
+        - Tổng đơn
+        - Số đơn theo trạng thái
+        - Đơn trong tháng hiện tại
+        - Đơn hủy trong tháng hiện tại
+        - Doanh thu tháng hiện tại (không tính đơn đã hủy)
+        - Doanh thu theo 6 tháng gần nhất
+        """
+        now = datetime.datetime.utcnow()
+        month_start = datetime.datetime(now.year, now.month, 1)
+        if now.month == 12:
+            next_month_start = datetime.datetime(now.year + 1, 1, 1)
+        else:
+            next_month_start = datetime.datetime(now.year, now.month + 1, 1)
+
+        total_orders = db.query(func.count(models.Order.id)).scalar() or 0
+
+        status_counts = {
+            "pending": 0,
+            "confirmed": 0,
+            "paid": 0,
+            "shipped": 0,
+            "completed": 0,
+            "cancelled": 0,
+        }
+        grouped_status = (
+            db.query(models.Order.status, func.count(models.Order.id))
+            .group_by(models.Order.status)
+            .all()
+        )
+        for status, count in grouped_status:
+            key = str(status or "").strip().lower()
+            if key in status_counts:
+                status_counts[key] = int(count or 0)
+
+        monthly_orders_q = (
+            db.query(models.Order)
+            .filter(models.Order.created_at >= month_start)
+            .filter(models.Order.created_at < next_month_start)
+        )
+        orders_this_month = monthly_orders_q.count()
+        cancelled_this_month = (
+            monthly_orders_q.filter(models.Order.status == "cancelled").count()
+        )
+
+        revenue_this_month_raw = (
+            db.query(func.coalesce(func.sum(models.Order.total_amount), 0))
+            .filter(models.Order.created_at >= month_start)
+            .filter(models.Order.created_at < next_month_start)
+            .filter(models.Order.status != "cancelled")
+            .scalar()
+        )
+        revenue_this_month = float(revenue_this_month_raw or 0)
+
+        # Build monthly revenue for last 6 months in Python for cross-DB compatibility.
+        history_start = (
+            month_start - datetime.timedelta(days=190)
+        )  # đủ bao phủ 6 tháng gần nhất
+        rows = (
+            db.query(models.Order.created_at, models.Order.total_amount, models.Order.status)
+            .filter(models.Order.created_at >= history_start)
+            .all()
+        )
+
+        month_key_to_revenue: dict[str, float] = {}
+        month_key_to_orders: dict[str, int] = {}
+        for created_at, total_amount, status in rows:
+            if created_at is None:
+                continue
+            key = f"{created_at.year:04d}-{created_at.month:02d}"
+            month_key_to_orders[key] = month_key_to_orders.get(key, 0) + 1
+            if str(status or "").strip().lower() != "cancelled":
+                month_key_to_revenue[key] = month_key_to_revenue.get(key, 0.0) + float(
+                    total_amount or 0
+                )
+
+        # Emit exactly 6 recent months, ordered asc.
+        months: list[tuple[int, int]] = []
+        y, m = month_start.year, month_start.month
+        for i in range(5, -1, -1):
+            yy, mm = y, m - i
+            while mm <= 0:
+                yy -= 1
+                mm += 12
+            months.append((yy, mm))
+
+        revenue_by_month = []
+        for yy, mm in months:
+            key = f"{yy:04d}-{mm:02d}"
+            revenue_by_month.append(
+                {
+                    "month": key,
+                    "orders": int(month_key_to_orders.get(key, 0)),
+                    "revenue": float(month_key_to_revenue.get(key, 0.0)),
+                }
+            )
+
+        return {
+            "total_orders": int(total_orders),
+            "status_counts": status_counts,
+            "orders_this_month": int(orders_this_month),
+            "cancelled_this_month": int(cancelled_this_month),
+            "revenue_this_month": float(revenue_this_month),
+            "revenue_by_month": revenue_by_month,
+        }
+
+    @staticmethod
     def get_order(db: Session, order_id: int):
         order = OrderService.get_by_id(db, order_id)
         if not order:
@@ -568,16 +677,25 @@ class AdminService:
             if slug:
                 slug = str(slug).strip()
                 cat = db.query(models.Category).filter(models.Category.slug == slug).first()
-                if not cat and slug == "uu-dai-cuoi-mua":
-                    db.execute(
-                        text(
-                            "INSERT INTO categories (name, slug, icon, sort_order) "
-                            "VALUES ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 7) "
-                            "ON CONFLICT (slug) DO NOTHING"
+                if not cat and slug in ("uu-dai-cuoi-mua", "body"):
+                    if slug == "uu-dai-cuoi-mua":
+                        db.execute(
+                            text(
+                                "INSERT INTO categories (name, slug, icon, sort_order) "
+                                "VALUES ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 8) "
+                                "ON CONFLICT (slug) DO NOTHING"
+                            )
                         )
-                    )
+                    elif slug == "body":
+                        db.execute(
+                            text(
+                                "INSERT INTO categories (name, slug, icon, sort_order) "
+                                "VALUES ('Body', 'body', '🩱', 4) "
+                                "ON CONFLICT (slug) DO NOTHING"
+                            )
+                        )
                     db.commit()
-                    cat = db.query(models.Category).filter(models.Category.slug == "uu-dai-cuoi-mua").first()
+                    cat = db.query(models.Category).filter(models.Category.slug == slug).first()
                 if cat:
                     data["category_id"] = cat.id
         if "category_id" in data and data["category_id"] is not None:
@@ -944,6 +1062,14 @@ class AdminService:
 
     @staticmethod
     def list_categories(db: Session, active_only: bool = True):
+        db.execute(
+            text(
+                "INSERT INTO categories (name, slug, icon, sort_order) "
+                "VALUES ('Body', 'body', '🩱', 4) "
+                "ON CONFLICT (slug) DO NOTHING"
+            )
+        )
+        db.commit()
         query = db.query(models.Category)
         if active_only:
             query = query.filter(models.Category.is_active == True)  # noqa: E712

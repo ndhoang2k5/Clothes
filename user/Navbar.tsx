@@ -154,6 +154,8 @@ const Navbar: React.FC = () => {
                     <a href="#/products?cat=so-sinh" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Đồ sơ sinh</a>
                     <a href="#/products?cat=be-trai" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Bé trai</a>
                     <a href="#/products?cat=be-gai" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Bé gái</a>
+                    <a href="#/products?cat=body" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Body</a>
+                    <a href="#/products?cat=phu-kien" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Phụ kiện</a>
                     <a href="#/products?cat=uu-dai-cuoi-mua" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Ưu đãi cuối mùa</a>
                 </div>
             </div>

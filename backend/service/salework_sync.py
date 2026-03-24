@@ -100,6 +100,20 @@ def sync_salework(db: Session):
         result["synced"] = 0
         return result
 
+    # First-time Salework sync rule:
+    # - If there is no product imported from Salework yet, create incoming products as inactive
+    #   so admin can manually enable desired items.
+    # - For later syncs, keep default behavior (new products active).
+    has_existing_salework_product = (
+        db.query(models.Product.id)
+        .filter(models.Product.external_source == "salework")
+        .first()
+        is not None
+    )
+    first_sync_mode = not has_existing_salework_product
+    default_new_active = not first_sync_mode
+    result["first_sync_mode"] = first_sync_mode
+
     # Default category for new products (first active category)
     default_category = (
         db.query(models.Category)
@@ -187,7 +201,7 @@ def sync_salework(db: Session):
                 discount_price=None,
                 currency="VND",
                 kind="single",
-                is_active=True,
+                is_active=default_new_active,
                 is_hot=False,
                 is_new=True,
                 is_sale=False,
@@ -230,7 +244,7 @@ def sync_salework(db: Session):
             color=parsed_color,
             stock=stock,
             price_override=price if price > 0 else None,
-            is_active=True,
+            is_active=default_new_active,
         )
         db.add(variant)
         db.commit()

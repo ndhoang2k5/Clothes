@@ -27,3 +27,26 @@
     transform: translateX(100%);
   }
 }
+
+.soft-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.28) rgba(0, 0, 0, 0);
+}
+
+.soft-scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.soft-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.soft-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.28);
+  border-radius: 9999px;
+}
+
+.soft-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.38);
+}

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../services/api';
 import { Collection, Product } from '../types';
 
@@ -7,15 +7,19 @@ const CollectionManagement: React.FC = () => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [editing, setEditing] = useState<Partial<Collection> | null>(null);
+  const [productSearch, setProductSearch] = useState('');
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
-    const [c, p] = await Promise.all([api.adminListCollections(true), api.getProducts()]);
+    const [c, p] = await Promise.all([
+      api.adminListCollections(true),
+      api.adminListProductsPage({ include_inactive: true, page: 1, per_page: 0 }),
+    ]);
     setCollections(c);
-    setProducts(p);
+    setProducts((p as any)?.items || []);
   };
 
   const handleSave = async () => {
@@ -43,12 +47,25 @@ const CollectionManagement: React.FC = () => {
     setEditing({ ...editing, products: newProds });
   };
 
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter((p) => {
+      const skuText = (p.variants || []).map((v) => String((v as any)?.sku || '')).join(' ');
+      const haystack = `${p.id} ${p.name || ''} ${p.category || ''} ${skuText}`.toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [products, productSearch]);
+
   return (
     <div>
       <div className="flex justify-between items-center mb-10">
         <h2 className="text-2xl font-black text-gray-800">Bộ Sưu Tập ({collections.length})</h2>
         <button 
-          onClick={() => setEditing({ name: '', description: '', products: [] })}
+          onClick={() => {
+            setProductSearch('');
+            setEditing({ name: '', description: '', products: [] });
+          }}
           className="bg-pink-500 text-white px-6 py-3 rounded-2xl font-bold hover:bg-pink-600 transition-colors"
         >
           + Tạo BST Mới
@@ -61,7 +78,7 @@ const CollectionManagement: React.FC = () => {
             <div className="h-48 relative overflow-hidden">
                <img src={col.coverImage} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                <div className="absolute top-4 right-4 flex gap-2">
-                 <button onClick={() => setEditing(col)} className="bg-white/90 backdrop-blur p-2 rounded-xl shadow-lg hover:text-pink-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
+                 <button onClick={() => { setProductSearch(''); setEditing(col); }} className="bg-white/90 backdrop-blur p-2 rounded-xl shadow-lg hover:text-pink-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>
                  <button onClick={() => { if(confirm('Xóa?')) api.adminDeleteCollection(col.id).then(fetchData) }} className="bg-white/90 backdrop-blur p-2 rounded-xl shadow-lg hover:text-red-500"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
                </div>
             </div>
@@ -151,8 +168,22 @@ const CollectionManagement: React.FC = () => {
 
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-4 uppercase tracking-widest">Chọn sản phẩm ({editing.products?.length || 0})</label>
+                <div className="mb-3">
+                  <input
+                    type="text"
+                    className="w-full bg-white border border-gray-200 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-pink-500"
+                    placeholder="Tìm theo tên, mã sản phẩm, SKU..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                  />
+                </div>
                 <div className="bg-gray-50 rounded-[2rem] p-6 h-[400px] overflow-y-auto space-y-2">
-                  {products.map(p => (
+                  {filteredProducts.length === 0 && (
+                    <div className="h-full flex items-center justify-center text-sm text-gray-400 font-semibold">
+                      Không tìm thấy sản phẩm phù hợp.
+                    </div>
+                  )}
+                  {filteredProducts.map(p => (
                     <div 
                       key={p.id} 
                       onClick={() => toggleProduct(p.id)}

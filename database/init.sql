@@ -301,10 +301,11 @@ VALUES
     ('Đồ sơ sinh', 'so-sinh', '👶', 1),
     ('Quần áo bé trai', 'be-trai', '👕', 2),
     ('Quần áo bé gái', 'be-gai', '👗', 3),
-    ('Phụ kiện', 'phu-kien', '🧢', 4),
-    ('Box quà tặng', 'qua-tang', '🎁', 5),
-    ('Combo đi sinh', 'di-sinh', '👜', 6),
-    ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 7)
+    ('Body', 'body', '🩱', 4),
+    ('Phụ kiện', 'phu-kien', '🧢', 5),
+    ('Box quà tặng', 'qua-tang', '🎁', 6),
+    ('Combo đi sinh', 'di-sinh', '👜', 7),
+    ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 8)
 ON CONFLICT (slug) DO NOTHING;
 
 -- Không seed sản phẩm test; dữ liệu sản phẩm lấy từ đồng bộ Salework hoặc nhập tay trong Admin.

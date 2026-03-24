@@ -21,6 +21,10 @@ def list_orders(
 ):
     return AdminService.list_orders(db, page=page, per_page=per_page, status=status, q=q, date_from=date_from, date_to=date_to)
 
+@router.get("/orders/kpis")
+def get_order_kpis(db: Session = Depends(get_db)):
+    return AdminService.get_order_kpis(db)
+
 @router.get("/orders/{order_id}")
 def get_order(order_id: int, db: Session = Depends(get_db)):
     out = AdminService.get_order(db, order_id)

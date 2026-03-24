@@ -2,9 +2,10 @@ export const CATEGORIES = [
   { id: '1', name: 'Đồ sơ sinh', icon: '👶', slug: 'so-sinh' },
   { id: '2', name: 'Quần áo bé trai', icon: '👕', slug: 'be-trai' },
   { id: '3', name: 'Quần áo bé gái', icon: '👗', slug: 'be-gai' },
-  { id: '4', name: 'Phụ kiện', icon: '🧢', slug: 'phu-kien' },
-  { id: '5', name: 'Box quà tặng', icon: '🎁', slug: 'qua-tang' },
-  { id: '6', name: 'Combo đi sinh', icon: '👜', slug: 'di-sinh' },
+  { id: '4', name: 'Body', icon: '🩱', slug: 'body' },
+  { id: '5', name: 'Phụ kiện', icon: '🧢', slug: 'phu-kien' },
+  { id: '6', name: 'Box quà tặng', icon: '🎁', slug: 'qua-tang' },
+  { id: '7', name: 'Combo đi sinh', icon: '👜', slug: 'di-sinh' },
 ];
 
 export const TRUST_FEATURES = [

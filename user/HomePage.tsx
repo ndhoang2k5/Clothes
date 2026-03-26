@@ -125,7 +125,7 @@ const HomePage: React.FC = () => {
     if (heroBanners.length <= 1) return;
     const t = window.setInterval(() => {
       setHeroIndex((i) => (i + 1) % heroBanners.length);
-    }, 6000);
+    }, 5000);
     return () => window.clearInterval(t);
   }, [heroBanners.length]);
 
@@ -133,7 +133,7 @@ const HomePage: React.FC = () => {
     if (promoBanners.length <= 1) return;
     const t = window.setInterval(() => {
       setPromoIndex((i) => (i + 1) % promoBanners.length);
-    }, 6000);
+    }, 2000);
     return () => window.clearInterval(t);
   }, [promoBanners.length]);
 
@@ -263,15 +263,15 @@ const HomePage: React.FC = () => {
 
       {/* Quick Categories */}
       <section className="max-w-7xl mx-auto px-4 -mt-16 relative z-10">
-        <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3 md:gap-4">
           {CATEGORIES.filter((cat) => cat.slug !== 'uu-dai-cuoi-mua' && cat.slug !== 'phu-kien').map((cat) => (
             <a 
               key={cat.id}
               href={`#/products?cat=${cat.slug}`}
-              className="bg-[#FFF9F1] p-6 rounded-2xl shadow-sm hover:shadow-xl transition-all text-center flex flex-col items-center group border border-[#E5D6C4]/70"
+              className="bg-[#FFF9F1] h-[92px] sm:h-[108px] md:h-auto md:aspect-square p-3 md:p-6 rounded-xl md:rounded-2xl shadow-sm hover:shadow-xl transition-all text-center flex flex-col items-center justify-center group border border-[#E5D6C4]/50"
             >
-              <span className="text-4xl mb-3 group-hover:scale-125 transition-transform">{cat.icon}</span>
-              <span className="text-sm font-bold text-[#4B3B32]">{cat.name}</span>
+              <span className="text-3xl md:text-4xl mb-2 md:mb-3 group-hover:scale-125 transition-transform">{cat.icon}</span>
+              <span className="text-[11px] leading-4 md:text-sm font-bold text-[#4B3B32] line-clamp-2">{cat.name}</span>
             </a>
           ))}
         </div>
@@ -398,39 +398,32 @@ const HomePage: React.FC = () => {
         <section className="max-w-7xl mx-auto px-4 pb-16">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h2 className="text-2xl md:text-3xl font-black text-gray-800">Bộ sưu tập nổi bật</h2>
+              <h2 className="text-2xl md:text-3xl font-black text-gray-800">Bộ sưu tập</h2>
               <p className="text-gray-500 text-sm">
                 Chọn nhanh theo chủ đề đã được mix sẵn cho bé.
               </p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {collections.slice(0, 4).map((col) => (
+          <div className="hide-scrollbar flex gap-3 md:gap-5 overflow-x-auto pb-2 snap-x snap-mandatory touch-pan-x">
+            {collections.map((col) => (
               <a
                 key={col.id}
                 href={`#/collections?id=${col.id}`}
-                className="group relative h-[260px] md:h-[320px] rounded-[2.5rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 block bg-gray-50"
+                className="group flex-none basis-[72%] sm:basis-[48%] md:basis-[38%] lg:basis-[31%] snap-start block"
               >
-                <img
-                  src={col.coverImage || 'https://picsum.photos/800/500?collection'}
-                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                  alt={col.name}
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-8 flex flex-col justify-end">
-                  <span className="text-pink-300 font-bold uppercase tracking-widest text-xs mb-2">
-                    Bộ sưu tập
-                  </span>
-                  <h3 className="text-2xl font-black text-white mb-2 line-clamp-2 group-hover:text-pink-200 transition-colors">
-                    {col.name}
-                  </h3>
-                  {col.description && (
-                    <p className="text-gray-200 text-sm line-clamp-2 mb-3">{col.description}</p>
-                  )}
-                  <div className="flex items-center gap-2 text-white font-black text-sm group-hover:translate-x-1 transition-transform">
-                    Xem bộ sưu tập
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                    </svg>
+                <div className="relative h-[300px] sm:h-[320px] md:h-[340px] rounded-[2.3rem] overflow-hidden bg-gray-50 shadow-sm">
+                  <img
+                    src={col.coverImage || 'https://picsum.photos/1200/700?collection'}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                    alt={col.name}
+                  />
+                  <div className="absolute inset-x-0 bottom-0 p-4 md:p-5 bg-gradient-to-t from-white/85 via-white/35 to-transparent">
+                    <h3
+                      className="text-[1.15rem] md:text-[1.25rem] leading-tight font-semibold italic text-[#B58A5A] line-clamp-2 text-center max-w-[95%] mx-auto"
+                      style={{ fontFamily: '"Dancing Script","Pacifico","Segoe Script","Brush Script MT",cursive' }}
+                    >
+                      {col.name}
+                    </h3>
                   </div>
                 </div>
               </a>

@@ -126,7 +126,7 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
             </div>
             <h1 className={`text-4xl font-black leading-tight mb-3 ${titleAlignClass} ${titleColorClass}`}>{post.title}</h1>
             {renderMeta.heroIntro && (
-              <div className={`text-[11px] uppercase tracking-[0.14em] text-gray-500/90 font-semibold mb-4 ${titleAlignClass}`}>
+              <div className={`text-xs md:text-sm italic text-gray-500/95 font-medium leading-6 mb-5 ${titleAlignClass}`}>
                 {renderMeta.heroIntro}
               </div>
             )}
@@ -264,7 +264,7 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
                       </div>
                       <div className="p-4">
                         {introText ? (
-                          <div className="text-[11px] uppercase tracking-[0.12em] text-gray-500 font-semibold line-clamp-2 mb-2">
+                          <div className="text-xs italic text-gray-500 font-medium line-clamp-2 mb-2">
                             {introText}
                           </div>
                         ) : null}

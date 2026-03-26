@@ -45,10 +45,48 @@ const COMPANY_INFO = {
   origin: 'Việt Nam',
   hotlineDisplay: '033 667 4688',
   hotlineTel: '0336674688',
-  email: 'hello@unbee.vn',
+  email: 'info@unbee.vn',
   messengerUrl: 'https://www.facebook.com/messages/t/115598328165203',
   facebookUrl: 'https://www.facebook.com/thoitrangunbee/',
+  zaloUrl: 'https://zalo.me/0336674688',
 } as const;
+
+const MobileQuickContacts: React.FC = () => (
+  <div className="md:hidden fixed right-3 bottom-24 z-50 flex flex-col gap-2">
+    <a
+      href={COMPANY_INFO.facebookUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="group w-11 h-11 rounded-full bg-white/85 backdrop-blur-sm text-[#1877F2] shadow-[0_8px_18px_rgba(24,119,242,0.25)] flex items-center justify-center opacity-85 hover:opacity-100 hover:-translate-y-0.5 hover:scale-105 active:scale-95 transition-all duration-200"
+      aria-label="Liên hệ Facebook"
+      title="Facebook"
+    >
+      <svg className="w-5 h-5 group-hover:scale-110 transition-transform" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M22 12a10 10 0 10-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.5-3.88 3.79-3.88 1.1 0 2.25.2 2.25.2v2.46h-1.27c-1.25 0-1.64.78-1.64 1.58V12h2.79l-.45 2.89h-2.34v6.99A10 10 0 0022 12z" />
+      </svg>
+    </a>
+    <a
+      href={COMPANY_INFO.zaloUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="group w-11 h-11 rounded-full bg-white/85 backdrop-blur-sm text-[#0A7CFF] shadow-[0_8px_18px_rgba(10,124,255,0.25)] flex items-center justify-center opacity-85 hover:opacity-100 hover:-translate-y-0.5 hover:scale-105 active:scale-95 transition-all duration-200 font-black text-[10px] tracking-wide"
+      aria-label="Liên hệ Zalo"
+      title="Zalo"
+    >
+      <span className="group-hover:scale-110 transition-transform">Zalo</span>
+    </a>
+    <a
+      href={`tel:${COMPANY_INFO.hotlineTel}`}
+      className="group w-11 h-11 rounded-full bg-white/85 backdrop-blur-sm text-[#22A559] shadow-[0_8px_18px_rgba(34,165,89,0.25)] flex items-center justify-center opacity-85 hover:opacity-100 hover:-translate-y-0.5 hover:scale-105 active:scale-95 transition-all duration-200"
+      aria-label="Gọi hotline"
+      title="Gọi hotline"
+    >
+      <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h2.28a2 2 0 011.94 1.515l.92 3.68a2 2 0 01-.55 1.94l-1.2 1.2a16 16 0 006.27 6.27l1.2-1.2a2 2 0 011.94-.55l3.68.92A2 2 0 0121 16.72V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+      </svg>
+    </a>
+  </div>
+);
 
 const Footer: React.FC = () => (
   <footer className="bg-[#3B2C24] text-white pb-10">
@@ -144,6 +182,9 @@ const Footer: React.FC = () => (
               <a href={COMPANY_INFO.facebookUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 hover:border-white/40 hover:text-white transition-colors text-sm">
                 Facebook
               </a>
+              <a href={COMPANY_INFO.zaloUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 hover:border-white/40 hover:text-white transition-colors text-sm">
+                Zalo
+              </a>
             </div>
           </div>
         </div>
@@ -154,7 +195,7 @@ const Footer: React.FC = () => (
           <p className="text-sm font-extrabold uppercase tracking-wide text-white">
             {COMPANY_INFO.legalName}
           </p>
-          <p className="text-sm leading-relaxed">Mã số doanh nghiệp: {COMPANY_INFO.taxCode}</p>
+          <p className="text-sm leading-relaxed">Mã số thuế: {COMPANY_INFO.taxCode}</p>
           <p className="text-sm leading-relaxed flex items-start gap-2">
             <svg className="w-4 h-4 mt-0.5 text-[#D6A86A] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
@@ -185,6 +226,9 @@ const Footer: React.FC = () => (
               </a>
               <a href={COMPANY_INFO.facebookUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 hover:border-white/40 hover:text-white transition-colors text-sm">
                 Facebook
+              </a>
+              <a href={COMPANY_INFO.zaloUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-white/20 hover:border-white/40 hover:text-white transition-colors text-sm">
+                Zalo
               </a>
             </div>
           </div>
@@ -317,6 +361,7 @@ const App: React.FC = () => {
       <CartProvider>
         <div className="flex flex-col min-h-screen bg-[#F8F3EC]">
           <Navbar />
+          <MobileQuickContacts />
           <main className="flex-grow min-h-[80vh]">
             {renderRoute()}
           </main>

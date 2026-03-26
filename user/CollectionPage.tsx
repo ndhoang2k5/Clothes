@@ -58,15 +58,21 @@ const CollectionPage: React.FC = () => {
             className="w-full h-full object-cover" 
             alt={activeCollection.name}
           />
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-center px-4">
-            <div className="max-w-3xl">
-              <h1 className="text-4xl md:text-6xl font-black text-white mb-6 animate-in fade-in slide-in-from-top-4 duration-700">{activeCollection.name}</h1>
-              <p className="text-white/90 text-lg md:text-xl font-medium leading-relaxed">{activeCollection.description}</p>
-            </div>
-          </div>
+          <div className="absolute inset-0 bg-black/25" />
         </div>
 
         <div className="max-w-7xl mx-auto px-4 py-20">
+          {activeCollection.description && (
+            <section className="mb-12 md:mb-14">
+              <div className="rounded-[1.75rem] bg-white border border-gray-100 p-6 md:p-8">
+                <h3 className="text-2xl font-black text-gray-800 mb-4">Giới thiệu bộ sưu tập</h3>
+                <p className="text-gray-600 leading-8 whitespace-pre-line">
+                  {activeCollection.description}
+                </p>
+              </div>
+            </section>
+          )}
+
           <div className="flex items-center justify-between mb-12">
             <h2 className="text-3xl font-black text-gray-800">Sản phẩm trong bộ sưu tập</h2>
             <div className="text-pink-500 font-bold bg-pink-50 px-4 py-2 rounded-full">

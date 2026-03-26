@@ -234,6 +234,15 @@ def merge_products(data: dict, db: Session = Depends(get_db)):
 def salework_sync(db: Session = Depends(get_db)):
     """Gọi API Salework, đồng bộ sản phẩm theo mã SKU (code)."""
     result = sync_salework(db)
+    if not result or not result.get("success"):
+        msg = None
+        try:
+            errs = result.get("errors") if isinstance(result, dict) else None
+            if isinstance(errs, list) and errs:
+                msg = str(errs[0])
+        except Exception:
+            msg = None
+        raise HTTPException(status_code=400, detail=msg or "Không thể đồng bộ Salework")
     return result
 
 

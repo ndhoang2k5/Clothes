@@ -421,8 +421,11 @@ class ApiService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
-    if (!res.ok) throw new Error('Không thể đồng bộ Salework');
-    const data = await res.json();
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = data?.detail;
+      throw new Error(typeof detail === 'string' ? detail : 'Không thể đồng bộ Salework');
+    }
     return {
       synced: Number(data.synced || data.synced_count || 0),
       created_products: Number(data.created_products || 0),

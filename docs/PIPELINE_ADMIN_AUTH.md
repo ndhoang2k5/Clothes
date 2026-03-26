@@ -218,6 +218,13 @@ Read
 docker compose up -d --build
 ```
 
+**Salework sync (production):**
+
+- Bắt buộc set trong `.env`:
+  - `SALEWORK_CLIENT_ID`
+  - `SALEWORK_TOKEN`
+- Nếu thiếu cấu hình, `POST /api/admin/salework/sync` sẽ trả **400** với `detail` rõ lỗi để debug nhanh.
+
 **Bật HTTPS (khuyến nghị) bằng Caddy (Let’s Encrypt, auto renew):**
 
 - Điều kiện:

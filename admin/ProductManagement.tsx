@@ -189,6 +189,9 @@ const ProductManagement: React.FC = () => {
     try {
       const result = await api.adminSaleworkSync();
       setSyncResult(result);
+      if (result.errors?.length) {
+        setError(result.errors.join('\n'));
+      }
       const updated = await api.adminListProducts(true);
       setProducts(updated);
     } catch (e: any) {
@@ -226,6 +229,11 @@ const ProductManagement: React.FC = () => {
               mã · tạo mới <span className="font-bold text-gray-700">{syncResult.created_products}</span>{' '}
               sản phẩm · cập nhật{' '}
               <span className="font-bold text-gray-700">{syncResult.updated_variants}</span> variants
+              {syncResult.errors?.length ? (
+                <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-red-700 whitespace-pre-wrap">
+                  {syncResult.errors.join('\n')}
+                </div>
+              ) : null}
             </div>
           )}
         </div>

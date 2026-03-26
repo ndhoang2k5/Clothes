@@ -199,6 +199,37 @@ Read
 - Bật HTTPS cho cả shop + admin.
 - (Tuỳ chọn) Chặn `/admin` bằng Basic Auth hoặc IP allowlist để giảm brute-force/scan.
 
+**Deploy Docker (phương án A: cùng domain `unbee.vn`):**
+
+- Route gợi ý:
+  - Shop: `https://unbee.vn/`
+  - Admin: `https://unbee.vn/admin/`
+  - API: `https://unbee.vn/api/...`
+  - Static uploads: `https://unbee.vn/static/...`
+- Repo đã có `docker-compose.yml` (production) + Nginx proxy nội bộ. HTTPS được terminate ở Caddy (Let’s Encrypt).
+- Build-time cho shop/admin cần set `VITE_API_ORIGIN=https://unbee.vn` (nếu không app sẽ fallback gọi `:8888`).
+
+**Chạy nhanh bằng Docker Compose (gợi ý):**
+
+- Tạo file env từ mẫu: `.env.prod.example` → `.env` (không commit `.env`)
+- Chạy:
+
+```bash
+docker compose up -d --build
+```
+
+**Bật HTTPS (khuyến nghị) bằng Caddy (Let’s Encrypt, auto renew):**
+
+- Điều kiện:
+  - DNS `A` record của `unbee.vn` trỏ về IP VPS.
+  - Mở inbound port **80** và **443** trên VPS/firewall.
+- Caddy đã nằm trong `docker-compose.override.yml` nên chỉ cần chạy `docker compose up -d --build` là tự có HTTPS.
+
+Sau khi lên xong, truy cập:
+
+- Shop: `https://unbee.vn/`
+- Admin: `https://unbee.vn/admin/`
+
 ---
 
 ## Thứ tự tổng thể với “đưa lên web”

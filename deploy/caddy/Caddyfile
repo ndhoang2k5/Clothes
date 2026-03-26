@@ -1,0 +1,13 @@
+{
+  # Email dùng cho Let's Encrypt (đổi nếu muốn)
+  email admin@unbee.vn
+}
+
+# One domain: shop + admin + API
+unbee.vn {
+  encode zstd gzip
+
+  # Forward everything to internal nginx "web" container
+  reverse_proxy web:80
+}
+

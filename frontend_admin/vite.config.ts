@@ -11,6 +11,9 @@ const repoRoot = path.resolve(__dirname, '..');
 export default defineConfig({
   root: __dirname,
   envDir: repoRoot,
+  // Production deploy under https://unbee.vn/admin/
+  // (Keeps shop assets and admin assets separated).
+  base: '/admin/',
   plugins: [react()],
   server: {
     host: '0.0.0.0',

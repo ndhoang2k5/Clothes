@@ -295,6 +295,16 @@ CREATE TABLE IF NOT EXISTS admin_users (
     last_login_at TIMESTAMPTZ
 );
 
+-- Seed admin đầu tiên (PIPELINE_ADMIN_AUTH §1.6). Mật khẩu chỉ lưu dạng bcrypt.
+-- Đăng nhập CMS: email đặt là `globaladmin` (trường email trong DB, không phải username riêng).
+INSERT INTO admin_users (email, password_hash, full_name, is_active)
+SELECT
+    'globaladmin',
+    '$2b$12$mOINgv96fgMMOP7Fu9KuBuMTw5aY8/cI5vOiWZqkNY1w5io5Eunom',
+    'Global admin',
+    true
+WHERE NOT EXISTS (SELECT 1 FROM admin_users WHERE lower(trim(email)) = 'globaladmin');
+
 -- Seed minimal categories (can be managed by Admin later)
 INSERT INTO categories (name, slug, icon, sort_order)
 VALUES

@@ -1,15 +1,25 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// Vite config dành riêng cho frontend_admin (CMS),
-// chạy độc lập trên port 8000.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/** Thư mục gốc monorepo (Clothes/) — dùng chung `.env*` với shop */
+const repoRoot = path.resolve(__dirname, '..');
+
+// Vite config dành cho frontend_admin (CMS), dev port 8000.
 export default defineConfig({
-  root: 'frontend_admin',
+  root: __dirname,
+  envDir: repoRoot,
   plugins: [react()],
   server: {
     host: '0.0.0.0',
     port: 8000,
     strictPort: true,
+  },
+  build: {
+    outDir: path.join(__dirname, 'dist'),
+    emptyOutDir: true,
   },
   resolve: {
     alias: {

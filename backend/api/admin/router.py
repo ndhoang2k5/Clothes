@@ -2,14 +2,45 @@
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from ...service.admin.admin_service import AdminService
+from ...service.auth_service import create_admin_access_token, verify_password, get_current_admin
 from ...service.salework_sync import sync_salework
 from ...database_config import get_db
+from ...entities import models
 from pathlib import Path
 import uuid
+import datetime
 
-router = APIRouter()
+auth_router = APIRouter()
+protected_router = APIRouter(dependencies=[Depends(get_current_admin)])
 
-@router.get("/orders")
+@auth_router.post("/auth/login")
+def admin_login(body: dict = Body(...), db: Session = Depends(get_db)):
+    email = (body.get("email") or "").strip().lower()
+    password = body.get("password") or ""
+    if not email or not password:
+        raise HTTPException(status_code=400, detail="Thiếu email hoặc mật khẩu")
+
+    user = db.query(models.AdminUser).filter(models.AdminUser.email == email).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không đúng")
+    if not verify_password(str(password), str(user.password_hash)):
+        raise HTTPException(status_code=401, detail="Email hoặc mật khẩu không đúng")
+
+    try:
+        user.last_login_at = datetime.datetime.utcnow()
+        db.add(user)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    token = create_admin_access_token(int(user.id))
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "admin": {"id": user.id, "email": user.email, "full_name": user.full_name},
+    }
+
+@protected_router.get("/orders")
 def list_orders(
     page: int = 1,
     per_page: int = 50,
@@ -21,18 +52,18 @@ def list_orders(
 ):
     return AdminService.list_orders(db, page=page, per_page=per_page, status=status, q=q, date_from=date_from, date_to=date_to)
 
-@router.get("/orders/kpis")
+@protected_router.get("/orders/kpis")
 def get_order_kpis(db: Session = Depends(get_db)):
     return AdminService.get_order_kpis(db)
 
-@router.get("/orders/{order_id}")
+@protected_router.get("/orders/{order_id}")
 def get_order(order_id: int, db: Session = Depends(get_db)):
     out = AdminService.get_order(db, order_id)
     if out is None:
         raise HTTPException(status_code=404, detail="Order not found")
     return out
 
-@router.patch("/orders/{order_id}/status")
+@protected_router.patch("/orders/{order_id}/status")
 def update_order_status(order_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
     """
     Body: { status: pending|confirmed|paid|shipped|completed|cancelled }
@@ -46,7 +77,7 @@ def update_order_status(order_id: int, data: dict = Body(...), db: Session = Dep
         raise HTTPException(status_code=404, detail="Order not found")
     return out
 
-@router.get("/customers")
+@protected_router.get("/customers")
 def list_customers(
     q: str | None = None,
     page: int = 1,
@@ -55,25 +86,25 @@ def list_customers(
 ):
     return AdminService.list_customers(db, q=q, page=page, per_page=per_page)
 
-@router.get("/customers/{customer_id}")
+@protected_router.get("/customers/{customer_id}")
 def get_customer(customer_id: int, db: Session = Depends(get_db)):
     out = AdminService.get_customer(db, customer_id)
     if out is None:
         raise HTTPException(status_code=404, detail="Customer not found")
     return out
 
-@router.post("/customers")
+@protected_router.post("/customers")
 def create_customer(data: dict = Body(...), db: Session = Depends(get_db)):
     return AdminService.create_customer(db, data)
 
-@router.patch("/customers/{customer_id}")
+@protected_router.patch("/customers/{customer_id}")
 def update_customer(customer_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
     out = AdminService.update_customer(db, customer_id, data)
     if out is None:
         raise HTTPException(status_code=404, detail="Customer not found")
     return out
 
-@router.get("/vouchers")
+@protected_router.get("/vouchers")
 def list_vouchers(
     q: str | None = None,
     is_active: bool | None = None,
@@ -83,57 +114,57 @@ def list_vouchers(
 ):
     return AdminService.list_vouchers(db, q=q, is_active=is_active, page=page, per_page=per_page)
 
-@router.get("/vouchers/{voucher_id}")
+@protected_router.get("/vouchers/{voucher_id}")
 def get_voucher(voucher_id: int, db: Session = Depends(get_db)):
     out = AdminService.get_voucher(db, voucher_id)
     if out is None:
         raise HTTPException(status_code=404, detail="Voucher not found")
     return out
 
-@router.post("/vouchers")
+@protected_router.post("/vouchers")
 def create_voucher(data: dict = Body(...), db: Session = Depends(get_db)):
     return AdminService.create_voucher(db, data)
 
-@router.patch("/vouchers/{voucher_id}")
+@protected_router.patch("/vouchers/{voucher_id}")
 def update_voucher(voucher_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
     out = AdminService.update_voucher(db, voucher_id, data)
     if out is None:
         raise HTTPException(status_code=404, detail="Voucher not found")
     return out
 
-@router.get("/shipping-rules")
+@protected_router.get("/shipping-rules")
 def list_shipping_rules(active_only: bool | None = None, db: Session = Depends(get_db)):
     return AdminService.list_shipping_rules(db, active_only=active_only)
 
-@router.get("/shipping-rules/{rule_id}")
+@protected_router.get("/shipping-rules/{rule_id}")
 def get_shipping_rule(rule_id: int, db: Session = Depends(get_db)):
     out = AdminService.get_shipping_rule(db, rule_id)
     if out is None:
         raise HTTPException(status_code=404, detail="Shipping rule not found")
     return out
 
-@router.post("/shipping-rules")
+@protected_router.post("/shipping-rules")
 def create_shipping_rule(data: dict = Body(...), db: Session = Depends(get_db)):
     return AdminService.create_shipping_rule(db, data)
 
-@router.patch("/shipping-rules/{rule_id}")
+@protected_router.patch("/shipping-rules/{rule_id}")
 def update_shipping_rule(rule_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
     out = AdminService.update_shipping_rule(db, rule_id, data)
     if out is None:
         raise HTTPException(status_code=404, detail="Shipping rule not found")
     return out
 
-@router.delete("/shipping-rules/{rule_id}")
+@protected_router.delete("/shipping-rules/{rule_id}")
 def delete_shipping_rule(rule_id: int, db: Session = Depends(get_db)):
     if not AdminService.delete_shipping_rule(db, rule_id):
         raise HTTPException(status_code=404, detail="Shipping rule not found")
     return {"ok": True}
 
-@router.get("/categories")
+@protected_router.get("/categories")
 def list_categories(active_only: bool = True, db: Session = Depends(get_db)):
     return AdminService.list_categories(db, active_only=active_only)
 
-@router.get("/products")
+@protected_router.get("/products")
 def list_products(
     include_inactive: bool = True,
     q: str | None = None,
@@ -148,7 +179,7 @@ def list_products(
     )
 
 
-@router.get("/products/picker")
+@protected_router.get("/products/picker")
 def list_products_picker(
     q: str | None = None,
     category: str | None = None,
@@ -160,7 +191,7 @@ def list_products_picker(
     """Lightweight products list for pickers (collections/combo)."""
     return AdminService.list_products_picker(db, q=q, category_slug=category, page=page, per_page=per_page, include_inactive=include_inactive)
 
-@router.get("/products/{product_id}")
+@protected_router.get("/products/{product_id}")
 def get_product(product_id: int, db: Session = Depends(get_db)):
     product = AdminService.get_product(db, product_id)
     if not product:
@@ -169,11 +200,11 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     from ...service.serializers import serialize_product
     return serialize_product(product)
 
-@router.post("/products")
+@protected_router.post("/products")
 def create_product(data: dict = Body(...), db: Session = Depends(get_db)):
     return AdminService.create_product(db, data)
 
-@router.put("/products/{product_id}")
+@protected_router.put("/products/{product_id}")
 def update_product(product_id: int, data: dict = Body(default={}), db: Session = Depends(get_db)):
     data = data or {}
     updated = AdminService.update_product(db, product_id, data)
@@ -181,7 +212,7 @@ def update_product(product_id: int, data: dict = Body(default={}), db: Session =
         raise HTTPException(status_code=404, detail="Product not found")
     return updated
 
-@router.delete("/products/{product_id}")
+@protected_router.delete("/products/{product_id}")
 def delete_product(product_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_product(db, product_id)
     if not ok:
@@ -189,7 +220,7 @@ def delete_product(product_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.post("/products/merge")
+@protected_router.post("/products/merge")
 def merge_products(data: dict, db: Session = Depends(get_db)):
     """Gộp nhiều sản phẩm thành 1. Body: product_ids[], name, category_id, description?, variant_assignments: [{ variant_id, size?, color? }]"""
     merged = AdminService.merge_products(db, data)
@@ -199,20 +230,20 @@ def merge_products(data: dict, db: Session = Depends(get_db)):
     return serialize_product(merged)
 
 
-@router.post("/salework/sync")
+@protected_router.post("/salework/sync")
 def salework_sync(db: Session = Depends(get_db)):
     """Gọi API Salework, đồng bộ sản phẩm theo mã SKU (code)."""
     result = sync_salework(db)
     return result
 
 
-@router.get("/salework/status")
+@protected_router.get("/salework/status")
 def salework_status():
     """Trạng thái đồng bộ Salework (last_sync có thể mở rộng sau)."""
     return {"last_sync_at": None, "message": "Gọi POST /api/admin/salework/sync để đồng bộ."}
 
 
-@router.post("/products/{product_id}/variants")
+@protected_router.post("/products/{product_id}/variants")
 def add_variant(product_id: int, data: dict, db: Session = Depends(get_db)):
     v = AdminService.create_variant(db, product_id, data)
     if not v:
@@ -220,7 +251,7 @@ def add_variant(product_id: int, data: dict, db: Session = Depends(get_db)):
     from ...service.serializers import serialize_variant
     return serialize_variant(v)
 
-@router.put("/variants/{variant_id}")
+@protected_router.put("/variants/{variant_id}")
 def update_variant(variant_id: int, data: dict, db: Session = Depends(get_db)):
     v = AdminService.update_variant(db, variant_id, data)
     if not v:
@@ -228,14 +259,14 @@ def update_variant(variant_id: int, data: dict, db: Session = Depends(get_db)):
     from ...service.serializers import serialize_variant
     return serialize_variant(v)
 
-@router.delete("/variants/{variant_id}")
+@protected_router.delete("/variants/{variant_id}")
 def delete_variant(variant_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_variant(db, variant_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Variant not found")
     return {"ok": True}
 
-@router.post("/products/{product_id}/images")
+@protected_router.post("/products/{product_id}/images")
 def add_product_image(product_id: int, data: dict, db: Session = Depends(get_db)):
     img = AdminService.add_product_image(db, product_id, data)
     if not img:
@@ -249,7 +280,7 @@ def add_product_image(product_id: int, data: dict, db: Session = Depends(get_db)
         "is_primary": img.is_primary,
     }
 
-@router.delete("/product-images/{image_id}")
+@protected_router.delete("/product-images/{image_id}")
 def delete_product_image(image_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_product_image(db, image_id)
     if not ok:
@@ -257,7 +288,7 @@ def delete_product_image(image_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.post("/product-images/{image_id}/set-primary")
+@protected_router.post("/product-images/{image_id}/set-primary")
 def set_product_image_primary(image_id: int, db: Session = Depends(get_db)):
     ok = AdminService.set_product_image_primary(db, image_id)
     if not ok:
@@ -265,7 +296,7 @@ def set_product_image_primary(image_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.get("/products/{product_id}/combo-items")
+@protected_router.get("/products/{product_id}/combo-items")
 def list_combo_items(product_id: int, db: Session = Depends(get_db)):
     items = AdminService.list_combo_items(db, product_id)
     if items is None:
@@ -273,7 +304,7 @@ def list_combo_items(product_id: int, db: Session = Depends(get_db)):
     return items
 
 
-@router.post("/products/{product_id}/combo-items")
+@protected_router.post("/products/{product_id}/combo-items")
 def add_combo_item(product_id: int, data: dict, db: Session = Depends(get_db)):
     variant_id = int(data.get("component_variant_id"))
     quantity = int(data.get("quantity") or 1)
@@ -283,7 +314,7 @@ def add_combo_item(product_id: int, data: dict, db: Session = Depends(get_db)):
     return items
 
 
-@router.put("/products/{product_id}/combo-items/{variant_id}")
+@protected_router.put("/products/{product_id}/combo-items/{variant_id}")
 def update_combo_item(product_id: int, variant_id: int, data: dict, db: Session = Depends(get_db)):
     quantity = int(data.get("quantity") or 1)
     items = AdminService.update_combo_item(db, product_id, variant_id, quantity)
@@ -292,14 +323,14 @@ def update_combo_item(product_id: int, variant_id: int, data: dict, db: Session 
     return items
 
 
-@router.delete("/products/{product_id}/combo-items/{variant_id}")
+@protected_router.delete("/products/{product_id}/combo-items/{variant_id}")
 def delete_combo_item(product_id: int, variant_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_combo_item(db, product_id, variant_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Combo item not found")
     return {"ok": True}
 
-@router.post("/variants/{variant_id}/images")
+@protected_router.post("/variants/{variant_id}/images")
 def add_variant_image(variant_id: int, data: dict, db: Session = Depends(get_db)):
     img = AdminService.add_variant_image(db, variant_id, data)
     if not img:
@@ -313,7 +344,7 @@ def add_variant_image(variant_id: int, data: dict, db: Session = Depends(get_db)
         "is_primary": img.is_primary,
     }
 
-@router.delete("/variant-images/{image_id}")
+@protected_router.delete("/variant-images/{image_id}")
 def delete_variant_image(image_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_variant_image(db, image_id)
     if not ok:
@@ -321,12 +352,12 @@ def delete_variant_image(image_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.get("/collections")
+@protected_router.get("/collections")
 def list_collections(include_inactive: bool = True, db: Session = Depends(get_db)):
     return AdminService.list_collections(db, include_inactive=include_inactive)
 
 
-@router.get("/collections/{collection_id}")
+@protected_router.get("/collections/{collection_id}")
 def get_collection(collection_id: int, db: Session = Depends(get_db)):
     col = AdminService.get_collection(db, collection_id)
     if not col:
@@ -335,7 +366,7 @@ def get_collection(collection_id: int, db: Session = Depends(get_db)):
     return serialize_collection(col)
 
 
-@router.post("/collections")
+@protected_router.post("/collections")
 def create_collection(data: dict, db: Session = Depends(get_db)):
     created = AdminService.create_collection(db, data)
     if not created:
@@ -343,7 +374,7 @@ def create_collection(data: dict, db: Session = Depends(get_db)):
     return created
 
 
-@router.put("/collections/{collection_id}")
+@protected_router.put("/collections/{collection_id}")
 def update_collection(collection_id: int, data: dict, db: Session = Depends(get_db)):
     updated = AdminService.update_collection(db, collection_id, data)
     if not updated:
@@ -351,24 +382,24 @@ def update_collection(collection_id: int, data: dict, db: Session = Depends(get_
     return updated
 
 
-@router.delete("/collections/{collection_id}")
+@protected_router.delete("/collections/{collection_id}")
 def delete_collection(collection_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_collection(db, collection_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Collection not found")
     return {"ok": True}
 
-@router.get("/banners")
+@protected_router.get("/banners")
 def list_banners(slot: str | None = None, active_only: bool = True, db: Session = Depends(get_db)):
     return AdminService.list_banners(db, slot=slot, active_only=active_only)
 
 
-@router.post("/banners")
+@protected_router.post("/banners")
 def create_banner(data: dict = Body(...), db: Session = Depends(get_db)):
     return AdminService.create_banner(db, data)
 
 
-@router.put("/banners/{banner_id}")
+@protected_router.put("/banners/{banner_id}")
 def update_banner(banner_id: int, data: dict = Body(...), db: Session = Depends(get_db)):
     updated = AdminService.update_banner(db, banner_id, data)
     if not updated:
@@ -376,7 +407,7 @@ def update_banner(banner_id: int, data: dict = Body(...), db: Session = Depends(
     return updated
 
 
-@router.delete("/banners/{banner_id}")
+@protected_router.delete("/banners/{banner_id}")
 def delete_banner(banner_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_banner(db, banner_id)
     if not ok:
@@ -384,7 +415,7 @@ def delete_banner(banner_id: int, db: Session = Depends(get_db)):
     return {"ok": True}
 
 
-@router.post("/upload-image")
+@protected_router.post("/upload-image")
 def upload_image(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="Only image uploads are supported")
@@ -405,7 +436,7 @@ def upload_image(file: UploadFile = File(...)):
     return {"url": f"/static/uploads/{name}"}
 
 
-@router.get("/blogs")
+@protected_router.get("/blogs")
 def list_blogs(
     category: str | None = None,
     status: str | None = None,
@@ -427,7 +458,7 @@ def list_blogs(
     )
 
 
-@router.get("/blogs/kpis")
+@protected_router.get("/blogs/kpis")
 def get_blog_kpis(
     category: str | None = None,
     date_from: str | None = None,
@@ -437,18 +468,18 @@ def get_blog_kpis(
     return AdminService.get_blog_kpis(db, category=category, date_from=date_from, date_to=date_to)
 
 
-@router.get("/blogs/editor-config")
+@protected_router.get("/blogs/editor-config")
 def get_blog_editor_config(db: Session = Depends(get_db)):
     return AdminService.get_blog_editor_config(db)
 
 
-@router.put("/blogs/editor-config")
+@protected_router.put("/blogs/editor-config")
 def update_blog_editor_config(data: dict = Body(default={}), db: Session = Depends(get_db)):
     data = data or {}
     return AdminService.set_blog_editor_config(db, data)
 
 
-@router.post("/blogs")
+@protected_router.post("/blogs")
 def create_blog(data: dict, db: Session = Depends(get_db)):
     try:
         created = AdminService.create_blog(db, data)
@@ -459,7 +490,7 @@ def create_blog(data: dict, db: Session = Depends(get_db)):
     return created
 
 
-@router.put("/blogs/{blog_id}")
+@protected_router.put("/blogs/{blog_id}")
 def update_blog(blog_id: int, data: dict, db: Session = Depends(get_db)):
     try:
         updated = AdminService.update_blog(db, blog_id, data)
@@ -470,9 +501,17 @@ def update_blog(blog_id: int, data: dict, db: Session = Depends(get_db)):
     return updated
 
 
-@router.delete("/blogs/{blog_id}")
+@protected_router.delete("/blogs/{blog_id}")
 def delete_blog(blog_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_blog(db, blog_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Blog not found")
     return {"ok": True}
+
+
+# Export a single router instance for `backend/main.py` to mount.
+# - auth_router: không cần JWT (chỉ để login lấy token admin)
+# - protected_router: bắt buộc JWT admin cho mọi endpoint còn lại
+router = APIRouter()
+router.include_router(auth_router)
+router.include_router(protected_router)

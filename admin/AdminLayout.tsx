@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { api } from '../services/api';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -13,9 +14,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
     return (
       <a 
         href={href} 
-        className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold transition-all duration-300 ${
+        className={`flex items-center gap-3 px-4 py-3.5 rounded-2xl font-bold transition-colors duration-200 ${
           isActive 
-            ? 'bg-pink-500 text-white shadow-lg shadow-pink-200 translate-x-1' 
+            ? 'bg-pink-500 text-white shadow-lg shadow-pink-200' 
             : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
         }`}
       >
@@ -26,9 +27,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC]">
-      {/* Sidebar cố định */}
-      <aside className="w-72 bg-white border-r border-gray-100 sticky top-0 h-screen overflow-y-auto hidden lg:flex flex-col">
+    <div className="flex h-screen min-h-0 w-full overflow-hidden bg-[#F8FAFC]">
+      {/* Sidebar cố định theo viewport — tránh nhấp khi scrollbar nội dung xuất hiện */}
+      <aside className="fixed inset-y-0 left-0 z-30 hidden h-screen w-72 flex-shrink-0 flex-col overflow-x-hidden overflow-y-auto border-r border-gray-100 bg-white lg:flex">
         <div className="p-8 border-b border-gray-50 flex items-center gap-3">
             <div className="w-12 h-12 bg-pink-500 rounded-[1.25rem] flex items-center justify-center text-white font-black text-2xl shadow-xl shadow-pink-100">U</div>
             <div>
@@ -90,16 +91,23 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
         </nav>
 
         <div className="p-6 border-t border-gray-50">
-            <button className="flex items-center gap-3 px-4 py-3 w-full text-red-500 font-bold rounded-2xl hover:bg-red-50 transition-colors">
+            <button
+              type="button"
+              className="flex items-center gap-3 px-4 py-3 w-full text-red-500 font-bold rounded-2xl hover:bg-red-50 transition-colors"
+              onClick={() => {
+                api.adminAuthLogout();
+                window.location.hash = '#/admin/login';
+              }}
+            >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
                 Đăng xuất
             </button>
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <div className="flex-grow flex flex-col h-screen overflow-hidden">
-        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-10 flex-shrink-0">
+      {/* Main: chừa đúng w-72 cho sidebar cố định (desktop) */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden lg:ml-72">
+        <header className="flex h-20 flex-shrink-0 items-center justify-between border-b border-gray-100 bg-white px-6 md:px-10">
             <div className="flex items-center gap-4">
                 <h1 className="text-xl font-black text-gray-800 tracking-tight">Hệ thống quản trị Unbee</h1>
             </div>
@@ -119,7 +127,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children }) => {
             </div>
         </header>
 
-        <main className="flex-grow overflow-y-auto p-10">
+        <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-6 md:p-10 [scrollbar-gutter:stable]">
             {children}
         </main>
       </div>

@@ -9,6 +9,11 @@ lerna-debug.log*
 
 node_modules
 dist
+
+# Env Vite (VITE_API_ORIGIN, …) — giữ `.env.example` trong repo
+.env
+.env.*
+!.env.example
 dist-ssr
 *.local
 

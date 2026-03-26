@@ -1,5 +1,6 @@
 
 import uvicorn
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,10 +11,24 @@ from .middleware.rate_limit import SimpleRateLimitMiddleware
 
 app = FastAPI(title="Unbee Multi-Tier API")
 
+def _parse_cors_origins(raw: str | None) -> list[str]:
+    if raw is None:
+        return ["*"]
+    s = (raw or "").strip()
+    if not s:
+        return ["*"]
+    if s == "*":
+        return ["*"]
+    return [o.strip().rstrip("/") for o in s.split(",") if o.strip()]
+
+
+cors_origins = _parse_cors_origins(os.getenv("CORS_ALLOWED_ORIGINS"))
+cors_allow_credentials = False if cors_origins == ["*"] else True
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_credentials=cors_allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -23,6 +38,8 @@ app.add_middleware(
 app.add_middleware(
     SimpleRateLimitMiddleware,
     rules=[
+        # Login: tight burst + slow refill (anti brute-force; per IP).
+        ("/api/admin/auth/login", 8, 1 / 60.0),
         ("/api/admin/orders", 30, 3.0),      # ~30 burst, ~3 req/s refill
         ("/api/admin/products", 30, 3.0),
         ("/api/admin/customers", 30, 3.0),

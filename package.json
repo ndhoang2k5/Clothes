@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:admin": "vite --config frontend_admin/vite.config.ts",
+    "build:admin": "tsc && vite build --config frontend_admin/vite.config.ts",
+    "preview:admin": "vite preview --config frontend_admin/vite.config.ts --host 0.0.0.0 --port 4173"
   },
   "dependencies": {
     "react": "^19.0.0",

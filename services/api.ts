@@ -110,6 +110,72 @@ class ApiService {
     }
   }
 
+  private static readonly ADMIN_TOKEN_KEY = 'unbee_admin_token';
+
+  private getAdminToken(): string | null {
+    try {
+      return localStorage.getItem(ApiService.ADMIN_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  private setAdminToken(token: string | null) {
+    try {
+      if (!token) localStorage.removeItem(ApiService.ADMIN_TOKEN_KEY);
+      else localStorage.setItem(ApiService.ADMIN_TOKEN_KEY, token);
+    } catch {
+      // ignore
+    }
+  }
+
+  adminAuthHasToken(): boolean {
+    return !!this.getAdminToken();
+  }
+
+  adminAuthLogout() {
+    this.setAdminToken(null);
+  }
+
+  async adminAuthLogin(email: string, password: string): Promise<{
+    access_token: string;
+    token_type: string;
+    admin?: { id: number; email: string; full_name?: string | null };
+  }> {
+    const res = await fetch(`${this.adminBaseUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const detail = data?.detail;
+      throw new Error(typeof detail === 'string' ? detail : 'Đăng nhập thất bại');
+    }
+    const token = data?.access_token;
+    if (!token) throw new Error('Phản hồi đăng nhập không hợp lệ');
+    this.setAdminToken(String(token));
+    return data;
+  }
+
+  private async adminFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+    const baseInit = init ?? {};
+    const headers = new Headers(baseInit.headers ?? undefined);
+    const t = this.getAdminToken();
+    if (t) headers.set('Authorization', `Bearer ${t}`);
+    const res = await fetch(input, { ...baseInit, headers });
+    if (res.status === 401) {
+      const u = typeof input === 'string' ? input : String(input);
+      if (!u.includes('/auth/login')) {
+        this.setAdminToken(null);
+        if (typeof window !== 'undefined' && !window.location.hash.startsWith('#/admin/login')) {
+          window.location.hash = '#/admin/login';
+        }
+      }
+    }
+    return res;
+  }
+
   private products: Product[] = JSON.parse(localStorage.getItem('unbee_products') || JSON.stringify(INITIAL_PRODUCTS));
   private banners: Banner[] = JSON.parse(localStorage.getItem('unbee_banners') || JSON.stringify(INITIAL_BANNERS));
   private orders: Order[] = JSON.parse(localStorage.getItem('unbee_orders') || JSON.stringify(INITIAL_ORDERS));
@@ -315,8 +381,8 @@ class ApiService {
   }
 
   async adminListProducts(include_inactive: boolean = true): Promise<Product[]> {
-    const res = await fetch(
-      `${this.adminBaseUrl}/products?include_inactive=${include_inactive ? 'true' : 'false'}`
+    const res = await this.adminFetch(
+      `${this.adminBaseUrl}/products?include_inactive=${include_inactive ? 'true' : 'false'}`,
     );
     if (!res.ok) throw new Error('API Error');
     const data: any = await res.json();
@@ -337,7 +403,7 @@ class ApiService {
     if (params?.category) qs.set('category', params.category);
     if (params?.page) qs.set('page', String(params.page));
     if (params?.per_page !== undefined) qs.set('per_page', String(params.per_page));
-    const res = await fetch(`${this.adminBaseUrl}/products?${qs.toString()}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products?${qs.toString()}`);
     if (!res.ok) throw new Error('API Error');
     const data: any = await res.json();
     const items: any[] = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : [];
@@ -350,7 +416,7 @@ class ApiService {
   }
 
   async adminSaleworkSync(): Promise<{ synced: number; created_products: number; updated_variants: number; errors: string[] }> {
-    const res = await fetch(`${this.adminBaseUrl}/salework/sync`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/salework/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -373,7 +439,7 @@ class ApiService {
     if (params.include_inactive !== undefined) {
       qs.set('include_inactive', params.include_inactive ? 'true' : 'false');
     }
-    const res = await fetch(`${this.adminBaseUrl}/products/picker?${qs.toString()}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products/picker?${qs.toString()}`);
     if (!res.ok) throw new Error('API Error');
     const data: any = await res.json();
     const items = Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [];
@@ -403,7 +469,7 @@ class ApiService {
         color: va.color ?? null,
       })),
     };
-    const res = await fetch(`${this.adminBaseUrl}/products/merge`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products/merge`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -414,7 +480,7 @@ class ApiService {
   }
 
   async adminListCategories(active_only: boolean = true): Promise<Category[]> {
-    const res = await fetch(`${this.adminBaseUrl}/categories?active_only=${active_only ? 'true' : 'false'}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/categories?active_only=${active_only ? 'true' : 'false'}`);
     if (!res.ok) throw new Error('API Error');
     const data: any[] = await res.json();
     return data.map((c) => ({
@@ -447,7 +513,7 @@ class ApiService {
         price_override: v.price ?? null,
       })),
     };
-    const res = await fetch(`${this.adminBaseUrl}/products`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -475,7 +541,7 @@ class ApiService {
     if (patchAny.category_id !== undefined && patchAny.category_id !== null) {
       payload.category_id = patchAny.category_id;
     }
-    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products/${Number(productId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -495,12 +561,12 @@ class ApiService {
   }
 
   async adminDeleteProduct(productId: string): Promise<void> {
-    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}`, { method: 'DELETE' });
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products/${Number(productId)}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('API Error');
   }
 
   async adminAddVariant(productId: string, data: { size: string; color: string; stock: number; price?: number }) {
-    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}/variants`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products/${Number(productId)}/variants`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -520,7 +586,7 @@ class ApiService {
     if (data.color !== undefined) body.color = data.color;
     if (data.stock !== undefined) body.stock = data.stock;
     if (data.price !== undefined) body.price_override = data.price ?? null;
-    const res = await fetch(`${this.adminBaseUrl}/variants/${Number(variantId)}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/variants/${Number(variantId)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -530,27 +596,27 @@ class ApiService {
   }
 
   async adminDeleteVariant(variantId: string): Promise<void> {
-    const res = await fetch(`${this.adminBaseUrl}/variants/${Number(variantId)}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/variants/${Number(variantId)}`, {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('API Error');
   }
 
   async adminGetProduct(productId: string): Promise<Product> {
-    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products/${Number(productId)}`);
     if (!res.ok) throw new Error('API Error');
     const data: any = await res.json();
     return this.mapBackendProductToFrontend(data);
   }
 
   async adminGetProductRaw(productId: string): Promise<any> {
-    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products/${Number(productId)}`);
     if (!res.ok) throw new Error('API Error');
     return res.json();
   }
 
   async adminDeleteProductImage(imageId: string): Promise<void> {
-    const res = await fetch(`${this.adminBaseUrl}/product-images/${Number(imageId)}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/product-images/${Number(imageId)}`, {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('API Error');
@@ -562,7 +628,7 @@ class ApiService {
     is_primary: boolean = false,
     alt_text?: string,
   ) {
-    const res = await fetch(`${this.adminBaseUrl}/variants/${Number(variantId)}/images`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/variants/${Number(variantId)}/images`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_url, is_primary, alt_text: alt_text ?? null }),
@@ -572,14 +638,14 @@ class ApiService {
   }
 
   async adminDeleteVariantImage(imageId: string): Promise<void> {
-    const res = await fetch(`${this.adminBaseUrl}/variant-images/${Number(imageId)}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/variant-images/${Number(imageId)}`, {
       method: 'DELETE',
     });
     if (!res.ok) throw new Error('API Error');
   }
 
   async adminAttachProductImage(productId: string, image_url: string, is_primary: boolean = false) {
-    const res = await fetch(`${this.adminBaseUrl}/products/${Number(productId)}/images`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/products/${Number(productId)}/images`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_url, is_primary }),
@@ -589,7 +655,7 @@ class ApiService {
   }
 
   async adminSetPrimaryProductImage(imageId: string): Promise<void> {
-    const res = await fetch(`${this.adminBaseUrl}/product-images/${Number(imageId)}/set-primary`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/product-images/${Number(imageId)}/set-primary`, {
       method: 'POST',
     });
     if (!res.ok) throw new Error('API Error');
@@ -676,14 +742,14 @@ class ApiService {
     if (params?.slot) qs.set('slot', params.slot);
     if (params?.active_only !== undefined) qs.set('active_only', String(params.active_only));
     const url = `${this.adminBaseUrl}/banners${qs.toString() ? `?${qs.toString()}` : ''}`;
-    const res = await fetch(url);
+    const res = await this.adminFetch(url);
     if (!res.ok) throw new Error('API Error');
     const data: AdminBanner[] = await res.json();
     return data.map((b) => ({ ...b, image_url: this.toAbsoluteUrl(b.image_url) }));
   }
 
   async adminCreateBanner(payload: Omit<AdminBanner, 'id'>): Promise<AdminBanner> {
-    const res = await fetch(`${this.adminBaseUrl}/banners`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/banners`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -694,7 +760,7 @@ class ApiService {
   }
 
   async adminUpdateBanner(id: number, payload: Partial<Omit<AdminBanner, 'id'>>): Promise<AdminBanner> {
-    const res = await fetch(`${this.adminBaseUrl}/banners/${id}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/banners/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -705,14 +771,14 @@ class ApiService {
   }
 
   async adminDeleteBanner(id: number): Promise<void> {
-    const res = await fetch(`${this.adminBaseUrl}/banners/${id}`, { method: 'DELETE' });
+    const res = await this.adminFetch(`${this.adminBaseUrl}/banners/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('API Error');
   }
 
   async adminUploadImage(file: File): Promise<string> {
     const fd = new FormData();
     fd.append('file', file);
-    const res = await fetch(`${this.adminBaseUrl}/upload-image`, { method: 'POST', body: fd });
+    const res = await this.adminFetch(`${this.adminBaseUrl}/upload-image`, { method: 'POST', body: fd });
     if (!res.ok) throw new Error('Upload failed');
     const data: { url: string } = await res.json();
     return this.toAbsoluteUrl(data.url);
@@ -725,13 +791,13 @@ class ApiService {
     if (params?.is_active !== undefined) qs.set('is_active', params.is_active ? 'true' : 'false');
     if (params?.page) qs.set('page', String(params.page));
     if (params?.per_page) qs.set('per_page', String(params.per_page));
-    const res = await fetch(`${this.adminBaseUrl}/vouchers${qs.toString() ? `?${qs.toString()}` : ''}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/vouchers${qs.toString() ? `?${qs.toString()}` : ''}`);
     if (!res.ok) throw new Error('Không thể tải vouchers');
     return res.json();
   }
 
   async adminCreateVoucher(payload: any) {
-    const res = await fetch(`${this.adminBaseUrl}/vouchers`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/vouchers`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -742,7 +808,7 @@ class ApiService {
   }
 
   async adminUpdateVoucher(id: number, payload: any) {
-    const res = await fetch(`${this.adminBaseUrl}/vouchers/${Number(id)}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/vouchers/${Number(id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -756,13 +822,13 @@ class ApiService {
   async adminListShippingRules(params?: { active_only?: boolean }) {
     const qs = new URLSearchParams();
     if (params?.active_only !== undefined) qs.set('active_only', params.active_only ? 'true' : 'false');
-    const res = await fetch(`${this.adminBaseUrl}/shipping-rules${qs.toString() ? `?${qs.toString()}` : ''}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/shipping-rules${qs.toString() ? `?${qs.toString()}` : ''}`);
     if (!res.ok) throw new Error('Không thể tải shipping rules');
     return res.json();
   }
 
   async adminCreateShippingRule(payload: any) {
-    const res = await fetch(`${this.adminBaseUrl}/shipping-rules`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/shipping-rules`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -773,7 +839,7 @@ class ApiService {
   }
 
   async adminUpdateShippingRule(id: number, payload: any) {
-    const res = await fetch(`${this.adminBaseUrl}/shipping-rules/${Number(id)}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/shipping-rules/${Number(id)}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -784,7 +850,7 @@ class ApiService {
   }
 
   async adminDeleteShippingRule(id: number) {
-    const res = await fetch(`${this.adminBaseUrl}/shipping-rules/${Number(id)}`, { method: 'DELETE' });
+    const res = await this.adminFetch(`${this.adminBaseUrl}/shipping-rules/${Number(id)}`, { method: 'DELETE' });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data as any)?.detail || 'Xóa shipping rule thất bại');
     return data;
@@ -799,7 +865,7 @@ class ApiService {
     if (params?.q) qs.set('q', params.q);
     if (params?.date_from) qs.set('date_from', params.date_from);
     if (params?.date_to) qs.set('date_to', params.date_to);
-    const res = await fetch(`${this.adminBaseUrl}/orders${qs.toString() ? `?${qs.toString()}` : ''}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/orders${qs.toString() ? `?${qs.toString()}` : ''}`);
     if (!res.ok) throw new Error('Không thể tải danh sách đơn hàng');
     return res.json();
   }
@@ -819,20 +885,20 @@ class ApiService {
     revenue_this_month: number;
     revenue_by_month: Array<{ month: string; orders: number; revenue: number }>;
   }> {
-    const res = await fetch(`${this.adminBaseUrl}/orders/kpis`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/orders/kpis`);
     if (!res.ok) throw new Error('Không thể tải KPI đơn hàng');
     return res.json();
   }
 
   async adminGetOrder(orderId: number) {
-    const res = await fetch(`${this.adminBaseUrl}/orders/${Number(orderId)}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/orders/${Number(orderId)}`);
     const data = await res.json();
     if (!res.ok) throw new Error((data as any)?.detail || 'Không thể tải chi tiết đơn hàng');
     return data;
   }
 
   async adminUpdateOrderStatus(orderId: number, status: string) {
-    const res = await fetch(`${this.adminBaseUrl}/orders/${Number(orderId)}/status`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/orders/${Number(orderId)}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ status }),
@@ -866,7 +932,7 @@ class ApiService {
   }
   /** Admin: list collections (includes inactive by default). */
   async adminListCollections(include_inactive: boolean = true): Promise<Collection[]> {
-    const res = await fetch(`${this.adminBaseUrl}/collections?include_inactive=${include_inactive ? 'true' : 'false'}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/collections?include_inactive=${include_inactive ? 'true' : 'false'}`);
     if (!res.ok) throw new Error('API Error');
     const data: any[] = await res.json();
     return data.map((c) => ({
@@ -888,7 +954,7 @@ class ApiService {
       product_ids: (payload.products || []).map((id) => Number(id)),
       slug: payload.slug ?? undefined,
     };
-    const res = await fetch(`${this.adminBaseUrl}/collections`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/collections`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -914,7 +980,7 @@ class ApiService {
       product_ids: (collection.products || []).map((id) => Number(id)),
       slug: (collection as any).slug ?? undefined,
     };
-    const res = await fetch(`${this.adminBaseUrl}/collections/${Number(collection.id)}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/collections/${Number(collection.id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -931,7 +997,7 @@ class ApiService {
   }
 
   async adminDeleteCollection(id: string): Promise<void> {
-    const res = await fetch(`${this.adminBaseUrl}/collections/${Number(id)}`, { method: 'DELETE' });
+    const res = await this.adminFetch(`${this.adminBaseUrl}/collections/${Number(id)}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('API Error');
   }
 
@@ -977,7 +1043,7 @@ class ApiService {
     if (params?.date_from && String(params.date_from).trim()) qs.set('date_from', String(params.date_from).trim());
     if (params?.date_to && String(params.date_to).trim()) qs.set('date_to', String(params.date_to).trim());
     const url = `${this.adminBaseUrl}/blogs${qs.toString() ? `?${qs.toString()}` : ''}`;
-    const res = await fetch(url);
+    const res = await this.adminFetch(url);
     if (!res.ok) throw new Error('API Error');
     const data: any[] = await res.json();
     return data.map((b) => this.mapBackendBlogToFrontend(b, 'tips'));
@@ -994,7 +1060,7 @@ class ApiService {
     status?: Blog['workflowStatus'];
     scheduled_at?: string | null;
   }): Promise<Blog> {
-    const res = await fetch(`${this.adminBaseUrl}/blogs`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/blogs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1018,7 +1084,7 @@ class ApiService {
       scheduled_at: string | null;
     }>,
   ): Promise<Blog> {
-    const res = await fetch(`${this.adminBaseUrl}/blogs/${id}`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/blogs/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -1029,7 +1095,7 @@ class ApiService {
   }
 
   async adminDeleteBlog(id: number): Promise<void> {
-    const res = await fetch(`${this.adminBaseUrl}/blogs/${id}`, { method: 'DELETE' });
+    const res = await this.adminFetch(`${this.adminBaseUrl}/blogs/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('API Error');
   }
 
@@ -1049,19 +1115,19 @@ class ApiService {
     if (params?.category && params.category !== 'all') qs.set('category', String(params.category));
     if (params?.date_from && String(params.date_from).trim()) qs.set('date_from', String(params.date_from).trim());
     if (params?.date_to && String(params.date_to).trim()) qs.set('date_to', String(params.date_to).trim());
-    const res = await fetch(`${this.adminBaseUrl}/blogs/kpis${qs.toString() ? `?${qs.toString()}` : ''}`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/blogs/kpis${qs.toString() ? `?${qs.toString()}` : ''}`);
     if (!res.ok) throw new Error('API Error');
     return await res.json();
   }
 
   async adminGetBlogEditorConfig(): Promise<{ enable_block_editor: boolean }> {
-    const res = await fetch(`${this.adminBaseUrl}/blogs/editor-config`);
+    const res = await this.adminFetch(`${this.adminBaseUrl}/blogs/editor-config`);
     if (!res.ok) throw new Error('API Error');
     return await res.json();
   }
 
   async adminUpdateBlogEditorConfig(payload: { enable_block_editor: boolean }): Promise<{ enable_block_editor: boolean }> {
-    const res = await fetch(`${this.adminBaseUrl}/blogs/editor-config`, {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/blogs/editor-config`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

@@ -154,6 +154,22 @@ class Customer(Base):
     orders = relationship("Order", back_populates="customer")
 
 
+class AdminUser(Base):
+    """
+    Tài khoản đăng nhập CMS (PIPELINE_ADMIN_AUTH).
+    Bảng `admin_users` trong `database/init.sql` / `database/migrate.sql`.
+    Thêm / đổi mật khẩu / khóa tài khoản thực hiện trực tiếp trên database.
+    """
+    __tablename__ = "admin_users"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(Text, nullable=False)
+    full_name = Column(String(255))
+    is_active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    last_login_at = Column(DateTime, nullable=True)
+
+
 class Order(Base):
     """
     Đơn hàng. Các field theo pipeline:

@@ -8,8 +8,8 @@ import os
 import requests
 
 SALEWORK_BASE_URL = os.environ.get("SALEWORK_BASE_URL", "https://salework.net/api/open/stock/v1")
-SALEWORK_CLIENT_ID = os.environ.get("SALEWORK_CLIENT_ID", "2573")
-SALEWORK_TOKEN = os.environ.get("SALEWORK_TOKEN", "/Kx80W61t30ZsEKFXJB4svDkmz98zLZ6Wpkg1V82UNWDRBSzKv7B04cCB1RSPYf5")
+SALEWORK_CLIENT_ID = os.environ.get("SALEWORK_CLIENT_ID", "")
+SALEWORK_TOKEN = os.environ.get("SALEWORK_TOKEN", "")
 
 
 def fetch_product_list():

@@ -7,8 +7,18 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+      /* Một vùng cuộn duy nhất (main trong AdminLayout) — tránh body scrollbar nhấp nháy khi đổi trang */
       body {
         font-family: 'Quicksand', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        overflow: hidden;
+      }
+      #root {
+        height: 100%;
       }
     </style>
   </head>

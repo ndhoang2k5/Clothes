@@ -4,8 +4,10 @@ services:
     image: caddy:2.8-alpine
     container_name: unbee_caddy
     ports:
-      - "80:80"
-      - "443:443"
+      # Bind to the NEW public IP only, so it won't conflict
+      # with other websites using 80/443 on the old IP.
+      - "45.117.177.53:80:80"
+      - "45.117.177.53:443:443"
     volumes:
       - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

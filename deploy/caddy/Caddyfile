@@ -11,13 +11,3 @@ unbee.vn {
   reverse_proxy web:80
 }
 
-# Second website on same VPS (must be behind the same Caddy),
-# so only ONE thing binds ports 80/443.
-#
-# IMPORTANT: `ranbee_web:80` is a placeholder service/container name.
-# Point it to the other website's internal container:port after you attach it to the same Docker network.
-ranbeevn.com {
-  encode zstd gzip
-  reverse_proxy ranbee_web:80
-}
-

@@ -224,6 +224,7 @@ docker compose up -d --build
   - DNS `A` record của `unbee.vn` trỏ về IP VPS.
   - Mở inbound port **80** và **443** trên VPS/firewall.
 - Caddy đã nằm trong `docker-compose.override.yml` nên chỉ cần chạy `docker compose up -d --build` là tự có HTTPS.
+  - Nếu VPS có **2 IP public** và IP cũ đang bị web khác chiếm 80/443, hãy bind Caddy vào IP mới (ví dụ `45.117.177.53`) như trong `docker-compose.override.yml`.
 
 Sau khi lên xong, truy cập:
 

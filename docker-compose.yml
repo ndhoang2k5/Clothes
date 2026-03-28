@@ -54,6 +54,9 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # Ảnh upload admin lưu ở backend/static/uploads — không mount thì mỗi lần recreate container là mất file.
+    volumes:
+      - ./backend/static/uploads:/app/backend/static/uploads
 
   web:
     build:

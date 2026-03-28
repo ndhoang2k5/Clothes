@@ -1,15 +1,30 @@
 
 import React from 'react';
 
+const BACKEND_PORT = 8888;
+const getStaticImageUrl = (fileName: string): string => {
+  const env = typeof (import.meta as any)?.env !== 'undefined' ? (import.meta as any).env?.VITE_API_ORIGIN : '';
+  const origin = env && String(env).trim()
+    ? String(env).trim().replace(/\/+$/, '')
+    : (typeof window !== 'undefined'
+      ? `${window.location.protocol}//${window.location.hostname}:${BACKEND_PORT}`
+      : `http://localhost:${BACKEND_PORT}`);
+  return `${origin}/static/images/${encodeURIComponent(fileName)}`;
+};
+
 export const CATEGORIES = [
   {
     id: '1',
     name: 'Đồ sơ sinh',
     slug: 'so-sinh',
     icon: (
-      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-100 to-pink-100 flex items-center justify-center">
-        <span className="text-2xl">👶</span>
-      </div>
+      <img
+        src={getStaticImageUrl('sosinh.png')}
+        alt="Đồ sơ sinh"
+        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        loading="lazy"
+        decoding="async"
+      />
     ),
   },
   {
@@ -17,9 +32,13 @@ export const CATEGORIES = [
     name: 'Quần áo bé trai',
     slug: 'be-trai',
     icon: (
-      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-100 to-blue-100 flex items-center justify-center">
-        <span className="text-2xl">🧒</span>
-      </div>
+      <img
+        src={getStaticImageUrl('boy.png')}
+        alt="Quần áo bé trai"
+        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        loading="lazy"
+        decoding="async"
+      />
     ),
   },
   {
@@ -27,9 +46,13 @@ export const CATEGORIES = [
     name: 'Quần áo bé gái',
     slug: 'be-gai',
     icon: (
-      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-pink-100 to-rose-100 flex items-center justify-center">
-        <span className="text-2xl">👧</span>
-      </div>
+      <img
+        src={getStaticImageUrl('girl.png')}
+        alt="Quần áo bé gái"
+        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        loading="lazy"
+        decoding="async"
+      />
     ),
   },
   {
@@ -37,9 +60,13 @@ export const CATEGORIES = [
     name: 'Body',
     slug: 'body',
     icon: (
-      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-rose-100 to-pink-100 flex items-center justify-center">
-        <span className="text-2xl">🩱</span>
-      </div>
+      <img
+        src={getStaticImageUrl('body.png')}
+        alt="Body"
+        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        loading="lazy"
+        decoding="async"
+      />
     ),
   },
   {
@@ -57,9 +84,13 @@ export const CATEGORIES = [
     name: 'Box quà tặng',
     slug: 'qua-tang',
     icon: (
-      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center">
-        <span className="text-2xl">🎁</span>
-      </div>
+      <img
+        src={getStaticImageUrl('giftbox.png')}
+        alt="Box quà tặng"
+        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        loading="lazy"
+        decoding="async"
+      />
     ),
   },
   {
@@ -67,9 +98,13 @@ export const CATEGORIES = [
     name: 'Combo đi sinh',
     slug: 'di-sinh',
     icon: (
-      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-100 to-teal-100 flex items-center justify-center">
-        <span className="text-2xl">👜</span>
-      </div>
+      <img
+        src={getStaticImageUrl('combo.png')}
+        alt="Combo đi sinh"
+        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        loading="lazy"
+        decoding="async"
+      />
     ),
   },
   {

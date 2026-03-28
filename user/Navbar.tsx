@@ -12,6 +12,15 @@ type SearchSuggestion = {
   discountPrice?: number;
 };
 
+const BACKEND_PORT = 8888;
+const getLogoUrl = (): string => {
+  const env = typeof (import.meta as any)?.env !== 'undefined' ? (import.meta as any).env?.VITE_API_ORIGIN : '';
+  const origin = env && String(env).trim()
+    ? String(env).trim().replace(/\/+$/, '')
+    : `${window.location.protocol}//${window.location.hostname}:${BACKEND_PORT}`;
+  return `${origin}/static/images/${encodeURIComponent('Logo Unbee-01.png')}`;
+};
+
 const Navbar: React.FC = () => {
   const { totalQuantity } = useCart();
   const { customer, logout } = useAuth();
@@ -135,8 +144,13 @@ const Navbar: React.FC = () => {
         <div className="flex justify-between h-20 items-center">
           {/* Logo */}
           <div className="flex-shrink-0 flex items-center cursor-pointer" onClick={() => navigate('#/')}>
-            <span className="text-3xl font-black tracking-tighter text-[#B58A5A]">unbee</span>
-            <div className="w-2 h-2 bg-[#D6A86A] rounded-full ml-1"></div>
+            <img
+              src={getLogoUrl()}
+              alt="Unbee"
+              className="h-[4.25rem] w-auto md:h-[4.75rem] lg:h-20 object-contain object-left"
+              loading="eager"
+              decoding="async"
+            />
           </div>
 
           {/* Desktop Menu */}
@@ -246,8 +260,13 @@ const Navbar: React.FC = () => {
           <div className="absolute inset-x-0 top-0 bg-[#FDF8F0] rounded-b-3xl shadow-xl pt-4 pb-6">
             <div className="max-w-7xl mx-auto px-4 flex items-center justify-between mb-4">
               <div className="flex items-center">
-                <span className="text-2xl font-black tracking-tighter text-[#B58A5A]">unbee</span>
-                <div className="w-2 h-2 bg-[#D6A86A] rounded-full ml-1" />
+                <img
+                  src={getLogoUrl()}
+                  alt="Unbee"
+                  className="h-16 w-auto max-h-[72px] object-contain object-left"
+                  loading="eager"
+                  decoding="async"
+                />
               </div>
               <button
                 className="p-2 rounded-full bg-white shadow-sm text-gray-600"

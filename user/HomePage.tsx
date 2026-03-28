@@ -270,7 +270,7 @@ const HomePage: React.FC = () => {
               href={`#/products?cat=${cat.slug}`}
               className="bg-[#FFF9F1] h-[92px] sm:h-[108px] md:h-auto md:aspect-square p-3 md:p-6 rounded-xl md:rounded-2xl shadow-sm hover:shadow-xl transition-all text-center flex flex-col items-center justify-center group border border-[#E5D6C4]/50"
             >
-              <span className="text-3xl md:text-4xl mb-2 md:mb-3 group-hover:scale-125 transition-transform">{cat.icon}</span>
+              <div className="mb-2 md:mb-3 flex items-center justify-center">{cat.icon}</div>
               <span className="text-[11px] leading-4 md:text-sm font-bold text-[#4B3B32] line-clamp-2">{cat.name}</span>
             </a>
           ))}

@@ -118,13 +118,17 @@ class UserProductService:
             offset = (page - 1) * per_page
             items = query.limit(per_page).offset(offset).all()
             return {
-                "items": [serialize_product_list_item(p) for p in items],
+                "items": [
+                    serialize_product_list_item(p, omit_missing_upload_files=True) for p in items
+                ],
                 "total": total,
                 "page": page,
                 "per_page": per_page,
             }
         return {
-            "items": [serialize_product_list_item(p) for p in query.all()],
+            "items": [
+                serialize_product_list_item(p, omit_missing_upload_files=True) for p in query.all()
+            ],
             "total": total,
             "page": 1,
             "per_page": 0,

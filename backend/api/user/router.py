@@ -122,7 +122,9 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     from ...service.serializers import serialize_product
-    return serialize_product(product)
+
+    # Bỏ URL ảnh upload đã mất file (DB còn path) để shop không hiển thị link hỏng.
+    return serialize_product(product, omit_missing_upload_files=True)
 
 
 @router.get("/products/{product_id}/combo-items")

@@ -1,7 +1,39 @@
 import datetime
+import os
 import re
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, Optional
+
+
+def _backend_static_dir() -> Path:
+    return Path(__file__).resolve().parent.parent / "static"
+
+
+def _local_upload_file_missing(url: Optional[str]) -> bool:
+    """
+    True nếu URL là ảnh upload của hệ thống (/static/uploads/...) nhưng file không còn trên đĩa.
+    URL ngoài hoặc không parse được → coi là không bỏ (để client tự xử lý).
+    """
+    if not url or not isinstance(url, str):
+        return True
+    raw = url.strip()
+    if raw.startswith("http://") or raw.startswith("https://"):
+        try:
+            from urllib.parse import urlparse
+
+            path = urlparse(raw).path or ""
+        except Exception:
+            return False
+    else:
+        path = raw if raw.startswith("/") else f"/{raw}"
+    if "/static/uploads/" not in path:
+        return False
+    rel = path.split("/static/", 1)[-1].lstrip("/")
+    if not rel.startswith("uploads/"):
+        return False
+    fp = _backend_static_dir() / rel.replace("/", os.sep)
+    return not fp.is_file()
 
 
 def _num(v: Any) -> Optional[float]:
@@ -20,7 +52,13 @@ def _dt(v: Any) -> Optional[str]:
     return str(v)
 
 
-def serialize_variant(variant) -> dict:
+def serialize_variant(variant, omit_missing_upload_files: bool = False) -> dict:
+    vimgs = sorted(
+        getattr(variant, "images", []) or [],
+        key=lambda x: (getattr(x, "sort_order", 0), x.id),
+    )
+    if omit_missing_upload_files:
+        vimgs = [img for img in vimgs if not _local_upload_file_missing(getattr(img, "image_url", None))]
     return {
         "id": variant.id,
         "product_id": variant.product_id,
@@ -42,7 +80,7 @@ def serialize_variant(variant) -> dict:
                 "sort_order": getattr(img, "sort_order", 0),
                 "is_primary": getattr(img, "is_primary", False),
             }
-            for img in sorted(getattr(variant, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
+            for img in vimgs
         ],
     }
 
@@ -63,9 +101,11 @@ def serialize_variant_list_item(variant) -> dict:
     }
 
 
-def serialize_product_list_item(product) -> dict:
+def serialize_product_list_item(product, omit_missing_upload_files: bool = False) -> dict:
     """Lightweight product for listing pages (small payload)."""
     imgs = sorted(getattr(product, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
+    if omit_missing_upload_files:
+        imgs = [img for img in imgs if not _local_upload_file_missing(getattr(img, "image_url", None))]
     primary = next((i for i in imgs if getattr(i, "is_primary", False)), None) or (imgs[0] if imgs else None)
     return {
         "id": product.id,
@@ -89,8 +129,10 @@ def serialize_product_list_item(product) -> dict:
     }
 
 
-def serialize_product(product) -> dict:
+def serialize_product(product, omit_missing_upload_files: bool = False) -> dict:
     imgs = sorted(getattr(product, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
+    if omit_missing_upload_files:
+        imgs = [img for img in imgs if not _local_upload_file_missing(getattr(img, "image_url", None))]
     primary = next((i for i in imgs if getattr(i, "is_primary", False)), None) or (imgs[0] if imgs else None)
 
     return {
@@ -121,7 +163,10 @@ def serialize_product(product) -> dict:
             }
             for img in imgs
         ],
-        "variants": [serialize_variant(v) for v in getattr(product, "variants", [])],
+        "variants": [
+            serialize_variant(v, omit_missing_upload_files=omit_missing_upload_files)
+            for v in getattr(product, "variants", [])
+        ],
         "combo_items": [
             {
                 "combo_product_id": getattr(ci, "combo_product_id", None),

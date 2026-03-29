@@ -179,7 +179,14 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
       const originalIds = new Set((editing.variants || []).map((v) => v.id));
       const currentIds = new Set(editingVariants.map((v) => v.id));
 
-      // update + add (ảnh gắn size/màu cho dòng `new-*` chỉ gửi API sau khi có variant id thật)
+      // Xóa variant đã bỏ khỏi danh sách TRƯỚC khi thêm dòng mới — tránh vi phạm UNIQUE (product_id, size, color).
+      for (const id of originalIds) {
+        if (!currentIds.has(id)) {
+          await api.adminDeleteVariant(id);
+        }
+      }
+
+      // Cập nhật / thêm variant (ảnh cho dòng `new-*` chỉ gửi sau khi có id thật)
       for (const v of editingVariants) {
         if (v.id.startsWith('new-')) {
           const created: any = await api.adminAddVariant(editing.id, {
@@ -202,13 +209,6 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
             stock: v.stock,
             price: v.price,
           });
-        }
-      }
-
-      // delete removed
-      for (const id of originalIds) {
-        if (!currentIds.has(id)) {
-          await api.adminDeleteVariant(id);
         }
       }
 
@@ -618,15 +618,23 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
                                   className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:ring-1 focus:ring-pink-500 outline-none"
                                   value={selectedImage?.id ?? ''}
                                   onChange={async (e) => {
-                                    const img = editingImages.find((it) => it.id === e.target.value);
-                                    if (!img || !editing) {
+                                    const val = e.target.value;
+                                    if (!val) {
                                       setEditingVariants((list) => {
                                         const next = [...list];
                                         (next[idx] as any) = { ...(next[idx] as any), image: undefined };
                                         return next;
                                       });
+                                      if (!editing || String(v.id).startsWith('new-')) return;
+                                      try {
+                                        await api.adminClearVariantImages(v.id);
+                                      } catch (err: any) {
+                                        setError(err?.message || 'Không bỏ được ảnh variant');
+                                      }
                                       return;
                                     }
+                                    const img = editingImages.find((it) => it.id === val);
+                                    if (!img || !editing) return;
                                     if (String(v.id).startsWith('new-')) {
                                       setEditingVariants((list) => {
                                         const next = [...list];

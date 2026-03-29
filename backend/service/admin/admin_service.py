@@ -1067,6 +1067,18 @@ class AdminService:
         return True
 
     @staticmethod
+    def clear_variant_images(db: Session, variant_id: int) -> bool:
+        """Xóa toàn bộ ảnh gắn với một variant (khi admin bỏ chọn ảnh trong dropdown)."""
+        variant = db.query(models.ProductVariant).filter(models.ProductVariant.id == variant_id).first()
+        if not variant:
+            return False
+        db.query(models.ProductVariantImage).filter(
+            models.ProductVariantImage.variant_id == variant_id
+        ).delete(synchronize_session=False)
+        db.commit()
+        return True
+
+    @staticmethod
     def list_banners(db: Session, slot: str | None = None, active_only: bool = True):
         query = db.query(models.Banner)
         if slot:

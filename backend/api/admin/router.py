@@ -353,6 +353,15 @@ def add_variant_image(variant_id: int, data: dict, db: Session = Depends(get_db)
         "is_primary": img.is_primary,
     }
 
+
+@protected_router.delete("/variants/{variant_id}/images")
+def clear_variant_images(variant_id: int, db: Session = Depends(get_db)):
+    ok = AdminService.clear_variant_images(db, variant_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Variant not found")
+    return {"ok": True}
+
+
 @protected_router.delete("/variant-images/{image_id}")
 def delete_variant_image(image_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_variant_image(db, image_id)

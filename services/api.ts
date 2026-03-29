@@ -651,6 +651,16 @@ class ApiService {
     if (!res.ok) throw new Error('API Error');
   }
 
+  /** Bỏ toàn bộ ảnh gắn với variant (dropdown «—»). */
+  async adminClearVariantImages(variantId: string): Promise<void> {
+    const vid = Number(variantId);
+    if (!Number.isFinite(vid) || vid <= 0) return;
+    const res = await this.adminFetch(`${this.adminBaseUrl}/variants/${vid}/images`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('API Error');
+  }
+
   async adminAttachProductImage(productId: string, image_url: string, is_primary: boolean = false) {
     const res = await this.adminFetch(`${this.adminBaseUrl}/products/${Number(productId)}/images`, {
       method: 'POST',

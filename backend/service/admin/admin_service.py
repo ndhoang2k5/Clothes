@@ -1035,7 +1035,23 @@ class AdminService:
         variant = db.query(models.ProductVariant).filter(models.ProductVariant.id == variant_id).first()
         if not variant:
             return None
-        img = models.ProductVariantImage(variant_id=variant_id, **data)
+        image_url = (data.get("image_url") or "").strip()
+        if not image_url:
+            return None
+        alt_text = data.get("alt_text")
+        is_primary = bool(data.get("is_primary", True))
+        sort_order = int(data.get("sort_order") or 0)
+        # Admin UI chỉ chọn một ảnh / size-màu: thay thế ảnh cũ thay vì chồng nhiều bản ghi.
+        db.query(models.ProductVariantImage).filter(
+            models.ProductVariantImage.variant_id == variant_id
+        ).delete(synchronize_session=False)
+        img = models.ProductVariantImage(
+            variant_id=variant_id,
+            image_url=image_url,
+            alt_text=alt_text,
+            sort_order=sort_order,
+            is_primary=is_primary,
+        )
         db.add(img)
         db.commit()
         db.refresh(img)

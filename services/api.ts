@@ -631,7 +631,11 @@ class ApiService {
     is_primary: boolean = false,
     alt_text?: string,
   ) {
-    const res = await this.adminFetch(`${this.adminBaseUrl}/variants/${Number(variantId)}/images`, {
+    const vid = Number(variantId);
+    if (!Number.isFinite(vid) || vid <= 0) {
+      throw new Error('Dòng size/màu chưa được lưu. Hãy bấm «Lưu thay đổi» trước, sau đó mở lại để gán ảnh.');
+    }
+    const res = await this.adminFetch(`${this.adminBaseUrl}/variants/${vid}/images`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_url, is_primary, alt_text: alt_text ?? null }),

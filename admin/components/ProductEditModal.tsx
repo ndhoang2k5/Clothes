@@ -29,6 +29,20 @@ type ShippingRuleLite = {
   is_active: boolean;
 };
 
+/** So khớp URL ảnh từ API (path) với URL đã qua getImageUrl (absolute), tránh mất chọn trong dropdown. */
+function imageUrlsEquivalent(a: string | undefined | null, b: string | undefined | null): boolean {
+  if (!a || !b) return false;
+  const norm = (s: string) => {
+    try {
+      const u = new URL(s, 'http://localhost');
+      return `${u.pathname}${u.search}`;
+    } catch {
+      return s;
+    }
+  };
+  return norm(a) === norm(b);
+}
+
 const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onSaved }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -165,15 +179,22 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
       const originalIds = new Set((editing.variants || []).map((v) => v.id));
       const currentIds = new Set(editingVariants.map((v) => v.id));
 
-      // update + add
+      // update + add (ảnh gắn size/màu cho dòng `new-*` chỉ gửi API sau khi có variant id thật)
       for (const v of editingVariants) {
         if (v.id.startsWith('new-')) {
-          await api.adminAddVariant(editing.id, {
+          const created: any = await api.adminAddVariant(editing.id, {
             size: v.size,
             color: v.color,
             stock: v.stock,
             price: v.price,
           });
+          const pendingUrl = (v as any).image as string | undefined;
+          if (pendingUrl && created?.id != null) {
+            const img = editingImages.find((it) => imageUrlsEquivalent(it.url, pendingUrl));
+            if (img) {
+              await api.adminAddVariantImage(String(created.id), img.url, true, img.alt);
+            }
+          }
         } else {
           await api.adminUpdateVariant(v.id, {
             size: v.size,
@@ -560,7 +581,9 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
                         </tr>
                       ) : (
                         editingVariants.map((v, idx) => {
-                          const selectedImage = editingImages.find((img) => img.url === (v as any).image);
+                          const selectedImage = editingImages.find((img) =>
+                            imageUrlsEquivalent(img.url, (v as any).image),
+                          );
                           return (
                             <tr key={v.id} className="border-t border-gray-50">
                               <td className="px-4 py-2 font-mono text-[11px] text-gray-500">{(v as any).sku || '-'}</td>
@@ -600,6 +623,14 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
                                       setEditingVariants((list) => {
                                         const next = [...list];
                                         (next[idx] as any) = { ...(next[idx] as any), image: undefined };
+                                        return next;
+                                      });
+                                      return;
+                                    }
+                                    if (String(v.id).startsWith('new-')) {
+                                      setEditingVariants((list) => {
+                                        const next = [...list];
+                                        (next[idx] as any) = { ...(next[idx] as any), image: img.url };
                                         return next;
                                       });
                                       return;

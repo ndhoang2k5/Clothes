@@ -8,22 +8,24 @@ const SLOT_OPTIONS: Array<{ value: BannerSlot; label: string; desc: string }> = 
   { value: 'home_promo', label: 'Banner khuyến mãi', desc: 'Banner ưu đãi giữa trang' },
   { value: 'home_product_promo', label: 'Khuyến mãi sản phẩm (tên + ảnh)', desc: 'Grid card ưu đãi sản phẩm' },
   { value: 'home_category_feature', label: 'Danh mục nổi bật', desc: 'Banner/ảnh cho danh mục nổi bật' },
-  { value: 'footer_banner', label: 'Banner chân trang', desc: 'Banner cuối trang' },
 ];
 
 /** Kích thước ảnh khuyến nghị (px) cho từng slot — khớp với tỉ lệ hiển thị trên giao diện user. */
-export const BANNER_IMAGE_SIZES: Record<BannerSlot, { width: number; height: number; note?: string }> = {
-  home_hero: { width: 1920, height: 600, note: 'Bìa full ngang, cao 400–600px trên màn hình' },
+export const BANNER_IMAGE_SIZES: Record<BannerSlot, { width: number; height: number; mobile?: { width: number; height: number }; note?: string }> = {
+  home_hero: { width: 1920, height: 600, mobile: { width: 1080, height: 1200 }, note: 'Desktop 16:5, Mobile gần tỉ lệ 9:10 để giảm crop trên màn hình dọc' },
   home_promo: { width: 1920, height: 400, note: 'Banner khuyến mãi giữa trang, cao ~240–280px' },
   home_product_promo: { width: 800, height: 800, note: 'Card vuông (phù hợp hiển thị grid 3 cột)' },
   home_category_feature: { width: 800, height: 352, note: 'Mỗi ô 1/3 cột, hiển thị ~400×176px' },
-  footer_banner: { width: 1920, height: 220, note: 'Dải ngang trước footer, cao ~180–220px' },
 };
 
 const getSlotLabel = (value: string) => SLOT_OPTIONS.find((o) => o.value === value)?.label ?? value;
 const getBannerSizeHint = (slot: string) => {
   const s = BANNER_IMAGE_SIZES[slot as BannerSlot];
   return s ? `${s.width} × ${s.height} px` : '';
+};
+const getBannerMobileSizeHint = (slot: string) => {
+  const s = BANNER_IMAGE_SIZES[slot as BannerSlot];
+  return s?.mobile ? `${s.mobile.width} × ${s.mobile.height} px` : '';
 };
 
 const BannerManagement: React.FC = () => {
@@ -41,6 +43,7 @@ const BannerManagement: React.FC = () => {
     slot: BannerSlot;
     sort_order: number;
     image_url: string;
+    mobile_image_url: string;
     title: string;
     subtitle: string;
     link_url: string;
@@ -49,6 +52,7 @@ const BannerManagement: React.FC = () => {
     slot: 'home_hero',
     sort_order: 0,
     image_url: '',
+    mobile_image_url: '',
     title: '',
     subtitle: '',
     link_url: '',
@@ -79,6 +83,7 @@ const BannerManagement: React.FC = () => {
       slot,
       sort_order: 0,
       image_url: '',
+      mobile_image_url: '',
       title: '',
       subtitle: '',
       link_url: '',
@@ -94,6 +99,7 @@ const BannerManagement: React.FC = () => {
       slot: (b.slot as BannerSlot) || slot,
       sort_order: b.sort_order ?? 0,
       image_url: b.image_url || '',
+      mobile_image_url: b.mobile_image_url || '',
       title: b.title || '',
       subtitle: b.subtitle || '',
       link_url: b.link_url || '',
@@ -118,6 +124,7 @@ const BannerManagement: React.FC = () => {
       return;
     }
     const imagePath = toImagePath(form.image_url);
+    const mobileImagePath = form.mobile_image_url?.trim() ? toImagePath(form.mobile_image_url) : null;
     setSaving(true);
     setError(null);
     try {
@@ -126,6 +133,7 @@ const BannerManagement: React.FC = () => {
           slot: form.slot,
           sort_order: form.sort_order,
           image_url: imagePath,
+          mobile_image_url: mobileImagePath,
           title: form.title || null,
           subtitle: form.subtitle || null,
           link_url: form.link_url || null,
@@ -136,6 +144,7 @@ const BannerManagement: React.FC = () => {
           slot: form.slot,
           sort_order: form.sort_order,
           image_url: imagePath,
+          mobile_image_url: mobileImagePath,
           title: form.title || null,
           subtitle: form.subtitle || null,
           link_url: form.link_url || null,
@@ -172,12 +181,16 @@ const BannerManagement: React.FC = () => {
     }
   };
 
-  const handleUpload = async (file: File) => {
+  const handleUpload = async (file: File, target: 'desktop' | 'mobile') => {
     setUploading(true);
     setError(null);
     try {
       const url = await api.adminUploadImage(file);
-      setForm((s) => ({ ...s, image_url: url }));
+      setForm((s) => ({
+        ...s,
+        image_url: target === 'desktop' ? url : s.image_url,
+        mobile_image_url: target === 'mobile' ? url : s.mobile_image_url,
+      }));
     } catch (e: any) {
       setError(e?.message || 'Upload ảnh thất bại');
     } finally {
@@ -255,8 +268,26 @@ const BannerManagement: React.FC = () => {
               key={b.id}
               className="bg-white border border-gray-100 rounded-[2rem] p-6 flex flex-col md:flex-row gap-8 items-center"
             >
-              <div className="w-full md:w-72 h-36 rounded-2xl overflow-hidden shadow-inner flex-shrink-0 bg-gray-50">
-                <img src={b.image_url} className="w-full h-full object-cover" />
+              <div className="w-full md:w-72 flex-shrink-0 space-y-3">
+                <div>
+                  <div className="mb-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-black uppercase tracking-wide">
+                    Desktop
+                  </div>
+                  <div className="h-36 rounded-2xl overflow-hidden shadow-inner bg-gray-50 border border-gray-100">
+                    <img src={b.image_url} className="w-full h-full object-cover" />
+                  </div>
+                </div>
+                <div>
+                  <div className="mb-1 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-teal-50 text-teal-700 border border-teal-200 text-[10px] font-black uppercase tracking-wide">
+                    Mobile
+                  </div>
+                  <div className="h-20 rounded-2xl overflow-hidden shadow-inner bg-gray-50 border border-gray-100">
+                    <img
+                      src={b.mobile_image_url || b.image_url}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                </div>
               </div>
               <div className="flex-grow w-full">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
@@ -272,7 +303,13 @@ const BannerManagement: React.FC = () => {
                   <h3 className="font-black text-gray-900">{b.title || '(Không tiêu đề)'}</h3>
                 </div>
                 {b.subtitle && <p className="text-sm text-gray-500 mb-1">{b.subtitle}</p>}
-                <p className="text-xs text-gray-400 truncate">{b.image_url}</p>
+                <p className="text-xs text-gray-400 truncate">
+                  <span className="font-bold text-gray-500">Desktop:</span> {b.image_url}
+                </p>
+                <p className="text-xs text-gray-400 truncate">
+                  <span className="font-bold text-gray-500">Mobile:</span>{' '}
+                  {b.mobile_image_url || '(đang dùng chung ảnh desktop)'}
+                </p>
                 {b.link_url && (
                   <p className="text-xs text-pink-500 font-bold mt-1 truncate">Link: {b.link_url}</p>
                 )}
@@ -419,7 +456,7 @@ const BannerManagement: React.FC = () => {
                       className="hidden"
                       onChange={(e) => {
                         const f = e.target.files?.[0];
-                        if (f) void handleUpload(f);
+                        if (f) void handleUpload(f, 'desktop');
                         e.currentTarget.value = '';
                       }}
                       disabled={uploading}
@@ -427,6 +464,45 @@ const BannerManagement: React.FC = () => {
                   </label>
                 </div>
               </div>
+              {form.slot === 'home_hero' && (
+                <div>
+                  <div className="flex items-baseline justify-between gap-2 mb-1">
+                    <label className="block text-[11px] font-black text-gray-400 uppercase">Ảnh banner mobile (tuỳ chọn)</label>
+                    <span className="text-[11px] text-gray-500 whitespace-nowrap">
+                      Khuyến nghị: <strong className="text-gray-700">{getBannerMobileSizeHint(form.slot)}</strong>
+                    </span>
+                  </div>
+                  <div className="flex gap-3 items-center">
+                    <div className="min-w-[120px] w-28 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                      {form.mobile_image_url ? (
+                        <img src={form.mobile_image_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400 text-[10px]">Không dùng ảnh riêng</div>
+                      )}
+                    </div>
+                    <input
+                      className="flex-1 min-w-0 bg-gray-50 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500"
+                      value={form.mobile_image_url}
+                      onChange={(e) => setForm((s) => ({ ...s, mobile_image_url: e.target.value }))}
+                      placeholder="URL ảnh mobile (để trống = dùng ảnh desktop)"
+                    />
+                    <label className="flex-shrink-0 inline-flex items-center justify-center px-4 py-2 bg-gray-900 text-white rounded-lg text-sm font-bold cursor-pointer hover:bg-gray-800">
+                      {uploading ? 'Đang up...' : 'Upload'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) void handleUpload(f, 'mobile');
+                          e.currentTarget.value = '';
+                        }}
+                        disabled={uploading}
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-[11px] font-black text-gray-400 uppercase mb-1">Link URL (tuỳ chọn)</label>
                 <input

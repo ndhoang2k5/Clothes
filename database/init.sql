@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS banners (
     slot TEXT NOT NULL,
     sort_order INT NOT NULL DEFAULT 0,
     image_url TEXT NOT NULL,
+    mobile_image_url TEXT,
     title TEXT,
     subtitle TEXT,
     link_url TEXT,
@@ -284,7 +285,17 @@ INSERT INTO shipping_rules (min_order_total, base_fee, discount_type, discount_v
 SELECT 300000, 30000, 'free', 0, true, 3
 WHERE NOT EXISTS (SELECT 1 FROM shipping_rules WHERE min_order_total = 300000 LIMIT 1);
 
--- 16) Admin users (JWT auth will use this table)
+-- 16) Newsletter subscribers (đăng ký nhận tin ở chân trang)
+CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    is_notified BOOLEAN NOT NULL DEFAULT FALSE,
+    subscribed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notified_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_newsletter_subscribers_pending ON newsletter_subscribers (is_notified, subscribed_at);
+
+-- 17) Admin users (JWT auth will use this table)
 CREATE TABLE IF NOT EXISTS admin_users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,

@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS banners (
     slot TEXT NOT NULL,
     sort_order INT NOT NULL DEFAULT 0,
     image_url TEXT NOT NULL,
+    mobile_image_url TEXT,
     title TEXT,
     subtitle TEXT,
     link_url TEXT,
@@ -127,6 +128,7 @@ CREATE TABLE IF NOT EXISTS banners (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_banners_slot_active ON banners (slot, is_active);
+ALTER TABLE banners ADD COLUMN IF NOT EXISTS mobile_image_url TEXT;
 
 CREATE TABLE IF NOT EXISTS product_images (
     id SERIAL PRIMARY KEY,
@@ -266,6 +268,15 @@ CREATE TABLE IF NOT EXISTS shipping_rules (
 );
 CREATE INDEX IF NOT EXISTS idx_shipping_rules_min_order ON shipping_rules (min_order_total DESC);
 CREATE INDEX IF NOT EXISTS idx_shipping_rules_active_sort ON shipping_rules (is_active, sort_order);
+
+CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+    id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    is_notified BOOLEAN NOT NULL DEFAULT FALSE,
+    subscribed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    notified_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_newsletter_subscribers_pending ON newsletter_subscribers (is_notified, subscribed_at);
 
 CREATE TABLE IF NOT EXISTS admin_users (
     id SERIAL PRIMARY KEY,

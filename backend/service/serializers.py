@@ -274,11 +274,13 @@ def _banner_image_url_for_response(url: Any) -> str:
 
 def serialize_banner(banner) -> dict:
     raw_image = getattr(banner, "image_url", None) or ""
+    raw_mobile_image = getattr(banner, "mobile_image_url", None) or ""
     return {
         "id": banner.id,
         "slot": banner.slot,
         "sort_order": banner.sort_order,
         "image_url": _banner_image_url_for_response(raw_image),
+        "mobile_image_url": _banner_image_url_for_response(raw_mobile_image),
         "title": banner.title,
         "subtitle": getattr(banner, "subtitle", None),
         "link_url": banner.link_url,

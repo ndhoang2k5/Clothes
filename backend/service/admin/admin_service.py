@@ -39,6 +39,15 @@ class AdminService:
         db.commit()
 
     @staticmethod
+    def _ensure_banners_mobile_column(db: Session):
+        """
+        Backward-compatible guard:
+        Nếu DB cũ chưa có cột mobile_image_url thì tự thêm trước khi thao tác banner.
+        """
+        db.execute(text("ALTER TABLE banners ADD COLUMN IF NOT EXISTS mobile_image_url TEXT"))
+        db.commit()
+
+    @staticmethod
     def get_system_config(db: Session, key: str, default_value: dict | None = None):
         AdminService._ensure_system_configs_table(db)
         row = db.execute(
@@ -1080,6 +1089,7 @@ class AdminService:
 
     @staticmethod
     def list_banners(db: Session, slot: str | None = None, active_only: bool = True):
+        AdminService._ensure_banners_mobile_column(db)
         query = db.query(models.Banner)
         if slot:
             query = query.filter(models.Banner.slot == slot)
@@ -1106,9 +1116,12 @@ class AdminService:
 
     @staticmethod
     def create_banner(db: Session, data: dict):
+        AdminService._ensure_banners_mobile_column(db)
         payload = dict(data)
         if "image_url" in payload and payload["image_url"]:
             payload["image_url"] = _normalize_banner_image_url(payload["image_url"])
+        if "mobile_image_url" in payload and payload["mobile_image_url"]:
+            payload["mobile_image_url"] = _normalize_banner_image_url(payload["mobile_image_url"])
         banner = models.Banner(**payload)
         db.add(banner)
         db.commit()
@@ -1117,12 +1130,13 @@ class AdminService:
 
     @staticmethod
     def update_banner(db: Session, banner_id: int, data: dict):
+        AdminService._ensure_banners_mobile_column(db)
         banner = db.query(models.Banner).filter(models.Banner.id == banner_id).first()
         if not banner:
             return None
         for k, v in data.items():
             if hasattr(banner, k):
-                if k == "image_url" and v:
+                if k in ("image_url", "mobile_image_url") and v:
                     v = _normalize_banner_image_url(v)
                 setattr(banner, k, v)
         banner.updated_at = __import__("datetime").datetime.utcnow()
@@ -1132,6 +1146,7 @@ class AdminService:
 
     @staticmethod
     def delete_banner(db: Session, banner_id: int) -> bool:
+        AdminService._ensure_banners_mobile_column(db)
         banner = db.query(models.Banner).filter(models.Banner.id == banner_id).first()
         if not banner:
             return False

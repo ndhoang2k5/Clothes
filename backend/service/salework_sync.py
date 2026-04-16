@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from ..entities import models
 from .salework_client import fetch_product_list, get_stock_total
 import re
+import datetime
+from threading import Lock
 
 
 def _slugify(name: str, code: str) -> str:
@@ -256,3 +258,95 @@ def sync_salework(db: Session):
 
     result["success"] = True
     return result
+
+
+_SYNC_STATE_LOCK = Lock()
+_SYNC_STATE = {
+    "running": False,
+    "last_sync_at": None,
+    "last_success_at": None,
+    "last_error": None,
+    "last_result": None,
+    "auto_enabled": False,
+    "interval_seconds": None,
+}
+
+
+def _utc_now_iso() -> str:
+    return datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+
+def configure_auto_sync(enabled: bool, interval_seconds: int | None):
+    with _SYNC_STATE_LOCK:
+        _SYNC_STATE["auto_enabled"] = bool(enabled)
+        _SYNC_STATE["interval_seconds"] = int(interval_seconds) if interval_seconds else None
+
+
+def get_sync_status() -> dict:
+    with _SYNC_STATE_LOCK:
+        return dict(_SYNC_STATE)
+
+
+def run_salework_sync(db: Session, trigger: str = "manual") -> dict:
+    """
+    Wrapper cho đồng bộ Salework:
+    - Cập nhật trạng thái runtime (running/last_sync_at/last_error/last_result)
+    - Tránh chạy chồng nhiều lượt sync cùng lúc
+    """
+    with _SYNC_STATE_LOCK:
+        if _SYNC_STATE["running"]:
+            return {
+                "success": False,
+                "synced": 0,
+                "created_products": 0,
+                "updated_variants": 0,
+                "errors": ["Đồng bộ Salework đang chạy, vui lòng đợi."],
+                "trigger": trigger,
+            }
+        _SYNC_STATE["running"] = True
+        _SYNC_STATE["last_error"] = None
+
+    try:
+        result = sync_salework(db)
+    except Exception as e:
+        now = _utc_now_iso()
+        with _SYNC_STATE_LOCK:
+            _SYNC_STATE["running"] = False
+            _SYNC_STATE["last_sync_at"] = now
+            _SYNC_STATE["last_error"] = str(e)
+            _SYNC_STATE["last_result"] = {
+                "success": False,
+                "synced": 0,
+                "created_products": 0,
+                "updated_variants": 0,
+                "errors": [str(e)],
+                "trigger": trigger,
+            }
+        return {
+            "success": False,
+            "synced": 0,
+            "created_products": 0,
+            "updated_variants": 0,
+            "errors": [str(e)],
+            "trigger": trigger,
+        }
+
+    now = _utc_now_iso()
+    payload = {
+        "success": bool(result and result.get("success")),
+        "synced": int((result or {}).get("synced") or 0),
+        "created_products": int((result or {}).get("created_products") or 0),
+        "updated_variants": int((result or {}).get("updated_variants") or 0),
+        "errors": list((result or {}).get("errors") or []),
+        "trigger": trigger,
+    }
+    with _SYNC_STATE_LOCK:
+        _SYNC_STATE["running"] = False
+        _SYNC_STATE["last_sync_at"] = now
+        _SYNC_STATE["last_result"] = payload
+        if payload["success"]:
+            _SYNC_STATE["last_success_at"] = now
+            _SYNC_STATE["last_error"] = None
+        elif payload["errors"]:
+            _SYNC_STATE["last_error"] = str(payload["errors"][0])
+    return payload

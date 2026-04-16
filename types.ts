@@ -82,14 +82,22 @@ export type BannerSlot =
   | 'home_hero'
   | 'home_promo'
   | 'home_product_promo'
-  | 'home_category_feature'
-  | 'footer_banner';
+  | 'home_category_feature';
+
+export type NewsletterSubscriber = {
+  id: number;
+  email: string;
+  is_notified: boolean;
+  subscribed_at: string | null;
+  notified_at: string | null;
+};
 
 export interface AdminBanner {
   id: number;
   slot: BannerSlot | (string & {});
   sort_order: number;
   image_url: string;
+  mobile_image_url?: string | null;
   title: string | null;
   subtitle: string | null;
   link_url: string | null;

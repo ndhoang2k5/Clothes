@@ -42,6 +42,7 @@ const HomePage: React.FC = () => {
   const [activeFeaturedTab, setActiveFeaturedTab] = useState<'new' | 'hot' | 'clearance' | 'all'>('new');
   const [clearanceProducts, setClearanceProducts] = useState<Product[]>([]);
   const [quickAddProductId, setQuickAddProductId] = useState<string | null>(null);
+  const [promoOfferModalOpen, setPromoOfferModalOpen] = useState(false);
   const [homeLoading, setHomeLoading] = useState(true);
   const heroTouchStartXRef = useRef<number | null>(null);
   const blogTrackRef = useRef<HTMLDivElement | null>(null);
@@ -176,6 +177,25 @@ const HomePage: React.FC = () => {
     el.scrollTo({ left: target, behavior: 'smooth' });
   };
 
+  const isClearancePromo = (b: AdminBanner) => {
+    const title = String(b.title || '').toLowerCase();
+    const subtitle = String(b.subtitle || '').toLowerCase();
+    const link = String(b.link_url || '').toLowerCase();
+    return (
+      title.includes('ưu đãi theo mùa')
+      || title.includes('uu dai theo mua')
+      || title.includes('ưu đãi cuối mùa')
+      || link.includes('uu-dai-cuoi-mua')
+      || subtitle.includes('ưu đãi')
+    );
+  };
+
+  const handlePromoCtaClick = (e: React.MouseEvent, b: AdminBanner) => {
+    if (!isClearancePromo(b)) return;
+    e.preventDefault();
+    setPromoOfferModalOpen(true);
+  };
+
   if (homeLoading) {
     return (
       <div className="pb-20">
@@ -248,14 +268,18 @@ const HomePage: React.FC = () => {
         >
           {heroBanners.map((slide, i) => (
             <div key={slide.id ?? i} className="flex-shrink-0 h-full relative" style={{ width: `${100 / heroBanners.length}%` }}>
-              <img
-                src={slide.image_url}
-                alt={slide.title || 'Unbee'}
-                className="absolute inset-0 w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#F8F3EC]/80 to-transparent flex items-center px-12 md:px-32">
-                <div className="max-w-md" />
-              </div>
+              <picture className="absolute inset-0 block">
+                <source
+                  media="(max-width: 767px)"
+                  srcSet={slide.mobile_image_url || slide.image_url}
+                />
+                <img
+                  src={slide.image_url}
+                  alt={slide.title || 'Unbee'}
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              </picture>
+              {/* Intentionally no overlay: show banner image as-is */}
             </div>
           ))}
         </div>
@@ -318,6 +342,7 @@ const HomePage: React.FC = () => {
                     )}
                     <a
                       href={b.link_url || '#/products'}
+                      onClick={(e) => handlePromoCtaClick(e, b)}
                       className="inline-flex w-fit px-4 py-2 rounded-full bg-white text-[#8B6A47] text-xs md:text-sm font-black hover:bg-[#FFF7EC] transition-colors"
                     >
                       Xem ngay
@@ -565,6 +590,62 @@ const HomePage: React.FC = () => {
           productId={quickAddProductId}
           onClose={() => setQuickAddProductId(null)}
         />
+      )}
+
+      {promoOfferModalOpen && (
+        <div
+          className="fixed inset-0 z-[70] bg-black/30 backdrop-blur-[1px] flex items-center justify-center px-4"
+          onClick={() => setPromoOfferModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-xl rounded-2xl bg-[#FFF7FB] border border-[#F4DCE8] shadow-2xl p-5 md:p-6 text-[#5E4654]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 mb-3">
+              <h3 className="text-lg md:text-xl font-black text-[#7E4E69]">
+                🌿 Ưu đãi nhẹ nhàng dành cho bé yêu 🌿
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPromoOfferModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-white text-[#8E6880] hover:bg-[#FBEAF2] border border-[#F2D8E5] font-black"
+                aria-label="Đóng"
+              >
+                ×
+              </button>
+            </div>
+            <p className="text-sm leading-6 mb-3">
+              Ba mẹ tham khảo những chương trình ưu đãi nhỏ xinh dưới đây để lựa chọn sản phẩm phù hợp nhé:
+            </p>
+            <div className="space-y-3 text-sm leading-6">
+              <div>
+                <p className="font-bold">🧸 Đơn hàng dưới 300K</p>
+                <p>– Giảm 5%</p>
+              </div>
+              <div>
+                <p className="font-bold">🚚 Đơn hàng từ 350K</p>
+                <p>– Giảm 5%</p>
+                <p>– Miễn phí vận chuyển</p>
+              </div>
+              <div>
+                <p className="font-bold">🎀 Đơn hàng từ 550K</p>
+                <p>– Giảm 5%</p>
+                <p>– Miễn phí vận chuyển</p>
+                <p>– Tặng gối lõm trị giá 99K</p>
+              </div>
+              <div>
+                <p className="font-bold">🍼 Đơn hàng từ 1.000K</p>
+                <p>– Giảm 7%</p>
+                <p>– Miễn phí vận chuyển</p>
+                <p>– Tặng 1 gối lõm</p>
+                <p>– Tặng thêm 1 set yến chữ U</p>
+              </div>
+            </div>
+            <p className="text-sm leading-6 mt-4 font-semibold text-[#7E4E69]">
+              💛 Một chút ưu đãi nhỏ, gửi đến ba mẹ và bé những điều dễ thương nhất.
+            </p>
+          </div>
+        </div>
       )}
 
       {/* Tips & News */}

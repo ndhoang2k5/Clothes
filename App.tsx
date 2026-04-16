@@ -274,9 +274,9 @@ const NewsletterSignupBlock: React.FC = () => {
   };
 
   return (
-    <section className="w-full mb-10 bg-[#EAF3FB]" aria-label="Đăng ký nhận tin">
+    <section className="w-full mb-10 bg-[#F8F3EC]" aria-label="Đăng ký nhận tin">
       <div className="max-w-7xl mx-auto px-4 py-7 md:py-10">
-        <div className="rounded-2xl border border-[#CFE2F2] bg-[#DCECF8] px-5 py-6 md:px-8 md:py-7 shadow-sm">
+        <div className="rounded-2xl border border-[#E5D6C4] bg-[#F4E8DA] px-5 py-6 md:px-8 md:py-7 shadow-sm">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
             <div className="md:max-w-xl">
               <p className="text-xl md:text-3xl font-extrabold text-[#506B80]">Đăng ký nhận tin</p>

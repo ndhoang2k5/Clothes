@@ -143,11 +143,11 @@ const Navbar: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
         <div className="flex justify-between h-20 items-center">
           {/* Logo */}
-          <div className="flex-shrink-0 flex items-center cursor-pointer" onClick={() => navigate('#/')}>
+          <div className="flex-shrink-0 flex items-center cursor-pointer h-16 md:h-20 w-[136px] md:w-[170px] overflow-hidden" onClick={() => navigate('#/')}>
             <img
               src={getLogoUrl()}
               alt="Unbee"
-              className="h-[4.25rem] w-auto md:h-[4.75rem] lg:h-20 object-contain object-left"
+              className="h-full w-auto max-w-none object-contain object-left origin-left scale-[1.7] md:scale-[1.9]"
               loading="eager"
               decoding="async"
             />
@@ -259,11 +259,11 @@ const Navbar: React.FC = () => {
           />
           <div className="absolute inset-x-0 top-0 bg-[#FDF8F0] rounded-b-3xl shadow-xl pt-4 pb-6">
             <div className="max-w-7xl mx-auto px-4 flex items-center justify-between mb-4">
-              <div className="flex items-center">
+              <div className="flex items-center h-14 w-[140px] overflow-hidden">
                 <img
                   src={getLogoUrl()}
                   alt="Unbee"
-                  className="h-16 w-auto max-h-[72px] object-contain object-left"
+                  className="h-full w-auto max-w-none object-contain object-left origin-left scale-[1.85]"
                   loading="eager"
                   decoding="async"
                 />

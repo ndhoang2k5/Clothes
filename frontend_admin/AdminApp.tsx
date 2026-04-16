@@ -10,6 +10,7 @@ import VoucherManagement from './pages/VoucherManagement';
 import ShippingRulesManagement from './pages/ShippingRulesManagement';
 import ClearanceManagement from './pages/ClearanceManagement';
 import BlogsManagement from './pages/BlogsManagement';
+import NewsletterManagement from './pages/NewsletterManagement';
 import AdminLoginPage from './pages/AdminLoginPage';
 import { api } from '../services/api';
 
@@ -68,6 +69,7 @@ const AdminApp: React.FC = () => {
       case '#/admin/vouchers': return <VoucherManagement />;
       case '#/admin/shipping-rules': return <ShippingRulesManagement />;
       case '#/admin/banners': return <BannerManagement />;
+      case '#/admin/newsletter': return <NewsletterManagement />;
       case '#/admin/intro': return <BlogsManagement />;
       case '#/admin/blogs': return <BlogsManagement />;
       case '#/admin':

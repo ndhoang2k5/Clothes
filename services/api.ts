@@ -1,6 +1,7 @@
 
 import { Banner, AdminBanner } from '../types';
 import type { Product, Category, Order, Blog, Collection, BannerSlot } from '../types';
+import type { NewsletterSubscriber } from '../types';
 import { extractBlogPlainText } from '../user/utils/blogContent';
 
 // Mock Data initialization
@@ -434,6 +435,45 @@ class ApiService {
     };
   }
 
+  async adminGetSaleworkStatus(): Promise<{
+    running: boolean;
+    last_sync_at: string | null;
+    last_success_at: string | null;
+    last_error: string | null;
+    auto_enabled: boolean;
+    interval_seconds: number | null;
+    last_result: {
+      success: boolean;
+      synced: number;
+      created_products: number;
+      updated_variants: number;
+      errors: string[];
+      trigger?: string;
+    } | null;
+  }> {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/salework/status`);
+    const data: any = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any)?.detail || 'Không thể lấy trạng thái đồng bộ Salework');
+    return {
+      running: !!data.running,
+      last_sync_at: data.last_sync_at ?? null,
+      last_success_at: data.last_success_at ?? null,
+      last_error: data.last_error ?? null,
+      auto_enabled: !!data.auto_enabled,
+      interval_seconds: data.interval_seconds != null ? Number(data.interval_seconds) : null,
+      last_result: data.last_result
+        ? {
+            success: !!data.last_result.success,
+            synced: Number(data.last_result.synced || 0),
+            created_products: Number(data.last_result.created_products || 0),
+            updated_variants: Number(data.last_result.updated_variants || 0),
+            errors: Array.isArray(data.last_result.errors) ? data.last_result.errors.map(String) : [],
+            trigger: data.last_result.trigger != null ? String(data.last_result.trigger) : undefined,
+          }
+        : null,
+    };
+  }
+
   async adminGetProductsPicker(params: { q?: string; page?: number; per_page?: number; include_inactive?: boolean }) {
     const qs = new URLSearchParams();
     if (params.q) qs.set('q', params.q);
@@ -724,7 +764,7 @@ class ApiService {
     }
   }
 
-  /** Lấy banner theo slot. Nếu slot=footer_banner mà rỗng thì thử lấy tất cả rồi lọc theo slot (tránh lệch tên slot backend). */
+  /** Lấy banner theo slot. */
   async userListBannersBySlot(slot: BannerSlot): Promise<AdminBanner[]> {
     const parse = (raw: any): AdminBanner[] => {
       const arr = Array.isArray(raw) ? raw : (raw?.data ?? raw?.items ?? []);
@@ -734,7 +774,12 @@ class ApiService {
         .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
         .map((b: any) => {
           const pathOrUrl = b.image_url ?? b.imageUrl ?? '';
-          return { ...b, image_url: this.toAbsoluteUrl(pathOrUrl) };
+          const mobilePathOrUrl = b.mobile_image_url ?? b.mobileImageUrl ?? '';
+          return {
+            ...b,
+            image_url: this.toAbsoluteUrl(pathOrUrl),
+            mobile_image_url: mobilePathOrUrl ? this.toAbsoluteUrl(mobilePathOrUrl) : null,
+          };
         });
     };
     try {
@@ -762,7 +807,11 @@ class ApiService {
     const res = await this.adminFetch(url);
     if (!res.ok) throw new Error('API Error');
     const data: AdminBanner[] = await res.json();
-    return data.map((b) => ({ ...b, image_url: this.toAbsoluteUrl(b.image_url) }));
+    return data.map((b) => ({
+      ...b,
+      image_url: this.toAbsoluteUrl(b.image_url),
+      mobile_image_url: b.mobile_image_url ? this.toAbsoluteUrl(b.mobile_image_url) : null,
+    }));
   }
 
   async adminCreateBanner(payload: Omit<AdminBanner, 'id'>): Promise<AdminBanner> {
@@ -773,7 +822,11 @@ class ApiService {
     });
     if (!res.ok) throw new Error('API Error');
     const b: AdminBanner = await res.json();
-    return { ...b, image_url: this.toAbsoluteUrl(b.image_url) };
+    return {
+      ...b,
+      image_url: this.toAbsoluteUrl(b.image_url),
+      mobile_image_url: b.mobile_image_url ? this.toAbsoluteUrl(b.mobile_image_url) : null,
+    };
   }
 
   async adminUpdateBanner(id: number, payload: Partial<Omit<AdminBanner, 'id'>>): Promise<AdminBanner> {
@@ -784,12 +837,57 @@ class ApiService {
     });
     if (!res.ok) throw new Error('API Error');
     const b: AdminBanner = await res.json();
-    return { ...b, image_url: this.toAbsoluteUrl(b.image_url) };
+    return {
+      ...b,
+      image_url: this.toAbsoluteUrl(b.image_url),
+      mobile_image_url: b.mobile_image_url ? this.toAbsoluteUrl(b.mobile_image_url) : null,
+    };
   }
 
   async adminDeleteBanner(id: number): Promise<void> {
     const res = await this.adminFetch(`${this.adminBaseUrl}/banners/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error('API Error');
+  }
+
+  async adminListNewsletterSubscribers(params?: {
+    q?: string;
+    status?: 'all' | 'pending' | 'sent';
+    subscribed_from?: string;
+    subscribed_to?: string;
+    page?: number;
+    per_page?: number;
+  }): Promise<{ items: NewsletterSubscriber[]; total: number; page: number; per_page: number }> {
+    const qs = new URLSearchParams();
+    if (params?.q && String(params.q).trim()) qs.set('q', String(params.q).trim());
+    if (params?.status) qs.set('status', params.status);
+    if (params?.subscribed_from) qs.set('subscribed_from', params.subscribed_from);
+    if (params?.subscribed_to) qs.set('subscribed_to', params.subscribed_to);
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.per_page) qs.set('per_page', String(params.per_page));
+    const res = await this.adminFetch(`${this.adminBaseUrl}/newsletter/subscribers${qs.toString() ? `?${qs.toString()}` : ''}`);
+    if (!res.ok) throw new Error('Không thể tải danh sách email đăng ký');
+    const data: any = await res.json();
+    const items = Array.isArray(data?.items) ? data.items : [];
+    return {
+      items: items.map((it: any) => ({
+        id: Number(it.id || 0),
+        email: String(it.email || ''),
+        is_notified: !!it.is_notified,
+        subscribed_at: it.subscribed_at ? String(it.subscribed_at) : null,
+        notified_at: it.notified_at ? String(it.notified_at) : null,
+      })),
+      total: Number(data?.total || 0),
+      page: Number(data?.page || params?.page || 1),
+      per_page: Number(data?.per_page || params?.per_page || 30),
+    };
+  }
+
+  async adminDeleteNewsletterSubscriber(subscriberId: number): Promise<void> {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/newsletter/subscribers/${Number(subscriberId)}`, {
+      method: 'DELETE',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any)?.detail || 'Xóa email đăng ký thất bại');
   }
 
   async adminUploadImage(file: File): Promise<string> {
@@ -1301,6 +1399,31 @@ class ApiService {
     const res = await fetch(`${this.userBaseUrl}/shipping/calculate?cart_total=${encodeURIComponent(cart_total)}`);
     if (!res.ok) return { baseFee: 0, discountFromShipping: 0, finalFee: 0 };
     return res.json();
+  }
+
+  async userSubscribeNewsletter(email: string): Promise<{
+    ok: boolean;
+    already_exists?: boolean;
+    sent_batch_now?: boolean;
+    pending_count?: number;
+    message?: string;
+  }> {
+    const res = await fetch(`${this.userBaseUrl}/newsletter/subscribe`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error((data as any)?.detail || 'Đăng ký nhận tin thất bại');
+    }
+    return {
+      ok: !!data.ok,
+      already_exists: !!data.already_exists,
+      sent_batch_now: !!data.sent_batch_now,
+      pending_count: data.pending_count != null ? Number(data.pending_count) : undefined,
+      message: data.message ? String(data.message) : undefined,
+    };
   }
 
   async userCreateOrder(payload: {

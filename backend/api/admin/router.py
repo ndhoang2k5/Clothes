@@ -1,9 +1,11 @@
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from ...service.admin.admin_service import AdminService
 from ...service.auth_service import create_admin_access_token, verify_password, get_current_admin
-from ...service.salework_sync import sync_salework
+from ...service.salework_sync import run_salework_sync, get_sync_status
+from ...service.newsletter_service import NewsletterService
 from ...database_config import get_db
 from ...entities import models
 from pathlib import Path
@@ -233,7 +235,7 @@ def merge_products(data: dict, db: Session = Depends(get_db)):
 @protected_router.post("/salework/sync")
 def salework_sync(db: Session = Depends(get_db)):
     """Gọi API Salework, đồng bộ sản phẩm theo mã SKU (code)."""
-    result = sync_salework(db)
+    result = run_salework_sync(db, trigger="manual")
     if not result or not result.get("success"):
         msg = None
         try:
@@ -248,8 +250,8 @@ def salework_sync(db: Session = Depends(get_db)):
 
 @protected_router.get("/salework/status")
 def salework_status():
-    """Trạng thái đồng bộ Salework (last_sync có thể mở rộng sau)."""
-    return {"last_sync_at": None, "message": "Gọi POST /api/admin/salework/sync để đồng bộ."}
+    """Trạng thái đồng bộ Salework (auto/manual, lần gần nhất, lỗi gần nhất)."""
+    return get_sync_status()
 
 
 @protected_router.post("/products/{product_id}/variants")
@@ -430,6 +432,83 @@ def delete_banner(banner_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_banner(db, banner_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Banner not found")
+    return {"ok": True}
+
+
+@protected_router.get("/newsletter/subscribers")
+def list_newsletter_subscribers(
+    q: str | None = None,
+    status: str | None = None,  # all | pending | sent
+    subscribed_from: str | None = None,  # YYYY-MM-DD
+    subscribed_to: str | None = None,  # YYYY-MM-DD
+    page: int = 1,
+    per_page: int = 30,
+    db: Session = Depends(get_db),
+):
+    NewsletterService.ensure_table(db)
+    query = db.query(models.NewsletterSubscriber)
+
+    if q and str(q).strip():
+        kw = f"%{str(q).strip().lower()}%"
+        query = query.filter(models.NewsletterSubscriber.email.ilike(kw))
+
+    s = (status or "all").strip().lower()
+    if s == "pending":
+        query = query.filter(models.NewsletterSubscriber.is_notified == False)  # noqa: E712
+    elif s == "sent":
+        query = query.filter(models.NewsletterSubscriber.is_notified == True)  # noqa: E712
+
+    if subscribed_from and str(subscribed_from).strip():
+        try:
+            from_date = datetime.date.fromisoformat(str(subscribed_from).strip())
+            query = query.filter(func.date(models.NewsletterSubscriber.subscribed_at) >= from_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="subscribed_from không hợp lệ, cần YYYY-MM-DD")
+    if subscribed_to and str(subscribed_to).strip():
+        try:
+            to_date = datetime.date.fromisoformat(str(subscribed_to).strip())
+            query = query.filter(func.date(models.NewsletterSubscriber.subscribed_at) <= to_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="subscribed_to không hợp lệ, cần YYYY-MM-DD")
+
+    total = query.count()
+    safe_page = max(1, int(page or 1))
+    safe_per_page = max(1, min(5000, int(per_page or 30)))
+    rows = (
+        query.order_by(models.NewsletterSubscriber.subscribed_at.desc(), models.NewsletterSubscriber.id.desc())
+        .offset((safe_page - 1) * safe_per_page)
+        .limit(safe_per_page)
+        .all()
+    )
+    return {
+        "items": [
+            {
+                "id": r.id,
+                "email": r.email,
+                "is_notified": bool(r.is_notified),
+                "subscribed_at": r.subscribed_at.isoformat() if r.subscribed_at else None,
+                "notified_at": r.notified_at.isoformat() if r.notified_at else None,
+            }
+            for r in rows
+        ],
+        "total": total,
+        "page": safe_page,
+        "per_page": safe_per_page,
+    }
+
+
+@protected_router.delete("/newsletter/subscribers/{subscriber_id}")
+def delete_newsletter_subscriber(subscriber_id: int, db: Session = Depends(get_db)):
+    NewsletterService.ensure_table(db)
+    row = (
+        db.query(models.NewsletterSubscriber)
+        .filter(models.NewsletterSubscriber.id == subscriber_id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Email đăng ký không tồn tại")
+    db.delete(row)
+    db.commit()
     return {"ok": True}
 
 

@@ -19,24 +19,31 @@ const NewsletterManagement: React.FC = () => {
   const [items, setItems] = useState<NewsletterSubscriber[]>([]);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<'all' | 'pending' | 'sent'>('all');
+  const [subscribedFrom, setSubscribedFrom] = useState('');
+  const [subscribedTo, setSubscribedTo] = useState('');
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(30);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / perPage)), [total, perPage]);
 
-  const fetchData = async () => {
+  const fetchData = async (opts?: { page?: number; perPage?: number }) => {
+    const nextPage = opts?.page ?? page;
+    const nextPerPage = opts?.perPage ?? perPage;
     setLoading(true);
     setError(null);
     try {
       const res = await api.adminListNewsletterSubscribers({
         q: q.trim() || undefined,
         status,
-        page,
-        per_page: perPage,
+        subscribed_from: subscribedFrom || undefined,
+        subscribed_to: subscribedTo || undefined,
+        page: nextPage,
+        per_page: nextPerPage,
       });
       setItems(res.items);
       setTotal(res.total);
@@ -55,7 +62,7 @@ const NewsletterManagement: React.FC = () => {
 
   const applySearch = () => {
     setPage(1);
-    void fetchData();
+    void fetchData({ page: 1 });
   };
 
   const exportCsv = async () => {
@@ -65,6 +72,8 @@ const NewsletterManagement: React.FC = () => {
       const rows = await api.adminListNewsletterSubscribers({
         q: q.trim() || undefined,
         status,
+        subscribed_from: subscribedFrom || undefined,
+        subscribed_to: subscribedTo || undefined,
         page: 1,
         per_page: 5000,
       });
@@ -94,6 +103,23 @@ const NewsletterManagement: React.FC = () => {
     }
   };
 
+  const handleDelete = async (row: NewsletterSubscriber) => {
+    if (!confirm(`Xóa email "${row.email}" khỏi danh sách đăng ký?`)) return;
+    setDeletingId(row.id);
+    setError(null);
+    try {
+      await api.adminDeleteNewsletterSubscriber(row.id);
+      const shouldGoPrevPage = items.length <= 1 && page > 1;
+      const nextPage = shouldGoPrevPage ? page - 1 : page;
+      if (nextPage !== page) setPage(nextPage);
+      await fetchData({ page: nextPage });
+    } catch (e: any) {
+      setError(e?.message || 'Xóa email thất bại');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -114,8 +140,8 @@ const NewsletterManagement: React.FC = () => {
       </div>
 
       <div className="bg-white border border-gray-100 rounded-[2rem] p-5 md:p-6">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-          <div className="md:col-span-5">
+        <div className="grid grid-cols-1 lg:grid-cols-6 gap-3 items-end">
+          <div className="lg:col-span-2">
             <label className="block text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">
               Tìm email
             </label>
@@ -129,7 +155,7 @@ const NewsletterManagement: React.FC = () => {
               }}
             />
           </div>
-          <div className="md:col-span-3">
+          <div>
             <label className="block text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">
               Trạng thái
             </label>
@@ -146,7 +172,29 @@ const NewsletterManagement: React.FC = () => {
               <option value="sent">Đã gửi admin</option>
             </select>
           </div>
-          <div className="md:col-span-2">
+          <div>
+            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">
+              Từ ngày
+            </label>
+            <input
+              type="date"
+              value={subscribedFrom}
+              onChange={(e) => setSubscribedFrom(e.target.value)}
+              className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-pink-500"
+            />
+          </div>
+          <div>
+            <label className="block text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">
+              Đến ngày
+            </label>
+            <input
+              type="date"
+              value={subscribedTo}
+              onChange={(e) => setSubscribedTo(e.target.value)}
+              className="w-full bg-gray-50 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-pink-500"
+            />
+          </div>
+          <div>
             <label className="block text-[11px] font-black text-gray-400 uppercase tracking-[0.2em] mb-2">
               / Trang
             </label>
@@ -164,7 +212,7 @@ const NewsletterManagement: React.FC = () => {
               <option value={100}>100</option>
             </select>
           </div>
-          <div className="md:col-span-2">
+          <div>
             <button
               type="button"
               onClick={applySearch}
@@ -193,6 +241,7 @@ const NewsletterManagement: React.FC = () => {
                 <th className="px-6 py-3">Trạng thái</th>
                 <th className="px-6 py-3">Ngày đăng ký</th>
                 <th className="px-6 py-3">Ngày gửi admin</th>
+                <th className="px-6 py-3 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -211,6 +260,16 @@ const NewsletterManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-3 text-sm text-gray-600">{formatDate(row.subscribed_at)}</td>
                     <td className="px-6 py-3 text-sm text-gray-600">{formatDate(row.notified_at)}</td>
+                    <td className="px-6 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(row)}
+                        disabled={deletingId === row.id}
+                        className="inline-flex px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-bold text-xs disabled:opacity-60"
+                      >
+                        {deletingId === row.id ? 'Đang xóa...' : 'Xóa'}
+                      </button>
+                    </td>
                   </tr>
                 ))}
             </tbody>

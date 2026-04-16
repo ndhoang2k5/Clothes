@@ -9,6 +9,7 @@ from ...service.shipping_service import ShippingService
 from ...service.order_service import OrderService
 from ...service.serializers import _dt, serialize_blog
 from ...service.order_notification_service import OrderNotificationService
+from ...service.newsletter_service import NewsletterService
 from ...service.auth_service import (
     create_access_token,
     get_current_customer,
@@ -144,6 +145,20 @@ def get_banners(slot: str | None = None, db: Session = Depends(get_db)):
         lambda: AdminService.list_banners(db, slot=slot, active_only=True),
         ttl_seconds=15.0,
     )
+
+
+@router.post("/newsletter/subscribe")
+def subscribe_newsletter(body: dict = Body(...), db: Session = Depends(get_db)):
+    """
+    Body: { email: string }
+    - Lưu email đăng ký nhận tin.
+    - Cứ đủ 5 email mới sẽ gửi 1 email tổng hợp về admin.
+    """
+    email = (body.get("email") or "").strip()
+    result = NewsletterService.subscribe_email(db, email)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("message") or "Đăng ký thất bại")
+    return result
 
 
 @router.get("/collections")

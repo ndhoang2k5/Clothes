@@ -37,12 +37,21 @@ const ProductManagement: React.FC = () => {
   const [mergeCategorySlug, setMergeCategorySlug] = useState<string>('so-sinh');
   const [mergeDescription, setMergeDescription] = useState('');
 
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{
-    synced: number;
-    created_products: number;
-    updated_variants: number;
-    errors: string[];
+  const [syncStatus, setSyncStatus] = useState<{
+    running: boolean;
+    last_sync_at: string | null;
+    last_success_at: string | null;
+    last_error: string | null;
+    auto_enabled: boolean;
+    interval_seconds: number | null;
+    last_result: {
+      success: boolean;
+      synced: number;
+      created_products: number;
+      updated_variants: number;
+      errors: string[];
+      trigger?: string;
+    } | null;
   } | null>(null);
 
   useEffect(() => {
@@ -58,6 +67,12 @@ const ProductManagement: React.FC = () => {
         setProducts(res.items);
         setTotalProducts(res.total);
         setCurrentPage(res.page);
+        try {
+          const status = await api.adminGetSaleworkStatus();
+          setSyncStatus(status);
+        } catch {
+          // ignore salework status failure
+        }
       } catch (e: any) {
         setError(e?.message || 'Không thể tải dữ liệu');
       } finally {
@@ -88,6 +103,22 @@ const ProductManagement: React.FC = () => {
     }, 300);
     return () => window.clearTimeout(t);
   }, [search]);
+
+  useEffect(() => {
+    const loadStatus = async () => {
+      try {
+        const status = await api.adminGetSaleworkStatus();
+        setSyncStatus(status);
+      } catch {
+        // ignore
+      }
+    };
+    void loadStatus();
+    const intervalId = window.setInterval(() => {
+      void loadStatus();
+    }, 10000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   const handleSave = async () => {
     if (!newProduct.name || !newProduct.price) return;
@@ -182,23 +213,11 @@ const ProductManagement: React.FC = () => {
     }
   };
 
-  const handleSyncSalework = async () => {
-    setError(null);
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const result = await api.adminSaleworkSync();
-      setSyncResult(result);
-      if (result.errors?.length) {
-        setError(result.errors.join('\n'));
-      }
-      const updated = await api.adminListProducts(true);
-      setProducts(updated);
-    } catch (e: any) {
-      setError(e?.message || 'Đồng bộ Salework thất bại');
-    } finally {
-      setSyncing(false);
-    }
+  const formatSyncTime = (iso: string | null): string => {
+    if (!iso) return 'Chưa có dữ liệu';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString('vi-VN');
   };
 
   const handleUpload = async (file: File) => {
@@ -223,28 +242,35 @@ const ProductManagement: React.FC = () => {
           <h2 className="text-xl font-black text-gray-800">
             Danh sách Sản phẩm ({products.length})
           </h2>
-          {syncResult && (
+          {syncStatus?.last_result && (
             <div className="mt-3 text-xs text-gray-500">
-              Đã đồng bộ Salework: <span className="font-bold text-gray-700">{syncResult.synced}</span>{' '}
-              mã · tạo mới <span className="font-bold text-gray-700">{syncResult.created_products}</span>{' '}
+              Đã đồng bộ Salework: <span className="font-bold text-gray-700">{syncStatus.last_result.synced}</span>{' '}
+              mã · tạo mới <span className="font-bold text-gray-700">{syncStatus.last_result.created_products}</span>{' '}
               sản phẩm · cập nhật{' '}
-              <span className="font-bold text-gray-700">{syncResult.updated_variants}</span> variants
-              {syncResult.errors?.length ? (
+              <span className="font-bold text-gray-700">{syncStatus.last_result.updated_variants}</span> variants
+              {syncStatus.last_result.errors?.length ? (
                 <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-red-700 whitespace-pre-wrap">
-                  {syncResult.errors.join('\n')}
+                  {syncStatus.last_result.errors.join('\n')}
                 </div>
               ) : null}
             </div>
           )}
         </div>
         <div className="flex flex-wrap gap-3 justify-end">
-          <button
-            onClick={handleSyncSalework}
-            className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-xl font-bold text-sm hover:bg-yellow-200 border border-yellow-200"
-            disabled={syncing}
-          >
-            {syncing ? 'Đang đồng bộ...' : 'Đồng bộ Salework'}
-          </button>
+          <div className="px-4 py-2 rounded-xl border border-yellow-200 bg-yellow-50 text-yellow-800">
+            <div className="text-sm font-bold">
+              Salework: {syncStatus?.running ? 'Đang tự đồng bộ...' : 'Tự động'}
+            </div>
+            <div className="text-[11px] text-yellow-900/80 mt-0.5">
+              Lần gần nhất: {formatSyncTime(syncStatus?.last_sync_at ?? null)}
+              {syncStatus?.interval_seconds ? ` · mỗi ${syncStatus.interval_seconds}s` : ''}
+            </div>
+            {syncStatus?.last_error && (
+              <div className="text-[11px] text-red-700 mt-1">
+                Lỗi gần nhất: {syncStatus.last_error}
+              </div>
+            )}
+          </div>
           <button
             onClick={() => {
               // tạo Box quà: slug qua-tang

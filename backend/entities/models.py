@@ -286,12 +286,22 @@ class Banner(Base):
     slot = Column(String, nullable=False, index=True)
     sort_order = Column(Integer, default=0)
     image_url = Column(Text, nullable=False)
+    mobile_image_url = Column(Text)
     title = Column(Text)
     subtitle = Column(Text)
     link_url = Column(Text)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+
+class NewsletterSubscriber(Base):
+    __tablename__ = "newsletter_subscribers"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    is_notified = Column(Boolean, nullable=False, default=False)
+    subscribed_at = Column(DateTime, default=datetime.datetime.utcnow)
+    notified_at = Column(DateTime, nullable=True)
 
 
 class Blog(Base):

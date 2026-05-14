@@ -109,11 +109,12 @@ export interface AdminBanner {
 export interface Blog {
   id: string;
   title: string;
+  slug?: string;
   content: string;
   thumbnail: string;
   author: string;
   createdAt: string;
-  category: 'news' | 'tips' | 'charity' | 'intro';
+  category: 'news' | 'tips' | 'share' | 'charity' | 'intro';
   workflowStatus?: 'draft' | 'review' | 'scheduled' | 'published';
   scheduledAt?: string;
   reviewedAt?: string;
@@ -122,4 +123,19 @@ export interface Blog {
   image?: string;
   excerpt?: string;
   publishedAt?: string;
+}
+
+export type PromoCardTheme = 'amber' | 'blue' | 'rose' | 'violet';
+
+/** Thẻ khuyến mãi trang chủ (API /vouchers/homepage-promo-cards). */
+export interface HomepagePromoCard {
+  id: number;
+  code: string;
+  type: string;
+  discount_label: string;
+  condition_label: string;
+  benefits: string[];
+  terms_text: string | null;
+  card_theme: string;
+  card_icon: string;
 }

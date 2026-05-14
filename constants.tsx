@@ -2,26 +2,32 @@
 import React from 'react';
 
 const BACKEND_PORT = 8888;
-const getStaticImageUrl = (fileName: string): string => {
+export const getStaticImageUrl = (filePath: string): string => {
   const env = typeof (import.meta as any)?.env !== 'undefined' ? (import.meta as any).env?.VITE_API_ORIGIN : '';
   const origin = env && String(env).trim()
     ? String(env).trim().replace(/\/+$/, '')
     : (typeof window !== 'undefined'
       ? `${window.location.protocol}//${window.location.hostname}:${BACKEND_PORT}`
       : `http://localhost:${BACKEND_PORT}`);
-  return `${origin}/static/images/${encodeURIComponent(fileName)}`;
+  // Support subfolders like "unbee_image/Đồ sơ sinh.png" without encoding "/" as "%2F".
+  const safe = String(filePath || '')
+    .split('/')
+    .filter(Boolean)
+    .map((seg) => encodeURIComponent(seg))
+    .join('/');
+  return `${origin}/static/images/${safe}`;
 };
 
 export const CATEGORIES = [
   {
     id: '1',
-    name: 'Đồ sơ sinh',
+    name: 'Sơ sinh',
     slug: 'so-sinh',
     icon: (
       <img
-        src={getStaticImageUrl('sosinh.png')}
-        alt="Đồ sơ sinh"
-        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        src={getStaticImageUrl('new_image/sosinh.png')}
+        alt="Sơ sinh"
+        className="w-10 h-10 md:w-12 md:h-12 object-contain transition-transform group-hover:scale-110"
         loading="lazy"
         decoding="async"
       />
@@ -29,13 +35,13 @@ export const CATEGORIES = [
   },
   {
     id: '2',
-    name: 'Quần áo bé trai',
-    slug: 'be-trai',
+    name: 'Bé',
+    slug: 'be',
     icon: (
       <img
-        src={getStaticImageUrl('boy.png')}
-        alt="Quần áo bé trai"
-        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        src={getStaticImageUrl('new_image/be.png')}
+        alt="Bé"
+        className="w-10 h-10 md:w-12 md:h-12 object-contain transition-transform group-hover:scale-110"
         loading="lazy"
         decoding="async"
       />
@@ -43,13 +49,13 @@ export const CATEGORIES = [
   },
   {
     id: '3',
-    name: 'Quần áo bé gái',
-    slug: 'be-gai',
+    name: 'Nhộng chũn',
+    slug: 'nhong-chun',
     icon: (
       <img
-        src={getStaticImageUrl('girl.png')}
-        alt="Quần áo bé gái"
-        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        src={getStaticImageUrl('new_image/nhong&chun.png')}
+        alt="Nhộng chũn"
+        className="w-10 h-10 md:w-12 md:h-12 object-contain transition-transform group-hover:scale-110"
         loading="lazy"
         decoding="async"
       />
@@ -57,13 +63,13 @@ export const CATEGORIES = [
   },
   {
     id: '4',
-    name: 'Body',
-    slug: 'body',
+    name: 'Phụ kiện',
+    slug: 'phu-kien',
     icon: (
       <img
-        src={getStaticImageUrl('body.png')}
-        alt="Body"
-        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        src={getStaticImageUrl('new_image/phukienme&be.png')}
+        alt="Phụ kiện"
+        className="w-10 h-10 md:w-12 md:h-12 object-contain transition-transform group-hover:scale-110"
         loading="lazy"
         decoding="async"
       />
@@ -71,23 +77,27 @@ export const CATEGORIES = [
   },
   {
     id: '5',
-    name: 'Phụ kiện',
-    slug: 'phu-kien',
+    name: 'Đồ chip bé gái',
+    slug: 'do-chip-be-gai',
     icon: (
-      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-indigo-100 to-sky-100 flex items-center justify-center">
-        <span className="text-2xl">🎀</span>
-      </div>
+      <img
+        src={getStaticImageUrl('new_image/dochipbegai.png')}
+        alt="Đồ chip bé gái"
+        className="w-10 h-10 md:w-12 md:h-12 object-contain transition-transform group-hover:scale-110"
+        loading="lazy"
+        decoding="async"
+      />
     ),
   },
   {
     id: '6',
-    name: 'Box quà tặng',
-    slug: 'qua-tang',
+    name: 'Combo đi sinh kèm quà',
+    slug: 'combo-di-sinh-kem-qua',
     icon: (
       <img
-        src={getStaticImageUrl('giftbox.png')}
-        alt="Box quà tặng"
-        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
+        src={getStaticImageUrl('new_image/combodisinh.png')}
+        alt="Combo đi sinh kèm quà"
+        className="w-10 h-10 md:w-12 md:h-12 object-contain transition-transform group-hover:scale-110"
         loading="lazy"
         decoding="async"
       />
@@ -95,20 +105,6 @@ export const CATEGORIES = [
   },
   {
     id: '7',
-    name: 'Combo đi sinh',
-    slug: 'di-sinh',
-    icon: (
-      <img
-        src={getStaticImageUrl('combo.png')}
-        alt="Combo đi sinh"
-        className="w-8 h-8 md:w-9 md:h-9 object-contain transition-transform group-hover:scale-110"
-        loading="lazy"
-        decoding="async"
-      />
-    ),
-  },
-  {
-    id: '8',
     name: 'Ưu đãi cuối mùa',
     slug: 'uu-dai-cuoi-mua',
     icon: (

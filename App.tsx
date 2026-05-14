@@ -17,6 +17,28 @@ import LoginPage from './user/LoginPage';
 import AccountPage from './user/AccountPage';
 import { api } from './services/api';
 
+function parseIdFromSlug(segment: string): string {
+  const s = String(segment || '').trim();
+  const m = s.match(/^(\d+)(?:-|$)/);
+  return m ? m[1] : '';
+}
+
+function notifyRouteChange() {
+  try {
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  } catch {
+    // ignore
+  }
+}
+
+export function navigate(path: string) {
+  const next = String(path || '').trim() || '/';
+  if (typeof window === 'undefined') return;
+  if (next === window.location.pathname + window.location.search) return;
+  window.history.pushState({}, '', next);
+  notifyRouteChange();
+}
+
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; message?: string }> {
   state = { hasError: false, message: '' };
   static getDerivedStateFromError(error: unknown) {
@@ -28,7 +50,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
         <div className="max-w-7xl mx-auto px-4 py-20 text-center">
           <h2 className="text-2xl font-black text-gray-800 mb-2">Đã xảy ra lỗi</h2>
           <p className="text-gray-500 mb-4">{this.state.message}</p>
-          <a href="#/" className="text-pink-500 font-bold hover:underline">Về trang chủ</a>
+          <a href="/" className="text-pink-500 font-bold hover:underline">Về trang chủ</a>
         </div>
       );
     }
@@ -92,7 +114,7 @@ const Footer: React.FC = () => (
     <ErrorBoundary>
       <NewsletterSignupBlock />
     </ErrorBoundary>
-    <div className="max-w-7xl mx-auto px-4 pt-14 md:pt-20 grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-12">
+    <div className="max-w-7xl mx-auto px-4 pt-10 md:pt-14 grid grid-cols-1 md:grid-cols-4 gap-7 md:gap-10">
       <div className="col-span-1 md:col-span-1">
         <div className="flex items-center mb-5 md:mb-6">
           <span className="text-3xl font-black text-[#F4E1CD]">unbee</span>
@@ -110,14 +132,14 @@ const Footer: React.FC = () => (
           <span className="text-white/70 text-xl leading-none">+</span>
         </summary>
         <ul className="space-y-4 pt-4 pb-1 leading-8">
-          <li><a href="#/about" className="hover:text-white transition-colors">Giới thiệu</a></li>
+          <li><a href="/about" className="hover:text-white transition-colors">Giới thiệu</a></li>
           <li><a href="#" className="hover:text-white transition-colors">Tuyển dụng</a></li>
         </ul>
       </details>
       <div className="hidden md:block">
         <h4 className="font-bold text-lg mb-6">Về Unbee</h4>
         <ul className="space-y-4 text-[#E5D6C4]">
-          <li><a href="#/about" className="hover:text-white transition-colors">Giới thiệu</a></li>
+          <li><a href="/about" className="hover:text-white transition-colors">Giới thiệu</a></li>
           <li><a href="#" className="hover:text-white transition-colors">Tuyển dụng</a></li>
         </ul>
       </div>
@@ -317,22 +339,90 @@ const NewsletterSignupBlock: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const [currentHash, setCurrentHash] = useState(window.location.hash || '#/');
+  const [currentPath, setCurrentPath] = useState(
+    typeof window !== 'undefined' ? `${window.location.pathname}${window.location.search}` : '/',
+  );
 
   useEffect(() => {
-    const handleHashChange = () => {
-      setCurrentHash(window.location.hash || '#/');
+    const handleRouteChange = () => {
+      setCurrentPath(`${window.location.pathname}${window.location.search}`);
       window.scrollTo(0, 0);
     };
-    window.addEventListener('hashchange', handleHashChange);
-    return () => window.removeEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleRouteChange);
+
+    // Backward-compat: convert old hash URLs to clean paths (best-effort).
+    const hash = String(window.location.hash || '');
+    if (hash && hash.startsWith('#/')) {
+      const [hashPath, hashQuery] = hash.split('?');
+      const params = new URLSearchParams(hashQuery || '');
+
+      // #/products?... -> /products?...
+      if (hashPath === '#/products') {
+        const qs = params.toString();
+        window.history.replaceState({}, '', `/products${qs ? `?${qs}` : ''}`);
+      }
+      // #/product/:id -> /products/:id (slug part can be appended later)
+      else if (hashPath.startsWith('#/product/')) {
+        const id = String(hashPath.split('/')[2] || '').trim();
+        window.history.replaceState({}, '', `/products/${encodeURIComponent(id)}`);
+      }
+      // #/blog/post/:id -> /blogs/:category/:id (category best-effort via query param)
+      else if (hashPath.startsWith('#/blog/post/')) {
+        const id = String(hashPath.split('/').slice(-1)[0] || '').trim();
+        const cat = String(params.get('category') || 'news');
+        window.history.replaceState({}, '', `/blogs/${encodeURIComponent(cat)}/${encodeURIComponent(id)}`);
+      }
+      // #/blog?... -> /blogs?...
+      else if (hashPath === '#/blog') {
+        const qs = params.toString();
+        window.history.replaceState({}, '', `/blogs${qs ? `?${qs}` : ''}`);
+      }
+      // #/tips -> /tips
+      else if (hashPath === '#/tips') {
+        window.history.replaceState({}, '', `/tips`);
+      }
+      // #/collections?... -> /collections?...
+      else if (hashPath === '#/collections') {
+        const qs = params.toString();
+        window.history.replaceState({}, '', `/collections${qs ? `?${qs}` : ''}`);
+      }
+      // #/cart -> /cart, #/about -> /about, etc.
+      else if (hashPath === '#/cart') {
+        window.history.replaceState({}, '', `/cart`);
+      } else if (hashPath === '#/about') {
+        window.history.replaceState({}, '', `/about`);
+      } else if (hashPath === '#/login') {
+        window.history.replaceState({}, '', `/login`);
+      } else if (hashPath === '#/account') {
+        window.history.replaceState({}, '', `/account`);
+      } else if (hashPath === '#/order-success') {
+        const qs = params.toString();
+        window.history.replaceState({}, '', `/order-success${qs ? `?${qs}` : ''}`);
+      } else {
+        window.history.replaceState({}, '', `/`);
+      }
+
+      // Clear hash after migration
+      try {
+        window.location.hash = '';
+      } catch {
+        // ignore
+      }
+    }
+
+    // Sync initial state after potential migration
+    handleRouteChange();
+
+    return () => window.removeEventListener('popstate', handleRouteChange);
   }, []);
 
   const renderRoute = () => {
-    const [path] = currentHash.split('?');
+    const [path] = currentPath.split('?');
 
-    if (path.startsWith('#/product/')) {
-      const id = path.split('/')[2] || '';
+    // Product detail: /products/:id-:slug (slug optional). Also accept /products/:id.
+    if (path.startsWith('/products/') && path !== '/products/') {
+      const segment = decodeURIComponent(path.split('/')[2] || '');
+      const id = parseIdFromSlug(segment) || segment;
       return (
         <ErrorBoundary>
           <ProductDetailPage productId={id} />
@@ -340,36 +430,40 @@ const App: React.FC = () => {
       );
     }
 
-    if (path.startsWith('#/blog/post/')) {
-      const parts = path.split('/');
-      const blogId = parts[parts.length - 1] || '';
-      return (
-        <ErrorBoundary>
-          <BlogPostPage blogId={blogId} />
-        </ErrorBoundary>
-      );
+    // Blog post: /blogs/:category/:id-:slug (category optional, slug optional)
+    if (path.startsWith('/blogs/')) {
+      const parts = path.split('/').filter(Boolean);
+      // parts: ['blogs', ':category', ':idSlug']
+      if (parts.length >= 3) {
+        const blogIdSeg = decodeURIComponent(parts[2] || '');
+        const blogId = parseIdFromSlug(blogIdSeg) || blogIdSeg;
+        return (
+          <ErrorBoundary>
+            <BlogPostPage blogId={blogId} />
+          </ErrorBoundary>
+        );
+      }
     }
 
     switch (path) {
-      case '#/products':
+      case '/products':
         return <ProductPage />;
-      case '#/collections':
+      case '/collections':
         return <CollectionPage />;
-      case '#/blog':
+      case '/blogs':
         return <BlogPage />;
-      case '#/tips':
+      case '/tips':
         return <TipsPage />;
-      case '#/cart':
+      case '/cart':
         return <CartPage />;
-      case '#/login':
+      case '/login':
         return <LoginPage />;
-      case '#/account':
+      case '/account':
         return <AccountPage />;
-      case '#/order-success':
+      case '/order-success':
         return <OrderSuccessPage />;
-      case '#/about':
+      case '/about':
         return <AboutPage />;
-      case '#/':
       default:
         return <HomePage />;
     }

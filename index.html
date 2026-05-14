@@ -35,12 +35,13 @@
         body {
             font-family: 'Quicksand', sans-serif;
             scroll-behavior: smooth;
+            overflow-x: hidden;
         }
     </style>
     <script>
       // Chuyển hướng thông minh dựa trên port
-      if (window.location.port === '8000' && (window.location.hash === '' || window.location.hash === '#/')) {
-        window.location.hash = '#/admin';
+      if (window.location.port === '8000' && window.location.pathname === '/' && (window.location.hash === '' || window.location.hash === '#/' )) {
+        window.location.replace('/admin/');
       }
     </script>
 <script type="importmap">

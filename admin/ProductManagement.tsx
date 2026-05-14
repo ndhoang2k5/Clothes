@@ -273,23 +273,23 @@ const ProductManagement: React.FC = () => {
           </div>
           <button
             onClick={() => {
-              // tạo Box quà: slug qua-tang
-              setNewProduct((s) => ({ ...s, category: 'qua-tang' }));
+              // tạo Đồ chip bé gái
+              setNewProduct((s) => ({ ...s, category: 'do-chip-be-gai' }));
               setIsAdding(true);
             }}
             className="bg-purple-50 text-purple-700 px-4 py-2 rounded-xl font-bold text-sm hover:bg-purple-100 border border-purple-200"
           >
-            + Tạo Box quà
+            + Tạo đồ chip bé gái
           </button>
           <button
             onClick={() => {
-              // tạo Combo đi sinh: slug di-sinh
-              setNewProduct((s) => ({ ...s, category: 'di-sinh' }));
+              // tạo Combo đi sinh kèm quà
+              setNewProduct((s) => ({ ...s, category: 'combo-di-sinh-kem-qua' }));
               setIsAdding(true);
             }}
             className="bg-teal-50 text-teal-700 px-4 py-2 rounded-xl font-bold text-sm hover:bg-teal-100 border border-teal-200"
           >
-            + Tạo Combo đi sinh
+            + Tạo combo đi sinh kèm quà
           </button>
           <button
             onClick={() => setIsAdding(true)}

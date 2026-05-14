@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
 import type { Blog } from '../types';
+import { navigate } from '../App';
+import { buildBlogPostPath, getSearchParams } from './utils/urls';
 
 const BlogPage: React.FC = () => {
-  const hashQuery = window.location.hash.split('?')[1] || '';
-  const queryParams = useMemo(() => new URLSearchParams(hashQuery), [hashQuery]);
+  const queryParams = useMemo(() => getSearchParams(), []);
   const initialCategory = (queryParams.get('category') as Blog['category'] | null) || 'news';
   const initialQ = queryParams.get('q') || '';
   const [activeCategory, setActiveCategory] = useState<Blog['category']>(initialCategory);
@@ -46,7 +47,7 @@ const BlogPage: React.FC = () => {
     const params = new URLSearchParams();
     params.set('category', next);
     if (qParam && String(qParam).trim()) params.set('q', String(qParam).trim());
-    window.location.hash = `#/blog?${params.toString()}`;
+    navigate(`/blogs?${params.toString()}`);
     setActiveCategory(next);
   };
 
@@ -56,7 +57,7 @@ const BlogPage: React.FC = () => {
     const params = new URLSearchParams();
     params.set('category', activeCategory);
     if (trimmed) params.set('q', trimmed);
-    window.location.hash = `#/blog?${params.toString()}`;
+    navigate(`/blogs?${params.toString()}`);
   };
 
   const clearSearch = () => submitSearch('');
@@ -69,21 +70,29 @@ const BlogPage: React.FC = () => {
   ];
 
   const groupLabel = activeCategory === 'news' ? 'News' : activeCategory === 'charity' ? 'Charity' : 'Blog';
+  const groupLabel2 =
+    activeCategory === 'news'
+      ? 'News'
+      : activeCategory === 'share'
+      ? 'Chia sẻ'
+      : activeCategory === 'charity'
+      ? 'Charity'
+      : 'Blog';
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12">
-      <header className="mb-8">
+    <div className="max-w-7xl mx-auto px-4 py-9">
+      <header className="mb-6">
         <nav className="text-sm text-gray-400 mb-3 flex items-center gap-2">
-          <a href="#/" className="hover:text-pink-500">
+          <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="hover:text-pink-500">
             Trang chủ
           </a>
           <span>/</span>
           <span className="text-gray-700 font-bold">Blog</span>
         </nav>
 
-        <h1 className="text-4xl font-black text-gray-800 mb-4">Bài viết Blog cho ba mẹ</h1>
+        <h1 className="text-3xl font-black text-gray-800 mb-3">Bài viết Blog cho ba mẹ</h1>
 
-        <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-5 mb-5">
+        <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-4 mb-4">
           <div className="flex items-center gap-2 mb-4">
             <div className="text-gray-500 font-black">Tìm kiếm</div>
             <div className="h-px flex-1 bg-gray-100" />
@@ -109,7 +118,7 @@ const BlogPage: React.FC = () => {
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 placeholder="Tìm theo tiêu đề, nội dung..."
-                className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-10 pr-4 py-3 text-sm outline-none focus:ring-2 focus:ring-pink-500"
+                className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-10 pr-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-pink-500"
               />
             </div>
             <button
@@ -164,6 +173,17 @@ const BlogPage: React.FC = () => {
           </button>
           <button
             type="button"
+            onClick={() => setTab('share')}
+            className={`px-5 py-2 rounded-full font-black text-sm border transition-all ${
+              activeCategory === 'share'
+                ? 'bg-pink-50 text-pink-700 border-pink-100'
+                : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'
+            }`}
+          >
+            Chia sẻ
+          </button>
+          <button
+            type="button"
             onClick={() => setTab('charity')}
             className={`px-5 py-2 rounded-full font-black text-sm border transition-all ${
               activeCategory === 'charity'
@@ -202,7 +222,8 @@ const BlogPage: React.FC = () => {
           <h2 className="text-2xl font-black text-gray-800 mb-2">Chưa có bài viết</h2>
           <p className="text-gray-500 mb-4">{error || 'Hiện chưa có bài viết ở chuyên mục này.'}</p>
           <a
-            href="#/blog"
+            href="/blogs"
+            onClick={(e) => { e.preventDefault(); navigate('/blogs'); }}
             className="inline-flex px-6 py-3 rounded-full bg-pink-500 text-white font-bold hover:bg-pink-600 transition-colors shadow-lg"
           >
             Quay lại Blog
@@ -213,7 +234,7 @@ const BlogPage: React.FC = () => {
           <div>
             <div className="flex items-center gap-3">
               <div className="w-2 h-7 bg-pink-500 rounded-full" />
-              <h2 className="text-xl md:text-2xl font-black text-gray-900">{groupLabel}</h2>
+              <h2 className="text-xl md:text-2xl font-black text-gray-900">{groupLabel2}</h2>
               <span className="text-xs font-bold text-gray-400">
                 {posts.length} bài
               </span>
@@ -225,9 +246,7 @@ const BlogPage: React.FC = () => {
             {posts[0] && (
               <button
                 type="button"
-                onClick={() => {
-                  window.location.hash = `#/blog/post/${posts[0].id}`;
-                }}
+                onClick={() => navigate(buildBlogPostPath(posts[0]))}
                 className="md:col-span-2 text-left bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col cursor-pointer"
               >
                 {posts[0].thumbnail && (
@@ -267,9 +286,7 @@ const BlogPage: React.FC = () => {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => {
-                  window.location.hash = `#/blog/post/${p.id}`;
-                }}
+                onClick={() => navigate(buildBlogPostPath(p))}
                 className="text-left bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl transition-all flex flex-col cursor-pointer"
               >
                 {p.thumbnail && (

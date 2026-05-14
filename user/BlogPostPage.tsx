@@ -3,6 +3,9 @@ import { api } from '../services/api';
 import type { Blog } from '../types';
 import { parseBlogContent, parseBlogRenderMeta } from './utils/blogContent';
 import type { BlogBlock } from './utils/blogContent';
+import { parseInlineLinks } from './utils/blogContent';
+import { navigate } from '../App';
+import { buildBlogPostPath } from './utils/urls';
 
 type Props = {
   blogId: string;
@@ -53,6 +56,24 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
   const renderMeta = useMemo(() => parseBlogRenderMeta(post?.content || ''), [post?.content]);
   const titleAlignClass = 'text-center';
   const titleColorClass = renderMeta.titleColor === 'brown' ? 'text-[#8B6B4A]' : 'text-gray-900';
+
+  const renderInline = (text: string) => {
+    const nodes = parseInlineLinks(text);
+    return nodes.map((n, i) => {
+      if (typeof n === 'string') return <React.Fragment key={`t-${i}`}>{n}</React.Fragment>;
+      return (
+        <a
+          key={`a-${i}`}
+          href={n.url}
+          target="_blank"
+          rel="noreferrer"
+          className="font-bold text-pink-600 underline decoration-pink-300 underline-offset-4 hover:text-pink-700"
+        >
+          {n.label}
+        </a>
+      );
+    });
+  };
 
   useEffect(() => {
     const el = relatedTrackRef.current;
@@ -106,14 +127,14 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
   }, [relatedPosts.length, isRelatedHovered]);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10">
+    <div className="max-w-4xl mx-auto px-4 py-8">
       {loading ? (
         <div className="py-20 text-center text-gray-500 font-bold">Đang tải...</div>
       ) : error || !post ? (
         <div className="py-20 text-center">
           <div className="text-2xl font-black text-gray-800 mb-2">{error ? 'Không tìm thấy' : 'Lỗi'}</div>
           <div className="text-gray-500 mb-6">{error || 'Không thể tải bài viết.'}</div>
-          <a href="#/blog" className="text-pink-500 font-bold hover:underline">
+          <a href="/blogs" onClick={(e) => { e.preventDefault(); navigate('/blogs'); }} className="text-pink-500 font-bold hover:underline">
             Quay lại Blog
           </a>
         </div>
@@ -121,10 +142,10 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
         <>
           <div className="mb-8">
             <div className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-widest">
-              {post.category}
+              {post.category === 'share' ? 'Chia sẻ' : post.category}
               {post.publishedAt ? ` • ${new Date(post.publishedAt).toLocaleDateString('vi-VN')}` : ''}
             </div>
-            <h1 className={`text-4xl font-black leading-tight mb-3 ${titleAlignClass} ${titleColorClass}`}>{post.title}</h1>
+            <h1 className={`text-3xl md:text-4xl font-black leading-tight mb-3 ${titleAlignClass} ${titleColorClass}`}>{post.title}</h1>
             {renderMeta.heroIntro && (
               <div className={`text-xs md:text-sm italic text-gray-500/95 font-medium leading-6 mb-5 ${titleAlignClass}`}>
                 {renderMeta.heroIntro}
@@ -150,7 +171,7 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
                 if (b.type === 'paragraph') {
                   return (
                     <p key={`p-${idx}`} className="whitespace-pre-line leading-8 text-gray-700 mb-5">
-                      {b.text}
+                      {renderInline(b.text)}
                     </p>
                   );
                 }
@@ -173,7 +194,7 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
                           ) : null}
                         </div>
                       )}
-                      <div className="leading-8 text-gray-700 whitespace-pre-line">{b.text}</div>
+                      <div className="leading-8 text-gray-700 whitespace-pre-line">{renderInline(b.text)}</div>
                       {!imageFirst && (
                         <div className="rounded-[1.5rem] overflow-hidden border border-gray-100 bg-gray-50">
                           {b.imageUrl ? (
@@ -187,7 +208,7 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
                 if (b.type === 'quote') {
                   return (
                     <blockquote key={`q-${idx}`} className="my-7 border-l-4 border-pink-300 bg-pink-50/40 rounded-r-xl px-5 py-4">
-                      <p className="text-gray-800 italic whitespace-pre-line mb-2">"{b.text}"</p>
+                      <p className="text-gray-800 italic whitespace-pre-line mb-2">"{renderInline(b.text)}"</p>
                       {b.author && <div className="text-xs font-bold text-pink-700">— {b.author}</div>}
                     </blockquote>
                   );
@@ -252,7 +273,7 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
                     <button
                       key={rp.id}
                       type="button"
-                      onClick={() => (window.location.hash = `#/blog/post/${rp.id}`)}
+                      onClick={() => navigate(buildBlogPostPath(rp))}
                       className="flex-none basis-[82%] sm:basis-[48%] lg:basis-[31%] snap-start text-left bg-white rounded-[1.75rem] border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-all"
                     >
                       <div className="h-44 bg-gray-50 overflow-hidden">

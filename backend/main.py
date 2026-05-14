@@ -51,6 +51,7 @@ app.add_middleware(
         ("/api/admin/vouchers", 30, 3.0),
         ("/api/user/products", 60, 6.0),    # user browsing
         ("/api/user/vouchers/auto", 60, 6.0),
+        ("/api/user/vouchers/homepage-promo-cards", 120, 10.0),
         ("/api/user/shipping/calculate", 60, 6.0),
     ],
 )

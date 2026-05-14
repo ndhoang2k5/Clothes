@@ -7,7 +7,7 @@ from ...service.admin.admin_service import AdminService
 from ...service.voucher_service import VoucherService
 from ...service.shipping_service import ShippingService
 from ...service.order_service import OrderService
-from ...service.serializers import _dt, serialize_blog
+from ...service.serializers import _dt, serialize_blog, serialize_homepage_promo_voucher
 from ...service.order_notification_service import OrderNotificationService
 from ...service.newsletter_service import NewsletterService
 from ...service.auth_service import (
@@ -227,21 +227,66 @@ def get_available_vouchers(
             continue
         min_total = float(v.min_order_total or 0)
         eligible = cart_total >= min_total
+        max_o = getattr(v, "max_order_total", None)
+        if max_o is not None:
+            try:
+                eligible = eligible and cart_total <= float(max_o)
+            except (TypeError, ValueError):
+                eligible = False
         item: dict = {
             "code": v.code,
             "type": v.type,
             "value": float(v.value or 0),
+            "percent_value": float(v.percent_value) if getattr(v, "percent_value", None) is not None else None,
+            "fixed_value": float(v.fixed_value) if getattr(v, "fixed_value", None) is not None else None,
             "min_order_total": min_total,
+            "max_order_total": float(max_o) if max_o is not None else None,
             "eligible": eligible,
         }
+        gift_name = (getattr(v, "gift_name", None) or "").strip() or None
+        gift_image = (getattr(v, "gift_image_url", None) or "").strip() or None
         if v.type == "product":
-            item["display_name"] = getattr(v, "display_name", None)
-            item["image_url"] = getattr(v, "image_url", None)
-        else:
-            max_disc = float(v.max_discount) if v.max_discount else None
-            item["max_discount"] = max_disc
+            gift_name = gift_name or getattr(v, "display_name", None)
+            gift_image = gift_image or getattr(v, "image_url", None)
+        if gift_name:
+            item["gift_name"] = gift_name
+            item["display_name"] = gift_name
+        if gift_image:
+            item["gift_image_url"] = gift_image
+            item["image_url"] = gift_image
+
+        max_disc = float(v.max_discount) if v.max_discount else None
+        item["max_discount"] = max_disc
         result.append(item)
     return result
+
+
+@router.get("/vouchers/homepage-promo-cards")
+def get_homepage_promo_cards(db: Session = Depends(get_db)):
+    """Thẻ khuyến mãi hiển thị trên trang chủ (slot thay banner promo)."""
+    import datetime as _dt
+    now = _dt.datetime.utcnow()
+    rows = (
+        db.query(models.Voucher)
+        .filter(
+            models.Voucher.is_active == True,  # noqa: E712
+            models.Voucher.show_on_homepage == True,  # noqa: E712
+        )
+        .filter((models.Voucher.valid_from.is_(None)) | (models.Voucher.valid_from <= now))
+        .filter((models.Voucher.valid_to.is_(None)) | (models.Voucher.valid_to >= now))
+        .order_by(
+            models.Voucher.homepage_sort_order.asc(),
+            models.Voucher.min_order_total.asc(),
+            models.Voucher.id.desc(),
+        )
+        .all()
+    )
+    out = []
+    for v in rows:
+        if v.usage_limit is not None and (v.used_count or 0) >= v.usage_limit:
+            continue
+        out.append(serialize_homepage_promo_voucher(v))
+    return out
 
 
 @router.post("/vouchers/validate")
@@ -283,18 +328,35 @@ def get_auto_voucher(
     best_disc, disc_amount, best_gift, _ = VoucherService.pick_auto_vouchers(db, cart_total)
     resp: dict = {"ok": True}
 
+    best_disc_gift_name = None
+    best_disc_gift_image = None
     if best_disc:
         resp["code"] = best_disc.code
         resp["discountAmount"] = float(disc_amount or 0)
         resp["voucherType"] = getattr(best_disc, "type", "fixed")
+        best_disc_gift_name = (getattr(best_disc, "gift_name", None) or "").strip() or None
+        best_disc_gift_image = (getattr(best_disc, "gift_image_url", None) or "").strip() or None
+        if getattr(best_disc, "type", "fixed") == "product":
+            best_disc_gift_name = best_disc_gift_name or getattr(best_disc, "display_name", None)
+            best_disc_gift_image = best_disc_gift_image or getattr(best_disc, "image_url", None)
     else:
         resp["code"] = None
         resp["discountAmount"] = 0
 
-    if best_gift:
+    if best_disc_gift_name:
+        resp["giftCode"] = best_disc.code
+        resp["giftProductName"] = best_disc_gift_name
+        resp["giftProductImage"] = best_disc_gift_image
+    elif best_gift:
         resp["giftCode"] = best_gift.code
-        resp["giftProductName"] = getattr(best_gift, "display_name", None) or "Quà tặng"
-        resp["giftProductImage"] = getattr(best_gift, "image_url", None)
+        resp["giftProductName"] = (
+            getattr(best_gift, "gift_name", None)
+            or getattr(best_gift, "display_name", None)
+            or "Quà tặng"
+        )
+        resp["giftProductImage"] = (
+            getattr(best_gift, "gift_image_url", None) or getattr(best_gift, "image_url", None)
+        )
 
     return resp
 

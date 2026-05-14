@@ -57,35 +57,34 @@ class UserProductService:
             [m.strip() for m in (materials or "").split(",") if m.strip()] if materials else []
         )
 
-        # Join variants nếu cần filter theo size/màu
-        if size_list or color_list:
-            query = query.join(models.Product.variants)
+        # Variant-based filters should not interfere with text search.
+        # Use EXISTS so each filter is evaluated independently without join collisions.
+        if size_list or color_list or material_list:
+            vq = db.query(models.ProductVariant.id).filter(models.ProductVariant.product_id == models.Product.id)
             if size_list:
-                query = query.filter(models.ProductVariant.size.in_(size_list))
+                vq = vq.filter(models.ProductVariant.size.in_(size_list))
             if color_list:
-                query = query.filter(models.ProductVariant.color.in_(color_list))
-            query = query.distinct()
-
-        if material_list:
-            # `material` is defined on ProductVariant, so we need variants in the query.
-            if not (size_list or color_list):
-                query = query.join(models.Product.variants)
-            query = query.filter(models.ProductVariant.material.in_(material_list)).distinct()
+                vq = vq.filter(models.ProductVariant.color.in_(color_list))
+            if material_list:
+                vq = vq.filter(models.ProductVariant.material.in_(material_list))
+            query = query.filter(vq.exists())
 
         # Text search (name/slug + variant SKU)
         q_term = (q or "").strip()
         if q_term:
             like_term = f"%{q_term}%"
-            query = (
-                query.outerjoin(models.ProductVariant, models.ProductVariant.product_id == models.Product.id)
-                .filter(
-                    or_(
-                        models.Product.name.ilike(like_term),
-                        models.Product.slug.ilike(like_term),
-                        models.ProductVariant.sku.ilike(like_term),
-                    )
+            sku_exists = (
+                db.query(models.ProductVariant.id)
+                .filter(models.ProductVariant.product_id == models.Product.id)
+                .filter(models.ProductVariant.sku.ilike(like_term))
+                .exists()
+            )
+            query = query.filter(
+                or_(
+                    models.Product.name.ilike(like_term),
+                    models.Product.slug.ilike(like_term),
+                    sku_exists,
                 )
-                .distinct()
             )
 
         # Giá thực tế (ưu tiên discount_price nếu có, ngược lại dùng base_price)

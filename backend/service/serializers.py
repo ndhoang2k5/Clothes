@@ -365,6 +365,7 @@ def serialize_shipping_rule(rule) -> dict:
 
 
 def serialize_voucher(voucher) -> dict:
+    benefits = _voucher_benefits_list(voucher)
     return {
         "id": voucher.id,
         "code": voucher.code,
@@ -373,15 +374,107 @@ def serialize_voucher(voucher) -> dict:
         "auto_apply": getattr(voucher, "auto_apply", False),
         "type": getattr(voucher, "type", "fixed"),
         "value": _num(getattr(voucher, "value", None)),
+        "percent_value": _num(getattr(voucher, "percent_value", None)),
+        "fixed_value": _num(getattr(voucher, "fixed_value", None)),
+        "gift_name": getattr(voucher, "gift_name", None),
+        "gift_image_url": getattr(voucher, "gift_image_url", None),
+        "gift_product_id": getattr(voucher, "gift_product_id", None),
         "min_order_total": _num(getattr(voucher, "min_order_total", 0)),
+        "max_order_total": _num(getattr(voucher, "max_order_total", None)),
         "max_discount": _num(getattr(voucher, "max_discount", None)),
         "usage_limit": getattr(voucher, "usage_limit", None),
         "used_count": getattr(voucher, "used_count", 0),
         "valid_from": _dt(getattr(voucher, "valid_from", None)),
         "valid_to": _dt(getattr(voucher, "valid_to", None)),
         "is_active": getattr(voucher, "is_active", True),
+        "show_on_homepage": bool(getattr(voucher, "show_on_homepage", False)),
+        "homepage_sort_order": int(getattr(voucher, "homepage_sort_order", 0) or 0),
+        "card_theme": getattr(voucher, "card_theme", None) or "amber",
+        "card_icon": getattr(voucher, "card_icon", None) or "gift",
+        "benefits": benefits,
+        "terms_text": getattr(voucher, "terms_text", None),
+        "order_condition_mode": getattr(voucher, "order_condition_mode", None) or "from",
         "created_at": _dt(getattr(voucher, "created_at", None)),
         "updated_at": _dt(getattr(voucher, "updated_at", None)),
+    }
+
+
+def _voucher_benefits_list(voucher) -> list:
+    import json
+    raw = getattr(voucher, "benefits_json", None)
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+        return [str(x) for x in data] if isinstance(data, list) else []
+    except Exception:
+        return []
+
+
+def _promo_card_discount_label(voucher) -> str:
+    t = getattr(voucher, "type", "fixed")
+    percent_val = getattr(voucher, "percent_value", None)
+    fixed_val = getattr(voucher, "fixed_value", None)
+    if percent_val is None and t == "percent":
+        percent_val = getattr(voucher, "value", 0)
+    if fixed_val is None and t == "fixed":
+        fixed_val = getattr(voucher, "value", 0)
+
+    p = float(percent_val or 0)
+    f = float(fixed_val or 0)
+
+    if p > 0:
+        if abs(p - round(p)) < 1e-9:
+            return f"Giảm {int(p)}%"
+        return f"Giảm {p}%"
+    if f > 0:
+        return f"Giảm {int(f):,}đ".replace(",", ".")
+    name = (
+        getattr(voucher, "gift_name", None)
+        or getattr(voucher, "display_name", None)
+        or getattr(voucher, "code", "")
+        or "Quà tặng"
+    )
+    return str(name)
+
+
+def _promo_card_condition_label(voucher) -> str:
+    mode = (getattr(voucher, "order_condition_mode", None) or "from").strip().lower()
+    min_o = float(getattr(voucher, "min_order_total", 0) or 0)
+    max_o = getattr(voucher, "max_order_total", None)
+    if mode == "under":
+        cap = max_o if max_o is not None else (min_o if min_o > 0 else None)
+        if cap is not None:
+            k = int(float(cap) // 1000)
+            return f"Đơn hàng dưới {k}K"
+        return "Mọi đơn hàng"
+    if min_o <= 0:
+        return "Áp dụng mọi đơn"
+    k = int(min_o // 1000)
+    return f"Đơn hàng từ {k}K"
+
+
+def serialize_homepage_promo_voucher(voucher) -> dict:
+    """Public JSON cho thẻ khuyến mãi trên trang chủ (không trả usage_limit…)."""
+    benefits = _voucher_benefits_list(voucher)
+    gift_name = (
+        getattr(voucher, "gift_name", None)
+        or (getattr(voucher, "display_name", None) if getattr(voucher, "type", "fixed") == "product" else None)
+    )
+    if gift_name:
+        has_gift_line = any(str(b).strip().lower().startswith("tặng") for b in benefits)
+        if not has_gift_line:
+            benefits = [*benefits, f"Tặng {gift_name}"]
+    return {
+        "id": voucher.id,
+        "code": voucher.code,
+        "type": getattr(voucher, "type", "fixed"),
+        "discount_label": _promo_card_discount_label(voucher),
+        "condition_label": _promo_card_condition_label(voucher),
+        "benefits": benefits,
+        "terms_text": getattr(voucher, "terms_text", None),
+        "card_theme": getattr(voucher, "card_theme", None) or "amber",
+        "card_icon": getattr(voucher, "card_icon", None) or "gift",
     }
 
 

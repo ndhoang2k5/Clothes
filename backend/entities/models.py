@@ -231,6 +231,8 @@ class Voucher(Base):
     Mã giảm giá (Phase A.3).
     type: percent | fixed. value: % hoặc số tiền. max_discount: trần giảm (percent).
     display_name + image_url: dùng cho "khuyến mãi sản phẩm" hiển thị trên trang chủ.
+    show_on_homepage + benefits_json + card_* : thẻ khuyến mãi dạng vé trên trang chủ.
+    max_order_total: đơn phải ≤ giá trị này mới áp (tuỳ chọn; dùng với order_condition_mode=under).
     """
     __tablename__ = "vouchers"
     id = Column(Integer, primary_key=True, index=True)
@@ -239,7 +241,13 @@ class Voucher(Base):
     image_url = Column(Text)
     type = Column(String(20), nullable=False, default="fixed")
     value = Column(Numeric(12, 2), nullable=False)
+    percent_value = Column(Numeric(12, 2), nullable=True)
+    fixed_value = Column(Numeric(12, 2), nullable=True)
+    gift_name = Column(String(255), nullable=True)
+    gift_image_url = Column(Text, nullable=True)
+    gift_product_id = Column(Integer, ForeignKey("products.id"), nullable=True)
     min_order_total = Column(Numeric(12, 2), default=0)
+    max_order_total = Column(Numeric(12, 2), nullable=True)
     max_discount = Column(Numeric(12, 2))
     usage_limit = Column(Integer)
     used_count = Column(Integer, default=0)
@@ -247,11 +255,18 @@ class Voucher(Base):
     valid_to = Column(DateTime)
     is_active = Column(Boolean, default=True)
     auto_apply = Column(Boolean, default=False)
+    show_on_homepage = Column(Boolean, nullable=False, default=False)
+    homepage_sort_order = Column(Integer, nullable=False, default=0)
+    card_theme = Column(String(32), nullable=False, default="amber")
+    card_icon = Column(String(32), nullable=False, default="gift")
+    benefits_json = Column(Text, nullable=True)
+    terms_text = Column(Text, nullable=True)
+    order_condition_mode = Column(String(16), nullable=False, default="from")
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     __table_args__ = (
-        CheckConstraint("type IN ('percent', 'fixed', 'product')", name="vouchers_type_check"),
+        CheckConstraint("type IN ('percent', 'fixed', 'product', 'combo')", name="vouchers_type_check"),
     )
 
 

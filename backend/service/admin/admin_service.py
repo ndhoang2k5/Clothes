@@ -23,6 +23,186 @@ from ..serializers import _normalize_banner_image_url
 from sqlalchemy.orm import selectinload
 
 class AdminService:
+    MENU_CATEGORY_TAXONOMY = [
+        ("Sơ sinh", "so-sinh", "👶", 1),
+        ("Bé", "be", "🧒", 2),
+        ("Nhộng chũn", "nhong-chun", "🛌", 3),
+        ("Phụ kiện", "phu-kien", "🧢", 4),
+        ("Đồ chip bé gái", "do-chip-be-gai", "🩲", 5),
+        ("Combo đi sinh kèm quà", "combo-di-sinh-kem-qua", "👜", 6),
+        ("Ưu đãi cuối mùa", "uu-dai-cuoi-mua", "🏷️", 7),
+    ]
+    LEGACY_CATEGORY_SLUGS = ("be-trai", "be-gai", "body", "qua-tang", "di-sinh")
+
+    @staticmethod
+    def _normalize_product_category_taxonomy(db: Session):
+        canonical_slugs = [slug for _, slug, _, _ in AdminService.MENU_CATEGORY_TAXONOMY]
+        canonical_count = (
+            db.query(models.Category.id)
+            .filter(models.Category.slug.in_(canonical_slugs))
+            .count()
+        )
+        has_active_legacy = (
+            db.query(models.Category.id)
+            .filter(
+                models.Category.slug.in_(AdminService.LEGACY_CATEGORY_SLUGS),
+                models.Category.is_active == True,  # noqa: E712
+            )
+            .first()
+            is not None
+        )
+        has_products_in_legacy = (
+            db.query(models.Product.id)
+            .join(models.Category, models.Product.category_id == models.Category.id)
+            .filter(models.Category.slug.in_(AdminService.LEGACY_CATEGORY_SLUGS))
+            .first()
+            is not None
+        )
+        if canonical_count == len(canonical_slugs) and (not has_active_legacy) and (not has_products_in_legacy):
+            return
+
+        # 1) Upsert danh mục chuẩn mới (menu + clearance)
+        for name, slug, icon, sort_order in AdminService.MENU_CATEGORY_TAXONOMY:
+            db.execute(
+                text(
+                    """
+                    INSERT INTO categories (name, slug, icon, sort_order, is_active)
+                    VALUES (:name, :slug, :icon, :sort_order, TRUE)
+                    ON CONFLICT (slug)
+                    DO UPDATE SET
+                        name = EXCLUDED.name,
+                        icon = EXCLUDED.icon,
+                        sort_order = EXCLUDED.sort_order,
+                        is_active = TRUE
+                    """
+                ),
+                {
+                    "name": name,
+                    "slug": slug,
+                    "icon": icon,
+                    "sort_order": sort_order,
+                },
+            )
+
+        db.flush()
+
+        # 2) Lấy map slug -> category_id
+        all_slugs = [s for _, s, _, _ in AdminService.MENU_CATEGORY_TAXONOMY] + list(
+            AdminService.LEGACY_CATEGORY_SLUGS
+        )
+        categories = (
+            db.query(models.Category)
+            .filter(models.Category.slug.in_(all_slugs))
+            .all()
+        )
+        id_by_slug = {str(c.slug): int(c.id) for c in categories if c.id is not None and c.slug}
+
+        so_sinh_id = id_by_slug.get("so-sinh")
+        be_id = id_by_slug.get("be")
+        nhong_chun_id = id_by_slug.get("nhong-chun")
+        phu_kien_id = id_by_slug.get("phu-kien")
+        chip_be_gai_id = id_by_slug.get("do-chip-be-gai")
+        combo_id = id_by_slug.get("combo-di-sinh-kem-qua")
+
+        be_trai_id = id_by_slug.get("be-trai")
+        be_gai_id = id_by_slug.get("be-gai")
+        body_id = id_by_slug.get("body")
+        qua_tang_id = id_by_slug.get("qua-tang")
+        di_sinh_id = id_by_slug.get("di-sinh")
+
+        # 3) Remap sản phẩm từ taxonomy cũ sang taxonomy mới
+        if be_trai_id and be_id:
+            db.execute(
+                text("UPDATE products SET category_id = :target WHERE category_id = :source"),
+                {"target": be_id, "source": be_trai_id},
+            )
+
+        if body_id and so_sinh_id:
+            db.execute(
+                text("UPDATE products SET category_id = :target WHERE category_id = :source"),
+                {"target": so_sinh_id, "source": body_id},
+            )
+
+        if qua_tang_id and combo_id:
+            db.execute(
+                text("UPDATE products SET category_id = :target WHERE category_id = :source"),
+                {"target": combo_id, "source": qua_tang_id},
+            )
+
+        if di_sinh_id and combo_id:
+            db.execute(
+                text("UPDATE products SET category_id = :target WHERE category_id = :source"),
+                {"target": combo_id, "source": di_sinh_id},
+            )
+
+        # be-gai: tách "chip" -> Đồ chip bé gái, còn lại -> Bé
+        if be_gai_id and chip_be_gai_id:
+            db.execute(
+                text(
+                    """
+                    UPDATE products
+                    SET category_id = :target_chip
+                    WHERE category_id = :source_be_gai
+                      AND (
+                        name ILIKE '%chip%'
+                        OR slug ILIKE '%chip%'
+                      )
+                    """
+                ),
+                {"target_chip": chip_be_gai_id, "source_be_gai": be_gai_id},
+            )
+
+        if be_gai_id and be_id:
+            db.execute(
+                text("UPDATE products SET category_id = :target_be WHERE category_id = :source_be_gai"),
+                {"target_be": be_id, "source_be_gai": be_gai_id},
+            )
+
+        # so-sinh: tách nhóm nhộng chũn sang danh mục riêng
+        if so_sinh_id and nhong_chun_id:
+            db.execute(
+                text(
+                    """
+                    UPDATE products
+                    SET category_id = :target_nhong
+                    WHERE category_id = :source_so_sinh
+                      AND (
+                        name ILIKE '%nhộng%'
+                        OR name ILIKE '%nhong%'
+                        OR name ILIKE '%chũn%'
+                        OR name ILIKE '%chun%'
+                        OR name ILIKE '%túi ngủ%'
+                        OR name ILIKE '%tui ngu%'
+                        OR slug ILIKE '%nhong%'
+                        OR slug ILIKE '%chun%'
+                        OR slug ILIKE '%tui-ngu%'
+                      )
+                    """
+                ),
+                {"target_nhong": nhong_chun_id, "source_so_sinh": so_sinh_id},
+            )
+
+        # fallback: sản phẩm chưa có category -> Sơ sinh
+        if so_sinh_id:
+            db.execute(
+                text("UPDATE products SET category_id = :target WHERE category_id IS NULL"),
+                {"target": so_sinh_id},
+            )
+
+        # 4) Ẩn các danh mục legacy khỏi dropdown/admin UI
+        db.query(models.Category).filter(
+            models.Category.slug.in_(AdminService.LEGACY_CATEGORY_SLUGS)
+        ).update({"is_active": False}, synchronize_session=False)
+
+        # đảm bảo Phụ kiện luôn active (legacy trùng slug với taxonomy mới)
+        if phu_kien_id:
+            db.execute(
+                text("UPDATE categories SET is_active = TRUE WHERE id = :cid"),
+                {"cid": phu_kien_id},
+            )
+
+        db.commit()
+
     @staticmethod
     def _ensure_system_configs_table(db: Session):
         db.execute(
@@ -188,11 +368,20 @@ class AdminService:
                 .filter(models.Voucher.code == gift_code)
                 .first()
             )
-            if gift_voucher and getattr(gift_voucher, "type", None) == "product":
-                out["applied_gift_product_name"] = (
-                    getattr(gift_voucher, "display_name", None) or gift_voucher.code
+            if gift_voucher:
+                gift_name = (
+                    getattr(gift_voucher, "gift_name", None)
+                    or getattr(gift_voucher, "display_name", None)
                 )
-                out["applied_gift_product_image"] = getattr(gift_voucher, "image_url", None)
+                gift_image = (
+                    getattr(gift_voucher, "gift_image_url", None)
+                    or getattr(gift_voucher, "image_url", None)
+                )
+                if gift_name or gift_image:
+                    out["applied_gift_product_name"] = (
+                        gift_name or gift_voucher.code
+                    )
+                    out["applied_gift_product_image"] = gift_image
 
         return out
 
@@ -686,24 +875,9 @@ class AdminService:
             if slug:
                 slug = str(slug).strip()
                 cat = db.query(models.Category).filter(models.Category.slug == slug).first()
-                if not cat and slug in ("uu-dai-cuoi-mua", "body"):
-                    if slug == "uu-dai-cuoi-mua":
-                        db.execute(
-                            text(
-                                "INSERT INTO categories (name, slug, icon, sort_order) "
-                                "VALUES ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 8) "
-                                "ON CONFLICT (slug) DO NOTHING"
-                            )
-                        )
-                    elif slug == "body":
-                        db.execute(
-                            text(
-                                "INSERT INTO categories (name, slug, icon, sort_order) "
-                                "VALUES ('Body', 'body', '🩱', 4) "
-                                "ON CONFLICT (slug) DO NOTHING"
-                            )
-                        )
-                    db.commit()
+                if not cat:
+                    # Tự chuẩn hoá taxonomy trước khi resolve slug (đảm bảo luôn có 7 danh mục menu mới).
+                    AdminService._normalize_product_category_taxonomy(db)
                     cat = db.query(models.Category).filter(models.Category.slug == slug).first()
                 if cat:
                     data["category_id"] = cat.id
@@ -1100,14 +1274,7 @@ class AdminService:
 
     @staticmethod
     def list_categories(db: Session, active_only: bool = True):
-        db.execute(
-            text(
-                "INSERT INTO categories (name, slug, icon, sort_order) "
-                "VALUES ('Body', 'body', '🩱', 4) "
-                "ON CONFLICT (slug) DO NOTHING"
-            )
-        )
-        db.commit()
+        AdminService._normalize_product_category_taxonomy(db)
         query = db.query(models.Category)
         if active_only:
             query = query.filter(models.Category.is_active == True)  # noqa: E712

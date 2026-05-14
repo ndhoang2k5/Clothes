@@ -126,23 +126,27 @@ class OrderService:
         if voucher_code:
             vres = VoucherService.validate_voucher(db, voucher_code, subtotal_float)
             if vres.get("ok"):
-                if (vres.get("voucher_type") or "fixed") == "product":
-                    applied_gift_voucher_code = voucher_code
-                else:
-                    voucher_discount = Decimal(str(vres.get("discount_amount") or 0))
+                voucher_discount = Decimal(str(vres.get("discount_amount") or 0))
+                if voucher_discount > 0:
                     applied_voucher_code = voucher_code
+                if vres.get("gift_product_name") or (vres.get("voucher_type") or "fixed") == "product":
+                    applied_gift_voucher_code = voucher_code
             else:
                 raise ValueError(vres.get("reason") or "Mã giảm giá không hợp lệ")
         else:
-            best_v, best_discount = VoucherService.pick_best_auto_voucher(db, subtotal_float)
-            if best_v and best_discount > 0:
+            best_discount_v, best_discount, best_gift_v, _ = VoucherService.pick_auto_vouchers(db, subtotal_float)
+            if best_discount_v and best_discount > 0:
                 voucher_discount = Decimal(str(best_discount))
-                applied_voucher_code = best_v.code
+                applied_voucher_code = best_discount_v.code
+                if VoucherService.has_gift(best_discount_v):
+                    applied_gift_voucher_code = best_discount_v.code
+            elif best_gift_v and VoucherService.has_gift(best_gift_v):
+                applied_gift_voucher_code = best_gift_v.code
 
         if gift_voucher_code:
             gres = VoucherService.validate_voucher(db, gift_voucher_code, subtotal_float)
             if gres.get("ok"):
-                if (gres.get("voucher_type") or "fixed") != "product":
+                if not gres.get("gift_product_name"):
                     raise ValueError("Mã quà tặng không hợp lệ")
                 applied_gift_voucher_code = gift_voucher_code
             else:

@@ -7,6 +7,8 @@ import FilterSidebar from '../components/FilterSidebar';
 import Pagination from '../components/Pagination';
 import { CATEGORIES } from '../constants';
 import { QuickAddToCartModal } from './QuickAddToCartModal';
+import { navigate } from '../App';
+import { getSearchParams } from './utils/urls';
 
 const SERVER_PER_PAGE = 24;
 
@@ -26,8 +28,7 @@ const ProductPage: React.FC = () => {
   });
 
   // Get active category from URL
-  const hashQuery = window.location.hash.split('?')[1] || '';
-  const queryParams = new URLSearchParams(hashQuery);
+  const queryParams = getSearchParams();
   const activeCategory = queryParams.get('cat');
   const activeQ = queryParams.get('q') || '';
   const [searchText, setSearchText] = useState(activeQ);
@@ -131,38 +132,38 @@ const ProductPage: React.FC = () => {
 
   const currentCategoryName = CATEGORIES.find(c => c.slug === activeCategory)?.name || 'Tất cả sản phẩm';
 
-  const setSearchQueryInHash = (nextQ: string) => {
+  const setSearchQueryInUrl = (nextQ: string) => {
     const trimmed = nextQ.trim();
     const params = new URLSearchParams();
     if (activeCategory) params.set('cat', activeCategory);
     if (trimmed) params.set('q', trimmed);
     const qs = params.toString();
-    window.location.hash = `#/products${qs ? '?' + qs : ''}`;
+    navigate(`/products${qs ? '?' + qs : ''}`);
   };
 
   return (
     <div className="bg-gray-50 min-h-screen">
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 py-10 md:py-12 mb-8 md:mb-10">
+      <div className="bg-white border-b border-gray-100 py-7 md:py-9 mb-6 md:mb-8">
         <div className="max-w-7xl mx-auto px-4">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
                 <div>
-                    <nav className="flex items-center gap-2 text-sm text-gray-400 font-medium mb-4">
-                        <a href="#/" className="hover:text-pink-500">Trang chủ</a>
+                    <nav className="flex items-center gap-2 text-sm text-gray-400 font-medium mb-3">
+                        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="hover:text-pink-500">Trang chủ</a>
                         <span>/</span>
                         <span className="text-gray-800 font-bold">{currentCategoryName}</span>
                     </nav>
-                    <h1 className="text-4xl font-black text-gray-800 tracking-tight">{currentCategoryName}</h1>
+                    <h1 className="text-3xl md:text-[2.15rem] font-black text-gray-800 tracking-tight">{currentCategoryName}</h1>
                 </div>
                 <div className="flex flex-col md:flex-row md:items-center gap-3">
-                  <div className="bg-pink-50 px-6 py-4 rounded-3xl flex items-center gap-4">
-                      <span className="text-pink-600 font-black text-xl">{serverTotal ?? products.length}</span>
+                  <div className="bg-pink-50 px-5 py-3 rounded-3xl flex items-center gap-3">
+                      <span className="text-pink-600 font-black text-lg">{serverTotal ?? products.length}</span>
                       <span className="text-pink-400 font-bold text-sm uppercase tracking-wider">Sản phẩm được tìm thấy</span>
                   </div>
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
-                      setSearchQueryInHash(searchText);
+                      setSearchQueryInUrl(searchText);
                     }}
                     className="w-full md:w-auto flex items-center gap-3"
                   >
@@ -170,11 +171,11 @@ const ProductPage: React.FC = () => {
                       value={searchText}
                       onChange={(e) => setSearchText(e.target.value)}
                       placeholder="Tìm theo tên hoặc SKU..."
-                      className="bg-white border border-gray-100 rounded-2xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-[#B58A5A]/40 w-full md:w-[320px]"
+                      className="bg-white border border-gray-100 rounded-2xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#B58A5A]/40 w-full md:w-[300px]"
                     />
                     <button
                       type="submit"
-                      className="bg-[#B58A5A] text-white px-5 py-3 rounded-2xl font-bold hover:bg-[#A3784E] transition-colors whitespace-nowrap"
+                      className="bg-[#B58A5A] text-white px-4 py-2.5 rounded-2xl font-bold hover:bg-[#A3784E] transition-colors whitespace-nowrap"
                     >
                       Tìm
                     </button>
@@ -184,13 +185,13 @@ const ProductPage: React.FC = () => {
         </div>
       </div>
 
-      <div id="product-list-top" className="max-w-7xl mx-auto px-4 pb-20">
+      <div id="product-list-top" className="max-w-7xl mx-auto px-4 pb-16">
         {/* Mobile filter bar */}
         <div className="lg:hidden mb-4 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={() => setMobileFiltersOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-white border border-gray-100 shadow-sm font-bold text-sm text-gray-700"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl bg-white border border-gray-100 shadow-sm font-bold text-sm text-gray-700"
           >
             <svg className="w-5 h-5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 4h18l-7 8v6l-4 2v-8L3 4z" />

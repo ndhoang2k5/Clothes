@@ -232,6 +232,11 @@ CREATE TABLE IF NOT EXISTS vouchers (
     auto_apply BOOLEAN NOT NULL DEFAULT FALSE,
     type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (type IN ('percent', 'fixed')),
     value NUMERIC(12, 2) NOT NULL,
+    percent_value NUMERIC(12, 2),
+    fixed_value NUMERIC(12, 2),
+    gift_name VARCHAR(255),
+    gift_image_url TEXT,
+    gift_product_id INT REFERENCES products(id) ON DELETE SET NULL,
     min_order_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
     max_discount NUMERIC(12, 2),
     usage_limit INT,
@@ -253,7 +258,24 @@ ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 -- Allow 'product' type for gift vouchers
 ALTER TABLE vouchers DROP CONSTRAINT IF EXISTS vouchers_type_check;
-ALTER TABLE vouchers ADD CONSTRAINT vouchers_type_check CHECK (type IN ('percent', 'fixed', 'product'));
+ALTER TABLE vouchers ADD CONSTRAINT vouchers_type_check CHECK (type IN ('percent', 'fixed', 'product', 'combo'));
+
+-- Combo voucher fields (allow one code to carry % / fixed / gift together)
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS percent_value NUMERIC(12, 2);
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS fixed_value NUMERIC(12, 2);
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS gift_name VARCHAR(255);
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS gift_image_url TEXT;
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS gift_product_id INT REFERENCES products(id) ON DELETE SET NULL;
+
+-- Thẻ khuyến mãi trang chủ (vé)
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS max_order_total NUMERIC(12, 2);
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS show_on_homepage BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS homepage_sort_order INT NOT NULL DEFAULT 0;
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS card_theme VARCHAR(32) NOT NULL DEFAULT 'amber';
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS card_icon VARCHAR(32) NOT NULL DEFAULT 'gift';
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS benefits_json TEXT;
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS terms_text TEXT;
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS order_condition_mode VARCHAR(16) NOT NULL DEFAULT 'from';
 
 CREATE TABLE IF NOT EXISTS shipping_rules (
     id SERIAL PRIMARY KEY,
@@ -300,14 +322,13 @@ WHERE NOT EXISTS (SELECT 1 FROM admin_users WHERE lower(trim(email)) = 'globalad
 -- 3) Seed / normalize
 INSERT INTO categories (name, slug, icon, sort_order)
 VALUES
-    ('Đồ sơ sinh', 'so-sinh', '👶', 1),
-    ('Quần áo bé trai', 'be-trai', '👕', 2),
-    ('Quần áo bé gái', 'be-gai', '👗', 3),
-    ('Body', 'body', '🩱', 4),
-    ('Phụ kiện', 'phu-kien', '🧢', 5),
-    ('Box quà tặng', 'qua-tang', '🎁', 6),
-    ('Combo đi sinh', 'di-sinh', '👜', 7),
-    ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 8)
+    ('Sơ sinh', 'so-sinh', '👶', 1),
+    ('Bé', 'be', '🧒', 2),
+    ('Nhộng chũn', 'nhong-chun', '🛌', 3),
+    ('Phụ kiện', 'phu-kien', '🧢', 4),
+    ('Đồ chip bé gái', 'do-chip-be-gai', '🩲', 5),
+    ('Combo đi sinh kèm quà', 'combo-di-sinh-kem-qua', '👜', 6),
+    ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 7)
 ON CONFLICT (slug) DO NOTHING;
 
 COMMIT;

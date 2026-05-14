@@ -241,10 +241,23 @@ CREATE TABLE IF NOT EXISTS vouchers (
     display_name VARCHAR(255),
     image_url TEXT,
     auto_apply BOOLEAN NOT NULL DEFAULT FALSE,
-    type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (type IN ('percent', 'fixed', 'product')),
+    type VARCHAR(20) NOT NULL DEFAULT 'fixed' CHECK (type IN ('percent', 'fixed', 'product', 'combo')),
     value NUMERIC(12, 2) NOT NULL,
+    percent_value NUMERIC(12, 2),
+    fixed_value NUMERIC(12, 2),
+    gift_name VARCHAR(255),
+    gift_image_url TEXT,
+    gift_product_id INT REFERENCES products(id) ON DELETE SET NULL,
     min_order_total NUMERIC(12, 2) NOT NULL DEFAULT 0,
+    max_order_total NUMERIC(12, 2),
     max_discount NUMERIC(12, 2),
+    show_on_homepage BOOLEAN NOT NULL DEFAULT FALSE,
+    homepage_sort_order INT NOT NULL DEFAULT 0,
+    card_theme VARCHAR(32) NOT NULL DEFAULT 'amber',
+    card_icon VARCHAR(32) NOT NULL DEFAULT 'gift',
+    benefits_json TEXT,
+    terms_text TEXT,
+    order_condition_mode VARCHAR(16) NOT NULL DEFAULT 'from',
     usage_limit INT,
     used_count INT NOT NULL DEFAULT 0,
     valid_from TIMESTAMPTZ,
@@ -319,14 +332,13 @@ WHERE NOT EXISTS (SELECT 1 FROM admin_users WHERE lower(trim(email)) = 'globalad
 -- Seed minimal categories (can be managed by Admin later)
 INSERT INTO categories (name, slug, icon, sort_order)
 VALUES
-    ('Đồ sơ sinh', 'so-sinh', '👶', 1),
-    ('Quần áo bé trai', 'be-trai', '👕', 2),
-    ('Quần áo bé gái', 'be-gai', '👗', 3),
-    ('Body', 'body', '🩱', 4),
-    ('Phụ kiện', 'phu-kien', '🧢', 5),
-    ('Box quà tặng', 'qua-tang', '🎁', 6),
-    ('Combo đi sinh', 'di-sinh', '👜', 7),
-    ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 8)
+    ('Sơ sinh', 'so-sinh', '👶', 1),
+    ('Bé', 'be', '🧒', 2),
+    ('Nhộng chũn', 'nhong-chun', '🛌', 3),
+    ('Phụ kiện', 'phu-kien', '🧢', 4),
+    ('Đồ chip bé gái', 'do-chip-be-gai', '🩲', 5),
+    ('Combo đi sinh kèm quà', 'combo-di-sinh-kem-qua', '👜', 6),
+    ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 7)
 ON CONFLICT (slug) DO NOTHING;
 
 -- Không seed sản phẩm test; dữ liệu sản phẩm lấy từ đồng bộ Salework hoặc nhập tay trong Admin.

@@ -146,12 +146,20 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .userGetAutoVoucher(totalPrice)
         .then((r) => {
           if (cancelled) return;
+          const autoDiscountCode = r.code ? String(r.code).trim() : '';
 
           if (!hasManualDiscount && !discountSuppressed) {
-            const code = r.code ? String(r.code).trim() : '';
+            const code = autoDiscountCode;
             const discountAmount = Number(r.discountAmount || 0);
             if (code && discountAmount > 0) {
-              setAppliedVoucher({ code, discountAmount, isAuto: true, voucherType: r.voucherType });
+              setAppliedVoucher({
+                code,
+                discountAmount,
+                isAuto: true,
+                voucherType: r.voucherType,
+                giftProductName: r.giftCode && r.giftCode === code ? r.giftProductName : undefined,
+                giftProductImage: r.giftCode && r.giftCode === code ? r.giftProductImage : undefined,
+              });
             } else if (appliedVoucher?.isAuto) {
               setAppliedVoucher(null);
             }
@@ -160,14 +168,18 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!hasManualGift && !giftSuppressed) {
             const giftCode = r.giftCode ? String(r.giftCode).trim() : '';
             if (giftCode && r.giftProductName) {
-              setGiftVoucher({
-                code: giftCode,
-                discountAmount: 0,
-                isAuto: true,
-                voucherType: 'product',
-                giftProductName: r.giftProductName,
-                giftProductImage: r.giftProductImage,
-              });
+              if (autoDiscountCode && giftCode === autoDiscountCode) {
+                setGiftVoucher(null);
+              } else {
+                setGiftVoucher({
+                  code: giftCode,
+                  discountAmount: 0,
+                  isAuto: true,
+                  voucherType: 'product',
+                  giftProductName: r.giftProductName,
+                  giftProductImage: r.giftProductImage,
+                });
+              }
             } else if (giftVoucher?.isAuto) {
               setGiftVoucher(null);
             }
@@ -202,23 +214,33 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const result = await api.userValidateVoucher(trimmed, cartTotal);
     if (!result.ok) throw new Error(result.reason || 'Mã không hợp lệ');
 
-    if (result.voucherType === 'product') {
-      setGiftVoucher({
+    const discountAmount = Number(result.discountAmount || 0);
+    const hasGift = Boolean(result.giftProductName || result.giftProductImage);
+
+    if (result.voucherType === 'product' && !discountAmount) {
+      setAppliedVoucher({
         code: trimmed,
         discountAmount: 0,
         isAuto: false,
-        voucherType: 'product',
+        voucherType: result.voucherType,
         giftProductName: result.giftProductName,
         giftProductImage: result.giftProductImage,
       });
+      setGiftVoucher(null);
       setGiftSuppressedAtTotal(null);
     } else {
       setAppliedVoucher({
         code: trimmed,
-        discountAmount: result.discountAmount ?? 0,
+        discountAmount,
         isAuto: false,
         voucherType: result.voucherType,
+        giftProductName: hasGift ? result.giftProductName : undefined,
+        giftProductImage: hasGift ? result.giftProductImage : undefined,
       });
+      if (hasGift) {
+        setGiftVoucher(null);
+        setGiftSuppressedAtTotal(null);
+      }
       setAutoSuppressedAtTotal(null);
     }
   };

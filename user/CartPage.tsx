@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useCart } from './CartContext';
 import { COLORS } from './designTokens';
 import { api } from '../services/api';
+import { navigate } from '../App';
 
 const CartPage: React.FC = () => {
   const { items, totalPrice, updateQuantity, removeItem, clearCart, appliedVoucher, giftVoucher, applyVoucher, removeVoucher } = useCart();
@@ -11,7 +12,13 @@ const CartPage: React.FC = () => {
   const [voucherError, setVoucherError] = useState<string | null>(null);
   const [availableVouchers, setAvailableVouchers] = useState<Array<{
     code: string; type: string; value: number; min_order_total: number; eligible: boolean;
-    max_discount?: number | null; display_name?: string | null; image_url?: string | null;
+    percent_value?: number | null;
+    fixed_value?: number | null;
+    max_discount?: number | null;
+    display_name?: string | null;
+    gift_name?: string | null;
+    image_url?: string | null;
+    gift_image_url?: string | null;
   }>>([]);
 
   const [shippingFee, setShippingFee] = useState<number>(0);
@@ -51,7 +58,35 @@ const CartPage: React.FC = () => {
   }, [items.length, totalPrice]);
 
   const voucherDiscount = appliedVoucher?.discountAmount ?? 0;
+  const displayGiftName = appliedVoucher?.giftProductName || giftVoucher?.giftProductName;
+  const displayGiftImage = appliedVoucher?.giftProductImage || giftVoucher?.giftProductImage;
+  const displayGiftCode = appliedVoucher?.giftProductName ? appliedVoucher.code : giftVoucher?.code;
   const totalPay = Math.max(0, totalPrice - voucherDiscount + shippingFee);
+
+  const formatVoucherLabel = (v: {
+    type: string;
+    value: number;
+    percent_value?: number | null;
+    fixed_value?: number | null;
+    display_name?: string | null;
+    gift_name?: string | null;
+  }): string => {
+    const rawPercent = Number(v.percent_value ?? (v.type === 'percent' ? v.value : 0) ?? 0);
+    const percentValue = Math.max(0, Math.min(100, rawPercent));
+    const fixedValue = Number(
+      v.fixed_value ?? ((v.type === 'fixed' || v.type === 'combo') ? v.value : 0) ?? 0,
+    );
+    const giftName = v.gift_name || v.display_name;
+
+    if (v.type === 'combo') {
+      return `${percentValue > 0 ? `Giảm ${percentValue}%` : ''}${
+        percentValue > 0 && fixedValue > 0 ? ' / ' : ''
+      }${fixedValue > 0 ? `Giảm ${fixedValue.toLocaleString()}đ` : ''}${giftName ? ` + ${giftName}` : ''}`;
+    }
+    if (v.type === 'product') return giftName || 'Quà tặng';
+    if (v.type === 'percent') return `Giảm ${percentValue}%`;
+    return `Giảm ${Number(fixedValue || v.value || 0).toLocaleString()}đ`;
+  };
 
   const handleApplyVoucher = async () => {
     setVoucherError(null);
@@ -104,7 +139,7 @@ const CartPage: React.FC = () => {
         total: String(result.totalAmount),
         date: result.createdAt || '',
       });
-      window.location.hash = `#/order-success?${params.toString()}`;
+      navigate(`/order-success?${params.toString()}`);
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : 'Đặt hàng thất bại');
     } finally {
@@ -116,13 +151,14 @@ const CartPage: React.FC = () => {
 
   if (items.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-16">
+      <div className="max-w-7xl mx-auto px-4 py-12">
         <h1 className="text-3xl font-black mb-2" style={{ color: COLORS.textMain }}>
           Giỏ hàng
         </h1>
         <p className="text-gray-500">Giỏ hàng của bạn đang trống.</p>
         <a
-          href="#/products"
+          href="/products"
+          onClick={(e) => { e.preventDefault(); navigate('/products'); }}
           className="inline-flex mt-6 px-6 py-3 rounded-full font-black text-white shadow-lg shadow-pink-200"
           style={{ backgroundColor: COLORS.ctaPrimary }}
         >
@@ -133,8 +169,8 @@ const CartPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-16">
-      <div className="flex items-end justify-between gap-4 mb-8">
+    <div className="max-w-7xl mx-auto px-4 py-12">
+      <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-black" style={{ color: COLORS.textMain }}>
             Giỏ hàng
@@ -165,7 +201,7 @@ const CartPage: React.FC = () => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3">
-                      <div>
+                      <div className="min-w-0">
                         <div className="font-black text-gray-900 truncate">{(it.product as any).name}</div>
                         {it.variant && (
                           <div className="text-xs text-gray-500 mt-1">
@@ -177,7 +213,7 @@ const CartPage: React.FC = () => {
                       </div>
                       <button
                         onClick={() => removeItem(it.key)}
-                        className="text-xs font-bold text-gray-500 hover:text-red-500"
+                        className="text-xs font-bold text-gray-500 hover:text-red-500 shrink-0"
                       >
                         Xóa
                       </button>
@@ -238,12 +274,7 @@ const CartPage: React.FC = () => {
                   {availableVouchers.map((v) => {
                     const alreadyApplied =
                       (appliedVoucher?.code === v.code) || (giftVoucher?.code === v.code);
-                    const label =
-                      v.type === 'product'
-                        ? (v.display_name || 'Quà tặng')
-                        : v.type === 'percent'
-                          ? `Giảm ${v.value}%`
-                          : `Giảm ${Number(v.value).toLocaleString()}đ`;
+                    const label = formatVoucherLabel(v);
                     return (
                       <button
                         key={v.code}
@@ -264,7 +295,7 @@ const CartPage: React.FC = () => {
                             }
                           })();
                         }}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                        className={`max-w-full min-w-0 px-3 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-normal text-left ${
                           alreadyApplied
                             ? 'bg-green-50 text-green-700 border-green-200 cursor-default'
                             : v.eligible
@@ -279,11 +310,11 @@ const CartPage: React.FC = () => {
                               : `Áp mã ${v.code}`
                         }
                       >
-                        {v.type === 'product' && v.image_url && (
-                          <img src={v.image_url} alt="" className="w-4 h-4 rounded inline-block mr-1 -mt-0.5 object-cover" />
+                        {(v.type === 'product' || v.type === 'combo') && ((v as any).gift_image_url || v.image_url) && (
+                          <img src={(v as any).gift_image_url || v.image_url || ''} alt="" className="w-4 h-4 rounded inline-block mr-1 -mt-0.5 object-cover" />
                         )}
-                        <span className="font-mono mr-1">{v.code}</span>
-                        <span className="text-gray-500">— {label}</span>
+                        <span className="font-mono mr-1 break-all">{v.code}</span>
+                        <span className="text-gray-500 break-words">— {label}</span>
                         {!v.eligible && (
                           <span className="ml-1 text-[10px] text-gray-400">(từ {Number(v.min_order_total).toLocaleString()}đ)</span>
                         )}
@@ -306,20 +337,20 @@ const CartPage: React.FC = () => {
               </p>
             )}
 
-            {giftVoucher && (
+            {(displayGiftName || displayGiftImage) && (
               <div className="mt-3 p-3 bg-amber-50 border border-amber-100 rounded-2xl">
                 <div className="flex items-center gap-3">
-                  {giftVoucher.giftProductImage && (
+                  {displayGiftImage && (
                     <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-50 flex-shrink-0 border border-gray-100">
-                      <img src={giftVoucher.giftProductImage} alt={giftVoucher.giftProductName || ''} className="w-full h-full object-cover" />
+                      <img src={displayGiftImage} alt={displayGiftName || ''} className="w-full h-full object-cover" />
                     </div>
                   )}
                   <div className="flex-grow min-w-0">
                     <div className="text-sm font-black text-amber-800">Quà tặng kèm đơn</div>
-                    <div className="text-sm text-amber-700">{giftVoucher.giftProductName || 'Sản phẩm tặng kèm'}</div>
-                    <div className="text-xs text-amber-600 mt-1">Mã: <strong>{giftVoucher.code}</strong></div>
+                    <div className="text-sm text-amber-700">{displayGiftName || 'Sản phẩm tặng kèm'}</div>
+                    {displayGiftCode && <div className="text-xs text-amber-600 mt-1">Mã: <strong>{displayGiftCode}</strong></div>}
                   </div>
-                  <button type="button" onClick={() => removeVoucher('gift')} className="text-gray-500 hover:text-red-600 font-bold text-sm flex-shrink-0">
+                  <button type="button" onClick={() => removeVoucher(appliedVoucher?.giftProductName ? 'discount' : 'gift')} className="text-gray-500 hover:text-red-600 font-bold text-sm flex-shrink-0">
                     Gỡ
                   </button>
                 </div>
@@ -398,10 +429,10 @@ const CartPage: React.FC = () => {
                 <span className="font-bold">−{voucherDiscount.toLocaleString()}đ</span>
               </div>
             )}
-            {giftVoucher && (
+            {(displayGiftName || displayGiftImage) && (
               <div className="flex items-center justify-between text-sm text-amber-700 mb-2">
                 <span>Quà tặng kèm</span>
-                <span className="font-bold">{giftVoucher.giftProductName || 'Có'}</span>
+                <span className="font-bold">{displayGiftName || 'Có'}</span>
               </div>
             )}
             <div className="flex items-center justify-between text-sm text-gray-600 mb-2">

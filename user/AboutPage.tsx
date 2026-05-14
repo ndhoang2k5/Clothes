@@ -2,11 +2,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
 import type { Blog } from '../types';
 import { parseBlogContent, parseBlogRenderMeta } from './utils/blogContent';
+import { navigate } from '../App';
+import { getSearchParams } from './utils/urls';
+import { buildBlogPostPath } from './utils/urls';
 
 const AboutPage: React.FC = () => {
   const categories = useMemo(() => ['intro', 'news', 'charity'] as Blog['category'][], []);
-  const hashQuery = window.location.hash.split('?')[1] || '';
-  const queryParams = useMemo(() => new URLSearchParams(hashQuery), [hashQuery]);
+  const queryParams = useMemo(() => getSearchParams(), []);
   const initialCategory = (queryParams.get('category') as Blog['category'] | null) || 'intro';
   const [activeCategory, setActiveCategory] = useState<Blog['category']>(categories.includes(initialCategory) ? initialCategory : 'intro');
 
@@ -58,7 +60,7 @@ const AboutPage: React.FC = () => {
 
   if (loading && posts.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-20">
+      <div className="max-w-7xl mx-auto px-4 py-14">
         <div className="animate-pulse space-y-6">
           <div className="h-8 w-48 bg-gray-200 rounded-full" />
           <div className="grid md:grid-cols-2 gap-10 mt-4">
@@ -76,31 +78,31 @@ const AboutPage: React.FC = () => {
 
   if (error || posts.length === 0) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-20">
-        <h2 className="text-4xl font-black mb-4">Về Unbee</h2>
+      <div className="max-w-7xl mx-auto px-4 py-14">
+        <h2 className="text-3xl font-black mb-3">Về Unbee</h2>
         <p className="text-gray-500">{error || 'Nội dung giới thiệu đang được cập nhật. Vui lòng quay lại sau nhé.'}</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-20">
-      <div className="mb-10">
-        <h1 className="text-4xl md:text-5xl font-black text-gray-900 mb-3">Về Unbee</h1>
+    <div className="max-w-7xl mx-auto px-4 py-14">
+      <div className="mb-8">
+        <h1 className="text-3xl md:text-4xl font-black text-gray-900 mb-2.5">Về Unbee</h1>
         <p className="text-gray-500 max-w-2xl">
           Câu chuyện thương hiệu được chia theo nhiều chuyên mục: Intro, News và Charity.
         </p>
 
-        <div className="flex items-center gap-3 flex-wrap mt-5">
+        <div className="flex items-center gap-3 flex-wrap mt-4">
           {categories.map((c) => (
             <button
               key={c}
               type="button"
               onClick={() => {
-                window.location.hash = `#/about?category=${encodeURIComponent(c)}`;
+                navigate(`/about?category=${encodeURIComponent(c)}`);
                 setActiveCategory(c);
               }}
-              className={`px-5 py-2 rounded-full font-black text-sm border transition-all ${
+              className={`px-4 py-1.5 rounded-full font-black text-sm border transition-all ${
                 activeCategory === c ? 'bg-pink-50 text-pink-700 border-pink-100' : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'
               }`}
             >
@@ -112,7 +114,7 @@ const AboutPage: React.FC = () => {
 
       {mainPost && (
         <div className="max-w-5xl">
-          <h2 className={`text-4xl md:text-5xl font-black mb-3 ${titleAlignClass} ${titleColorClass}`}>{mainPost.title}</h2>
+          <h2 className={`text-3xl md:text-4xl font-black mb-3 ${titleAlignClass} ${titleColorClass}`}>{mainPost.title}</h2>
           {renderMeta.heroIntro && (
             <div className={`text-[11px] uppercase tracking-[0.14em] text-gray-500/90 font-semibold mb-5 ${titleAlignClass}`}>
               {renderMeta.heroIntro}
@@ -212,7 +214,7 @@ const AboutPage: React.FC = () => {
               <button
                 key={p.id}
                 type="button"
-                onClick={() => (window.location.hash = `#/blog/post/${p.id}`)}
+                onClick={() => navigate(buildBlogPostPath(p))}
                 className="text-left bg-white rounded-[2rem] border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl transition-all"
               >
                 {p.thumbnail && (

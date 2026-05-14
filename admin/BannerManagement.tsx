@@ -5,7 +5,7 @@ import type { AdminBanner, BannerSlot } from '../types';
 
 const SLOT_OPTIONS: Array<{ value: BannerSlot; label: string; desc: string }> = [
   { value: 'home_hero', label: 'Ảnh bìa trang chủ', desc: 'Ảnh bìa lớn đầu trang (carousel)' },
-  { value: 'home_promo', label: 'Banner khuyến mãi', desc: 'Banner ưu đãi giữa trang' },
+  { value: 'home_promo', label: 'Banner khuyến mãi (legacy)', desc: 'Không còn dùng trên trang chủ mới; ưu tiên thẻ voucher (Quản lý mã → Thẻ trang chủ)' },
   { value: 'home_product_promo', label: 'Khuyến mãi sản phẩm (tên + ảnh)', desc: 'Grid card ưu đãi sản phẩm' },
   { value: 'home_category_feature', label: 'Danh mục nổi bật', desc: 'Banner/ảnh cho danh mục nổi bật' },
 ];

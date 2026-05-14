@@ -4,6 +4,7 @@ import { api } from '../services/api';
 import { Product, Collection } from '../types';
 import ProductCard from '../components/ProductCard';
 import Pagination from '../components/Pagination';
+import { navigate } from '../App';
 
 const ITEMS_PER_PAGE = 4;
 
@@ -14,7 +15,7 @@ const CollectionPage: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
 
   // Simple router for individual collection or list
-  const queryParams = new URLSearchParams(window.location.hash.split('?')[1]);
+  const queryParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search || '' : '');
   const activeId = queryParams.get('id');
 
   useEffect(() => {
@@ -97,21 +98,22 @@ const CollectionPage: React.FC = () => {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-20">
-      <div className="mb-16">
-        <h1 className="text-4xl font-black text-gray-800 mb-4">Các Bộ Sưu Tập Nổi Bật</h1>
-        <p className="text-gray-500 text-lg">Khám phá những xu hướng thời trang mới nhất dành cho bé yêu từ Unbee.</p>
+    <div className="max-w-7xl mx-auto px-4 py-14">
+      <div className="mb-10">
+        <h1 className="text-3xl font-black text-gray-800 mb-3">Các Bộ Sưu Tập Nổi Bật</h1>
+        <p className="text-gray-500">Khám phá những xu hướng thời trang mới nhất dành cho bé yêu từ Unbee.</p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-10">
+      <div className="grid md:grid-cols-2 gap-7">
         {collections.map(col => (
           <a 
             key={col.id} 
-            href={`#/collections?id=${col.id}`}
+            href={`/collections?id=${encodeURIComponent(String(col.id))}`}
+            onClick={(e) => { e.preventDefault(); navigate(`/collections?id=${encodeURIComponent(String(col.id))}`); }}
             className="group relative h-[500px] rounded-[3rem] overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-500 block"
           >
             <img src={col.coverImage} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={col.name} />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-12 flex flex-col justify-end">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent p-9 flex flex-col justify-end">
                 <span className="text-pink-400 font-bold uppercase tracking-widest text-sm mb-4">Collection</span>
                 <h3 className="text-3xl font-black text-white mb-4 group-hover:text-pink-300 transition-colors">{col.name}</h3>
                 <p className="text-gray-200 line-clamp-2 mb-8">{col.description}</p>

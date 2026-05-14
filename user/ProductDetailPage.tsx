@@ -3,6 +3,8 @@ import { api } from '../services/api';
 import type { Product, ComboItem } from '../types';
 import ProductCard from '../components/ProductCard';
 import { useCart } from './CartContext';
+import { navigate } from '../App';
+import { buildProductPath } from './utils/urls';
 
 interface ProductDetailPageProps {
   productId: string;
@@ -148,7 +150,7 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
 
   if (loading) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-16 bg-white min-h-[60vh]">
+      <div className="max-w-7xl mx-auto px-4 py-12 bg-white min-h-[60vh]">
         <div className="grid md:grid-cols-2 gap-10">
           <div className="aspect-[4/5] rounded-3xl skeleton" />
           <div className="space-y-4">
@@ -165,10 +167,10 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
 
   if (!product) {
     return (
-      <div className="max-w-7xl mx-auto px-4 py-20 text-center bg-white min-h-[60vh]">
+      <div className="max-w-7xl mx-auto px-4 py-14 text-center bg-white min-h-[60vh]">
         <h2 className="text-2xl font-black text-gray-800 mb-2">Không tìm thấy sản phẩm</h2>
         {error && <p className="text-gray-500 mb-4">{error}</p>}
-        <a href="#/products" className="text-pink-500 font-bold hover:underline">Quay lại danh sách sản phẩm</a>
+        <a href="/products" onClick={(e) => { e.preventDefault(); navigate('/products'); }} className="text-pink-500 font-bold hover:underline">Quay lại danh sách sản phẩm</a>
       </div>
     );
   }
@@ -176,11 +178,11 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
   return (
     <div className="max-w-7xl mx-auto px-4 py-12 bg-white min-h-[60vh]">
       <nav className="text-sm text-gray-400 mb-6 flex items-center gap-2">
-        <a href="#/" className="hover:text-pink-500">
+        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="hover:text-pink-500">
           Trang chủ
         </a>
         <span>/</span>
-        <a href="#/products" className="hover:text-pink-500">
+        <a href="/products" onClick={(e) => { e.preventDefault(); navigate('/products'); }} className="hover:text-pink-500">
           Sản phẩm
         </a>
         <span>/</span>
@@ -191,7 +193,7 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
 
       <div className="grid md:grid-cols-2 gap-10 mb-16">
         <div className="space-y-3">
-          <div className="relative bg-white rounded-[2rem] overflow-hidden border border-gray-100">
+          <div className="relative bg-white rounded-[1.75rem] overflow-hidden border border-gray-100">
             <div
               className="w-full h-[420px] bg-gray-100 overflow-hidden"
             >
@@ -452,7 +454,7 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
         <section className="mb-16">
           <h2 className="text-2xl font-black text-gray-900 mb-4">Combo này gồm</h2>
           {comboItems && comboItems.length > 0 ? (
-            <div className="bg-white rounded-[2rem] border border-gray-100 p-6 space-y-3">
+            <div className="bg-white rounded-[1.75rem] border border-gray-100 p-5 space-y-3">
               {comboItems.map((ci: any) => {
                 const v = ci.variant;
                 const p = ci.product;
@@ -518,7 +520,7 @@ const RelatedProducts: React.FC<{ currentId: string }> = ({ currentId }) => {
   if (list.length === 0) return null;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-5">
       {list.map((p) => (
         <ProductCard key={p.id} product={p} />
       ))}

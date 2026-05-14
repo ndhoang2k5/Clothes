@@ -16,6 +16,44 @@ const BlogBlockEditor: React.FC<Props> = ({ value, onChange }) => {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const pendingUploadIdxRef = useRef<number | null>(null);
   const lastEmittedRef = useRef<string>(value);
+  const paragraphTextareaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+  const mediaTextTextareaRefs = useRef<Record<number, HTMLTextAreaElement | null>>({});
+
+  const applyLinkToText = (text: string, start: number, end: number, url: string) => {
+    const safeUrl = String(url || '').trim();
+    if (!safeUrl) return text;
+    const s = Math.max(0, Math.min(start, text.length));
+    const e = Math.max(s, Math.min(end, text.length));
+    const selected = text.slice(s, e);
+    const label = (selected || '').trim() || 'link';
+    const before = text.slice(0, s);
+    const after = text.slice(e);
+    return `${before}[${label}](${safeUrl})${after}`;
+  };
+
+  const promptAndInsertLink = (idx: number, kind: 'paragraph' | 'media_text') => {
+    const el = kind === 'paragraph' ? paragraphTextareaRefs.current[idx] : mediaTextTextareaRefs.current[idx];
+    if (!el) return;
+    const url = window.prompt('Dán link URL (https://...)', 'https://');
+    if (!url) return;
+    const start = el.selectionStart ?? 0;
+    const end = el.selectionEnd ?? start;
+    setBlocks((prev) =>
+      prev.map((it, i) => {
+        if (i !== idx) return it;
+        if (kind === 'paragraph' && it.type === 'paragraph') {
+          return { ...it, text: applyLinkToText(it.text || '', start, end, url) };
+        }
+        if (kind === 'media_text' && it.type === 'media_text') {
+          return { ...it, text: applyLinkToText(it.text || '', start, end, url) };
+        }
+        return it;
+      }),
+    );
+    window.setTimeout(() => {
+      try { el.focus(); } catch {}
+    }, 0);
+  };
 
   // Sync blocks from outside changes (e.g. switching to another post),
   // but avoid overwriting while the user is typing (which can cause caret jumps).
@@ -279,6 +317,7 @@ const BlogBlockEditor: React.FC<Props> = ({ value, onChange }) => {
               <div>
                 <label className="block text-xs font-black text-gray-500 mb-1">Đoạn văn đi kèm</label>
                 <textarea
+                  ref={(node) => { mediaTextTextareaRefs.current[idx] = node; }}
                   value={b.text}
                   onChange={(e) =>
                     setBlocks((prev) =>
@@ -290,6 +329,18 @@ const BlogBlockEditor: React.FC<Props> = ({ value, onChange }) => {
                   className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500 min-h-28"
                   placeholder="Nhập đoạn văn hiển thị cạnh ảnh..."
                 />
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    className="px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-50"
+                    onClick={() => promptAndInsertLink(idx, 'media_text')}
+                  >
+                    Gắn link
+                  </button>
+                  <div className="text-[11px] text-gray-500">
+                    Bôi đen chữ cần gắn link → bấm “Gắn link”
+                  </div>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -506,6 +557,7 @@ const BlogBlockEditor: React.FC<Props> = ({ value, onChange }) => {
           {topBar}
 
           <textarea
+            ref={(node) => { paragraphTextareaRefs.current[idx] = node; }}
             value={b.text}
             onChange={(e) =>
               setBlocks((prev) =>
@@ -514,6 +566,18 @@ const BlogBlockEditor: React.FC<Props> = ({ value, onChange }) => {
             }
             className="w-full bg-gray-50 border border-gray-100 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-pink-500 min-h-32"
           />
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="button"
+              className="px-3 py-2 rounded-xl bg-white border border-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-50"
+              onClick={() => promptAndInsertLink(idx, 'paragraph')}
+            >
+              Gắn link
+            </button>
+            <div className="text-[11px] text-gray-500">
+              Bôi đen chữ cần gắn link → bấm “Gắn link”
+            </div>
+          </div>
         </div>
       );
     });

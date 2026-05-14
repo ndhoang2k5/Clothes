@@ -3,7 +3,7 @@ import { api } from '../services/api';
 import type { Blog } from '../types';
 import BlogBlockEditor from './components/BlogBlockEditor';
 
-type TabKey = 'intro' | 'tips' | 'news' | 'charity';
+type TabKey = 'intro' | 'tips' | 'news' | 'share' | 'charity';
 type ListKey = Exclude<TabKey, 'intro'>;
 type VisibilityFilter = 'all' | 'on' | 'off';
 
@@ -35,6 +35,7 @@ const DEFAULT_STORY: StoryState = {
 const CATEGORY_LABEL: Record<ListKey, string> = {
   tips: 'Tips',
   news: 'News',
+  share: 'Chia sẻ',
   charity: 'Charity',
 };
 
@@ -54,6 +55,7 @@ const BlogsManagement: React.FC = () => {
   const [postsByCategory, setPostsByCategory] = useState<Record<ListKey, Blog[]>>({
     tips: [],
     news: [],
+    share: [],
     charity: [],
   });
 
@@ -87,7 +89,7 @@ const BlogsManagement: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const [introBlogs, tipsBlogs, newsBlogs, charityBlogs] = await Promise.all([
+        const [introBlogs, tipsBlogs, newsBlogs, shareBlogs, charityBlogs] = await Promise.all([
           api
             .adminListBlogs({ category: 'intro', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
             .catch(() => []),
@@ -96,6 +98,9 @@ const BlogsManagement: React.FC = () => {
             .catch(() => []),
           api
             .adminListBlogs({ category: 'news', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
+            .catch(() => []),
+          api
+            .adminListBlogs({ category: 'share', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
             .catch(() => []),
           api
             .adminListBlogs({ category: 'charity', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
@@ -119,6 +124,7 @@ const BlogsManagement: React.FC = () => {
         setPostsByCategory({
           tips: tipsBlogs || [],
           news: newsBlogs || [],
+          share: shareBlogs || [],
           charity: charityBlogs || [],
         });
       } catch (e: any) {
@@ -158,6 +164,8 @@ const BlogsManagement: React.FC = () => {
       setPostsByCategory((prev) => ({ ...prev, tips: upsert(prev.tips, saved) }));
     } else if (category === 'news') {
       setPostsByCategory((prev) => ({ ...prev, news: upsert(prev.news, saved) }));
+    } else if (category === 'share') {
+      setPostsByCategory((prev) => ({ ...prev, share: upsert(prev.share, saved) }));
     } else {
       setPostsByCategory((prev) => ({ ...prev, charity: upsert(prev.charity, saved) }));
     }
@@ -312,6 +320,7 @@ const BlogsManagement: React.FC = () => {
       { key: 'intro', label: 'Intro (Về Unbee)' },
       { key: 'tips', label: 'Tips' },
       { key: 'news', label: 'News' },
+      { key: 'share', label: 'Chia sẻ' },
       { key: 'charity', label: 'Charity' },
     ],
     [],

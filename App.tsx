@@ -1,21 +1,23 @@
 
-import React, { useState, useEffect, Component } from 'react';
+import React, { useState, useEffect, Component, Suspense, lazy } from 'react';
 import Navbar from './user/Navbar';
-import HomePage from './user/HomePage';
-import ProductPage from './user/ProductPage';
-import CollectionPage from './user/CollectionPage';
-import ProductDetailPage from './user/ProductDetailPage';
-import AboutPage from './user/AboutPage';
-import BlogPage from './user/BlogPage';
-import TipsPage from './user/TipsPage';
-import BlogPostPage from './user/BlogPostPage';
-import CartPage from './user/CartPage';
-import OrderSuccessPage from './user/OrderSuccessPage';
 import { CartProvider } from './user/CartContext';
 import { AuthProvider } from './user/AuthContext';
-import LoginPage from './user/LoginPage';
-import AccountPage from './user/AccountPage';
 import { api } from './services/api';
+import { PageLoadingFallback } from './user/components/PageLoadingFallback';
+
+const HomePage = lazy(() => import('./user/HomePage'));
+const ProductPage = lazy(() => import('./user/ProductPage'));
+const CollectionPage = lazy(() => import('./user/CollectionPage'));
+const ProductDetailPage = lazy(() => import('./user/ProductDetailPage'));
+const AboutPage = lazy(() => import('./user/AboutPage'));
+const BlogPage = lazy(() => import('./user/BlogPage'));
+const TipsPage = lazy(() => import('./user/TipsPage'));
+const BlogPostPage = lazy(() => import('./user/BlogPostPage'));
+const CartPage = lazy(() => import('./user/CartPage'));
+const OrderSuccessPage = lazy(() => import('./user/OrderSuccessPage'));
+const LoginPage = lazy(() => import('./user/LoginPage'));
+const AccountPage = lazy(() => import('./user/AccountPage'));
 
 function parseIdFromSlug(segment: string): string {
   const s = String(segment || '').trim();
@@ -69,7 +71,7 @@ const COMPANY_INFO = {
   email: 'info@unbee.vn',
   messengerUrl: 'https://www.facebook.com/messages/t/115598328165203',
   facebookUrl: 'https://www.facebook.com/thoitrangunbee/',
-  zaloUrl: 'https://zalo.me/0336674688',
+  zaloUrl: 'https://zalo.me/0984493905',
 } as const;
 
 const MobileQuickContacts: React.FC = () => (
@@ -369,7 +371,7 @@ const App: React.FC = () => {
       // #/blog/post/:id -> /blogs/:category/:id (category best-effort via query param)
       else if (hashPath.startsWith('#/blog/post/')) {
         const id = String(hashPath.split('/').slice(-1)[0] || '').trim();
-        const cat = String(params.get('category') || 'news');
+        const cat = String(params.get('category') || 'tin-tuc');
         window.history.replaceState({}, '', `/blogs/${encodeURIComponent(cat)}/${encodeURIComponent(id)}`);
       }
       // #/blog?... -> /blogs?...
@@ -476,7 +478,9 @@ const App: React.FC = () => {
           <Navbar />
           <MobileQuickContacts />
           <main className="flex-grow min-h-[80vh]">
-            {renderRoute()}
+            <Suspense fallback={<PageLoadingFallback />}>
+              {renderRoute()}
+            </Suspense>
           </main>
           <Footer />
         </div>

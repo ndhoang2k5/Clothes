@@ -24,7 +24,7 @@ const IntroManagement: React.FC = () => {
       try {
         const [introBlogs, tipBlogs] = await Promise.all([
           api.adminListBlogs({ category: 'intro' }).catch(() => []),
-          api.adminListBlogs({ category: 'tips' }).catch(() => []),
+          api.adminListBlogs({ category: 'tram-sac-cua-me' }).catch(() => []),
         ]);
         const intro = introBlogs[0];
         if (intro) {
@@ -182,7 +182,7 @@ const IntroManagement: React.FC = () => {
             <div>
               <h3 className="text-xl font-black text-gray-800">Mẹo nhỏ cho mẹ - Vui khỏe cho bé</h3>
               <p className="text-xs text-gray-500 mt-1">
-                Quản lý các bài viết mẹo nhỏ (category = tips) hiển thị ở cuối trang chủ.
+                Quản lý các bài viết chuyên mục Trạm sạc của mẹ hiển thị ở cuối trang chủ.
               </p>
             </div>
             <button
@@ -193,7 +193,7 @@ const IntroManagement: React.FC = () => {
                   content: '',
                   thumbnail: '',
                   author: '',
-                  category: 'tips',
+                  category: 'tram-sac-cua-me',
                 } as Blog)
               }
               className="px-4 py-2 rounded-2xl bg-pink-500 text-white font-black text-sm hover:bg-pink-600"
@@ -221,10 +221,10 @@ const IntroManagement: React.FC = () => {
                       <h4 className="text-sm font-black text-gray-800 truncate">{t.title}</h4>
                       <span
                         className={`text-[10px] font-black px-2 py-1 rounded-full ${
-                          t.category === 'tips' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
+                          t.category === 'tram-sac-cua-me' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-500'
                         }`}
                       >
-                        {t.category === 'tips' ? 'Tips' : t.category}
+                        {t.category === 'tram-sac-cua-me' ? 'Trạm sạc của mẹ' : t.category}
                       </span>
                     </div>
                     <div className="text-[11px] text-gray-400 mt-1 truncate">
@@ -420,7 +420,7 @@ const IntroManagement: React.FC = () => {
                           content: editingTip.content || '',
                           thumbnail: editingTip.thumbnail || '',
                           author: editingTip.author || '',
-                          category: 'tips',
+                          category: 'tram-sac-cua-me',
                           is_published: (editingTip as any).is_published ?? true,
                         });
                       } else {
@@ -429,7 +429,7 @@ const IntroManagement: React.FC = () => {
                           content: editingTip.content || '',
                           thumbnail: editingTip.thumbnail || '',
                           author: editingTip.author || '',
-                          category: 'tips',
+                          category: 'tram-sac-cua-me',
                           is_published: (editingTip as any).is_published ?? true,
                         });
                       }

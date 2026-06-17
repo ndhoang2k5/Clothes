@@ -90,7 +90,10 @@ const ClearanceManagement: React.FC = () => {
       void api
         .adminListProductsPage({ page: 1, per_page: 10, q: term, include_inactive: true })
         .then((res) => {
-          const items = (res.items || []).filter((p) => p.category !== CLEARANCE_SLUG);
+          const items = (res.items || []).filter((p) => {
+            const cats = p.categories?.length ? p.categories : p.category ? [p.category] : [];
+            return !cats.includes(CLEARANCE_SLUG);
+          });
           setAddItems(items);
         })
         .catch((e: any) => setError(e?.message || 'Không thể tìm sản phẩm'))

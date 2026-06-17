@@ -2,10 +2,17 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { api } from '../services/api';
 import type { Blog } from '../types';
 import BlogBlockEditor from './components/BlogBlockEditor';
+import {
+  BLOG_NAV_SECTIONS,
+  getBlogSectionLabel,
+  isIntroBlog,
+  normalizeBlogSectionSlug,
+  type BlogSectionSlug,
+} from '../user/utils/blogCategories';
 
-type TabKey = 'intro' | 'tips' | 'news' | 'share' | 'charity';
-type ListKey = Exclude<TabKey, 'intro'>;
+type TabKey = 'intro' | 'blogs';
 type VisibilityFilter = 'all' | 'on' | 'off';
+type SectionFilter = BlogSectionSlug | 'all';
 
 type StoryState = {
   id?: number;
@@ -32,13 +39,6 @@ const DEFAULT_STORY: StoryState = {
   imageUrl: 'https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?auto=format&fit=crop&q=80&w=800',
 };
 
-const CATEGORY_LABEL: Record<ListKey, string> = {
-  tips: 'Tips',
-  news: 'News',
-  share: 'Chia sẻ',
-  charity: 'Charity',
-};
-
 function visibilityBadge(isPublished: boolean) {
   return isPublished
     ? 'bg-green-100 text-green-700 border-green-200'
@@ -46,20 +46,16 @@ function visibilityBadge(isPublished: boolean) {
 }
 
 const BlogsManagement: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<TabKey>('intro');
+  const [activeTab, setActiveTab] = useState<TabKey>('blogs');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [story, setStory] = useState<StoryState>(DEFAULT_STORY);
-  const [postsByCategory, setPostsByCategory] = useState<Record<ListKey, Blog[]>>({
-    tips: [],
-    news: [],
-    share: [],
-    charity: [],
-  });
+  const [posts, setPosts] = useState<Blog[]>([]);
+  const [sectionFilter, setSectionFilter] = useState<SectionFilter>('all');
 
-  const [editingPostCategory, setEditingPostCategory] = useState<ListKey>('tips');
+  const [editingPostSection, setEditingPostSection] = useState<BlogSectionSlug>('tin-tuc');
   const [editingPost, setEditingPost] = useState<EditingState>(null);
   const [visibilityFilter, setVisibilityFilter] = useState<VisibilityFilter>('all');
   const [searchText, setSearchText] = useState('');
@@ -89,21 +85,18 @@ const BlogsManagement: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const [introBlogs, tipsBlogs, newsBlogs, shareBlogs, charityBlogs] = await Promise.all([
+        const [introBlogs, blogPosts] = await Promise.all([
           api
             .adminListBlogs({ category: 'intro', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
             .catch(() => []),
           api
-            .adminListBlogs({ category: 'tips', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
-            .catch(() => []),
-          api
-            .adminListBlogs({ category: 'news', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
-            .catch(() => []),
-          api
-            .adminListBlogs({ category: 'share', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
-            .catch(() => []),
-          api
-            .adminListBlogs({ category: 'charity', q: searchText, author: authorFilter, date_from: dateFrom, date_to: dateTo })
+            .adminListBlogs({
+              q: searchText,
+              author: authorFilter,
+              date_from: dateFrom,
+              date_to: dateTo,
+              exclude_intro: true,
+            })
             .catch(() => []),
         ]);
 
@@ -121,12 +114,14 @@ const BlogsManagement: React.FC = () => {
           setStory(DEFAULT_STORY);
         }
 
-        setPostsByCategory({
-          tips: tipsBlogs || [],
-          news: newsBlogs || [],
-          share: shareBlogs || [],
-          charity: charityBlogs || [],
-        });
+        setPosts(
+          (blogPosts || [])
+            .filter((p) => !isIntroBlog(p))
+            .map((p) => ({
+              ...p,
+              category: normalizeBlogSectionSlug(p.category),
+            })),
+        );
       } catch (e: any) {
         if (!cancelled) setError(e?.message || 'Không thể tải blog');
       } finally {
@@ -159,17 +154,24 @@ const BlogsManagement: React.FC = () => {
     };
   }, []);
 
-  const upsertPostInState = (category: ListKey, saved: Blog) => {
-    if (category === 'tips') {
-      setPostsByCategory((prev) => ({ ...prev, tips: upsert(prev.tips, saved) }));
-    } else if (category === 'news') {
-      setPostsByCategory((prev) => ({ ...prev, news: upsert(prev.news, saved) }));
-    } else if (category === 'share') {
-      setPostsByCategory((prev) => ({ ...prev, share: upsert(prev.share, saved) }));
-    } else {
-      setPostsByCategory((prev) => ({ ...prev, charity: upsert(prev.charity, saved) }));
-    }
+  const upsertPostInState = (saved: Blog) => {
+    const normalized = {
+      ...saved,
+      category: normalizeBlogSectionSlug(saved.category),
+    };
+    setPosts((prev) => upsert(prev, normalized));
   };
+
+  const visiblePosts = useMemo(() => {
+    return posts.filter((p) => {
+      if (sectionFilter !== 'all' && normalizeBlogSectionSlug(p.category) !== sectionFilter) {
+        return false;
+      }
+      if (visibilityFilter === 'all') return true;
+      if (visibilityFilter === 'on') return Boolean(p.isPublished);
+      return !Boolean(p.isPublished);
+    });
+  }, [posts, sectionFilter, visibilityFilter]);
 
   const handleSaveStory = async () => {
     setSaving(true);
@@ -207,7 +209,13 @@ const BlogsManagement: React.FC = () => {
       setKpiLoading(true);
       try {
         const value = await api.adminGetBlogKpis({
-          category: (activeTab as Blog['category']) || 'all',
+          category:
+            activeTab === 'intro'
+              ? 'intro'
+              : sectionFilter !== 'all'
+              ? sectionFilter
+              : undefined,
+          exclude_intro: activeTab === 'blogs' && sectionFilter === 'all',
           date_from: dateFrom || undefined,
           date_to: dateTo || undefined,
         });
@@ -222,25 +230,27 @@ const BlogsManagement: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, dateFrom, dateTo]);
+  }, [activeTab, sectionFilter, dateFrom, dateTo]);
 
-  const openCreatePost = (category: ListKey) => {
-    setEditingPostCategory(category);
+  const openCreatePost = (section: BlogSectionSlug = 'tin-tuc') => {
+    setEditingPostSection(section);
     setEditingPost({
       id: undefined,
       title: '',
       content: '',
       thumbnail: '',
       author: '',
-      category,
+      category: section,
       isPublished: false,
     } as any);
   };
 
-  const openEditPost = (category: ListKey, p: Blog) => {
-    setEditingPostCategory(category);
+  const openEditPost = (p: Blog) => {
+    const section = normalizeBlogSectionSlug(p.category);
+    setEditingPostSection(section);
     setEditingPost({
       ...p,
+      category: section,
       isPublished: !!p.isPublished,
     });
   };
@@ -257,7 +267,7 @@ const BlogsManagement: React.FC = () => {
         content: editingPost.content || '',
         thumbnail: editingPost.thumbnail || '',
         author: editingPost.author || '',
-        category: editingPostCategory,
+        category: editingPostSection,
         is_published: Boolean((editingPost as any).isPublished),
       };
 
@@ -268,7 +278,7 @@ const BlogsManagement: React.FC = () => {
         saved = await api.adminCreateBlog(payload as any);
       }
 
-      upsertPostInState(editingPostCategory, saved);
+      upsertPostInState(saved);
       setEditingPost(null);
     } catch (e: any) {
       setError(e?.message || 'Lưu bài viết thất bại');
@@ -277,16 +287,13 @@ const BlogsManagement: React.FC = () => {
     }
   };
 
-  const handleDeletePost = async (category: ListKey, id: string) => {
+  const handleDeletePost = async (id: string) => {
     if (!confirm('Xoá bài viết này?')) return;
     setSaving(true);
     setError(null);
     try {
       await api.adminDeleteBlog(Number(id));
-      setPostsByCategory((prev) => ({
-        ...prev,
-        [category]: prev[category].filter((x) => x.id !== id),
-      }));
+      setPosts((prev) => prev.filter((x) => x.id !== id));
     } catch (e: any) {
       setError(e?.message || 'Xoá bài viết thất bại');
     } finally {
@@ -294,11 +301,7 @@ const BlogsManagement: React.FC = () => {
     }
   };
 
-  const handleQuickVisibilityChange = async (
-    category: ListKey,
-    post: Blog,
-    nextPublished: boolean,
-  ) => {
+  const handleQuickVisibilityChange = async (post: Blog, nextPublished: boolean) => {
     if (!post.id) return;
     if (Boolean(post.isPublished) === nextPublished) return;
     setSaving(true);
@@ -307,7 +310,7 @@ const BlogsManagement: React.FC = () => {
       const saved = await api.adminUpdateBlog(Number(post.id), {
         is_published: nextPublished,
       });
-      upsertPostInState(category, saved);
+      upsertPostInState(saved);
     } catch (e: any) {
       setError(e?.message || 'Cập nhật trạng thái hiển thị thất bại');
     } finally {
@@ -315,13 +318,28 @@ const BlogsManagement: React.FC = () => {
     }
   };
 
+  const handleQuickCategoryChange = async (post: Blog, nextSection: BlogSectionSlug) => {
+    if (!post.id) return;
+    const current = normalizeBlogSectionSlug(post.category);
+    if (current === nextSection) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await api.adminUpdateBlog(Number(post.id), {
+        category: nextSection,
+      });
+      upsertPostInState(saved);
+    } catch (e: any) {
+      setError(e?.message || 'Đổi chuyên mục thất bại');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const tabs: Array<{ key: TabKey; label: string }> = useMemo(
     () => [
+      { key: 'blogs', label: 'Blogs' },
       { key: 'intro', label: 'Intro (Về Unbee)' },
-      { key: 'tips', label: 'Tips' },
-      { key: 'news', label: 'News' },
-      { key: 'share', label: 'Chia sẻ' },
-      { key: 'charity', label: 'Charity' },
     ],
     [],
   );
@@ -514,10 +532,35 @@ const BlogsManagement: React.FC = () => {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h3 className="text-2xl font-black text-gray-800">{CATEGORY_LABEL[activeTab as ListKey]}</h3>
+              <h3 className="text-2xl font-black text-gray-800">Blogs</h3>
               <p className="text-xs text-gray-500 mt-2">
-                Tạo nhiều bài viết. Mỗi bài có nhiều ảnh + nhiều đoạn văn trong nội dung.
+                Tạo nhiều bài viết. Mỗi bài có nhiều ảnh + nhiều đoạn văn trong nội dung. Chọn chuyên mục khi tạo/sửa bài.
               </p>
+              <div className="flex gap-2 mt-3 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setSectionFilter('all')}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-black border ${
+                    sectionFilter === 'all' ? 'bg-pink-50 text-pink-700 border-pink-200' : 'bg-white text-gray-600 border-gray-200'
+                  }`}
+                >
+                  Tất cả chuyên mục
+                </button>
+                {BLOG_NAV_SECTIONS.map((section) => (
+                  <button
+                    key={section.slug}
+                    type="button"
+                    onClick={() => setSectionFilter(section.slug)}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-black border ${
+                      sectionFilter === section.slug
+                        ? 'bg-pink-50 text-pink-700 border-pink-200'
+                        : 'bg-white text-gray-600 border-gray-200'
+                    }`}
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </div>
               <div className="flex gap-2 mt-3 flex-wrap">
                 {([
                   { key: 'all', label: 'Tất cả' },
@@ -565,7 +608,7 @@ const BlogsManagement: React.FC = () => {
             </div>
             <button
               type="button"
-              onClick={() => openCreatePost(activeTab as ListKey)}
+              onClick={() => openCreatePost(sectionFilter === 'all' ? 'tin-tuc' : sectionFilter)}
               className="px-5 py-3 rounded-2xl bg-pink-500 text-white font-black text-xs hover:bg-pink-600 transition-colors shadow-lg shadow-pink-200"
               disabled={saving}
             >
@@ -573,13 +616,13 @@ const BlogsManagement: React.FC = () => {
             </button>
           </div>
 
-          {postsByCategory[activeTab as ListKey].length === 0 ? (
+          {visiblePosts.length === 0 ? (
             <div className="bg-gray-50 border border-gray-100 rounded-[2rem] p-10 text-center">
               <h4 className="text-xl font-black text-gray-800 mb-2">Chưa có bài viết</h4>
-              <p className="text-gray-500 mb-6">Bạn có thể bắt đầu tạo bài News/Charity ngay tại nút “+ Thêm bài viết”.</p>
+              <p className="text-gray-500 mb-6">Bạn có thể bắt đầu tạo bài viết mới tại nút “+ Thêm bài viết”.</p>
               <button
                 type="button"
-                onClick={() => openCreatePost(activeTab as ListKey)}
+                onClick={() => openCreatePost(sectionFilter === 'all' ? 'tin-tuc' : sectionFilter)}
                 className="bg-pink-500 text-white px-8 py-3 rounded-xl font-black hover:bg-pink-600 transition-colors disabled:opacity-60"
                 disabled={saving}
               >
@@ -588,13 +631,7 @@ const BlogsManagement: React.FC = () => {
             </div>
           ) : (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {postsByCategory[activeTab as ListKey]
-                .filter((p) => {
-                  if (visibilityFilter === 'all') return true;
-                  if (visibilityFilter === 'on') return Boolean(p.isPublished);
-                  return !Boolean(p.isPublished);
-                })
-                .map((p) => (
+              {visiblePosts.map((p) => (
                 <div key={p.id} className="border border-gray-100 rounded-[2rem] overflow-hidden bg-white hover:shadow-sm transition-shadow">
                   {p.thumbnail ? (
                     <div className="h-40 bg-gray-50 overflow-hidden">
@@ -607,16 +644,19 @@ const BlogsManagement: React.FC = () => {
                   )}
                   <div className="p-4">
                     <div className="text-sm font-black text-gray-900 line-clamp-2 mb-2">{p.title}</div>
+                    <div className="text-[10px] font-black text-pink-600 mb-2">
+                      {getBlogSectionLabel(normalizeBlogSectionSlug(p.category))}
+                    </div>
                     <div className="text-[11px] text-gray-400 mb-3">
                       {(p.publishedAt || p.createdAt) ? new Date(p.publishedAt || p.createdAt).toLocaleDateString('vi-VN') : ''}
                     </div>
                     <div className={`inline-flex px-2 py-1 rounded-full text-[10px] font-black border mb-3 ${visibilityBadge(Boolean(p.isPublished))}`}>
                       {Boolean(p.isPublished) ? 'Đang mở' : 'Đang tắt'}
                     </div>
-                    <div className="flex flex-wrap gap-2 mb-3">
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
                       <button
                         type="button"
-                        onClick={() => void handleQuickVisibilityChange(activeTab as ListKey, p, true)}
+                        onClick={() => void handleQuickVisibilityChange(p, true)}
                         disabled={saving || Boolean(p.isPublished)}
                         className="px-2.5 py-1.5 rounded-lg bg-green-50 border border-green-200 text-green-700 text-[11px] font-black disabled:opacity-50"
                       >
@@ -624,17 +664,32 @@ const BlogsManagement: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => void handleQuickVisibilityChange(activeTab as ListKey, p, false)}
+                        onClick={() => void handleQuickVisibilityChange(p, false)}
                         disabled={saving || !Boolean(p.isPublished)}
                         className="px-2.5 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-700 text-[11px] font-black disabled:opacity-50"
                       >
                         Tắt bài viết
                       </button>
+                      <select
+                        value={normalizeBlogSectionSlug(p.category)}
+                        onChange={(e) =>
+                          void handleQuickCategoryChange(p, e.target.value as BlogSectionSlug)
+                        }
+                        disabled={saving}
+                        className="flex-1 min-w-[9.5rem] px-2 py-1.5 rounded-lg bg-white border border-pink-200 text-[11px] font-bold text-gray-700 outline-none focus:ring-2 focus:ring-pink-300 disabled:opacity-50"
+                        aria-label={`Chuyên mục: ${p.title}`}
+                      >
+                        {BLOG_NAV_SECTIONS.map((section) => (
+                          <option key={section.slug} value={section.slug}>
+                            {section.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div className="flex gap-2">
                       <button
                         type="button"
-                        onClick={() => openEditPost(activeTab as ListKey, p)}
+                        onClick={() => openEditPost(p)}
                         className="flex-1 px-3 py-2 rounded-xl bg-white border border-gray-100 text-gray-700 text-xs font-bold hover:bg-gray-50"
                         disabled={saving}
                       >
@@ -642,7 +697,7 @@ const BlogsManagement: React.FC = () => {
                       </button>
                       <button
                         type="button"
-                        onClick={() => void handleDeletePost(activeTab as ListKey, p.id)}
+                        onClick={() => void handleDeletePost(p.id)}
                         className="px-3 py-2 rounded-xl bg-red-50 border border-red-100 text-red-600 text-xs font-bold hover:bg-red-100"
                         disabled={saving}
                       >
@@ -657,15 +712,14 @@ const BlogsManagement: React.FC = () => {
         </div>
       )}
 
-      {editingPost && activeTab !== 'intro' && (
+      {editingPost && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
           <div className="bg-white rounded-[2rem] max-w-3xl w-full max-h-[90vh] overflow-y-auto shadow-2xl p-6">
             <div className="flex items-center justify-between gap-4 mb-4">
               <div>
                 <h3 className="text-xl font-black text-gray-800">
-                  {editingPost.id ? `Sửa bài viết (${CATEGORY_LABEL[editingPostCategory]})` : `Thêm bài viết (${CATEGORY_LABEL[editingPostCategory]})`}
+                  {editingPost.id ? 'Sửa bài viết' : 'Thêm bài viết'}
                 </h3>
-                <div className="text-xs text-gray-500 mt-1">{editingPostCategory}</div>
               </div>
               <button
                 type="button"
@@ -695,14 +749,34 @@ const BlogsManagement: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-black text-gray-400 uppercase mb-2">Tác giả (tuỳ chọn)</label>
-                  <input
-                    value={editingPost.author || ''}
-                    onChange={(e) => setEditingPost((prev) => (prev ? { ...prev, author: e.target.value } : prev))}
+                  <label className="block text-xs font-black text-gray-400 uppercase mb-2">Chuyên mục</label>
+                  <select
+                    value={editingPostSection}
+                    onChange={(e) => {
+                      const next = e.target.value as BlogSectionSlug;
+                      setEditingPostSection(next);
+                      setEditingPost((prev) => (prev ? { ...prev, category: next } : prev));
+                    }}
                     className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-pink-500"
                     disabled={saving}
-                  />
+                  >
+                    {BLOG_NAV_SECTIONS.map((section) => (
+                      <option key={section.slug} value={section.slug}>
+                        {section.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-gray-400 uppercase mb-2">Tác giả (tuỳ chọn)</label>
+                <input
+                  value={editingPost.author || ''}
+                  onChange={(e) => setEditingPost((prev) => (prev ? { ...prev, author: e.target.value } : prev))}
+                  className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-pink-500"
+                  disabled={saving}
+                />
               </div>
 
               <label className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">

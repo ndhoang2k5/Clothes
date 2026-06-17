@@ -1,8 +1,14 @@
 
 from sqlalchemy import text, or_, func
 import datetime
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from ...entities import models
+from ..product_category_utils import (
+    apply_category_slug_filter,
+    ensure_product_category,
+    resolve_category_ids_from_slugs,
+    sync_product_categories,
+)
 from ..serializers import (
     serialize_banner,
     serialize_order,
@@ -20,7 +26,6 @@ from ..voucher_service import VoucherService
 from ..shipping_service import ShippingService
 from ..order_service import OrderService
 from ..serializers import _normalize_banner_image_url
-from sqlalchemy.orm import selectinload
 
 class AdminService:
     MENU_CATEGORY_TAXONOMY = [
@@ -583,6 +588,10 @@ class AdminService:
         voucher = VoucherService.update(db, voucher_id, data)
         return serialize_voucher(voucher) if voucher else None
 
+    @staticmethod
+    def delete_voucher(db: Session, voucher_id: int) -> bool:
+        return VoucherService.delete(db, voucher_id)
+
     # --- Shipping rules (Phase A.4) ---
     @staticmethod
     def list_shipping_rules(db: Session, active_only: bool | None = None):
@@ -609,14 +618,40 @@ class AdminService:
         return ShippingService.delete(db, rule_id)
 
     @staticmethod
+    def _extract_category_slugs(data: dict) -> list[str] | None:
+        if "categories" in data:
+            raw = data.pop("categories")
+            if isinstance(raw, list):
+                return [str(x).strip() for x in raw if str(x).strip()]
+            return []
+        if "category" in data:
+            raw = data.pop("category")
+            slug = str(raw).strip() if raw and isinstance(raw, str) else None
+            return [slug] if slug else []
+        return None
+
+    @staticmethod
     def create_product(db: Session, data: dict):
         images = data.pop("images", None)  # optional list of {image_url,...} or strings
         variants = data.pop("variants", None)  # optional list of variant dicts
+        category_slugs = AdminService._extract_category_slugs(data)
+        if category_slugs is not None and category_slugs:
+            category_ids = resolve_category_ids_from_slugs(db, category_slugs)
+            if category_ids:
+                data["category_id"] = category_ids[0]
 
         product = models.Product(**data)
         db.add(product)
         db.commit()
         db.refresh(product)
+
+        if category_slugs is not None and category_slugs:
+            category_ids = resolve_category_ids_from_slugs(db, category_slugs)
+            sync_product_categories(db, product.id, category_ids)
+            db.commit()
+        elif product.category_id:
+            ensure_product_category(db, product.id, product.category_id)
+            db.commit()
 
         if images:
             for idx, img in enumerate(images):
@@ -656,20 +691,12 @@ class AdminService:
             selectinload(models.Product.images),
             selectinload(models.Product.variants).selectinload(models.ProductVariant.images),
             selectinload(models.Product.category),
+            selectinload(models.Product.product_categories).selectinload(models.ProductCategory.category),
             selectinload(models.Product.combo_components).selectinload(models.ComboItem.component_variant),
         )
         if not include_inactive:
             query = query.filter(models.Product.is_active == True)  # noqa: E712
-        if category_slug and str(category_slug).strip():
-            cat = (
-                db.query(models.Category)
-                .filter(models.Category.slug == str(category_slug).strip())
-                .first()
-            )
-            if cat:
-                query = query.filter(models.Product.category_id == cat.id)
-            else:
-                query = query.filter(models.Product.id == -1)
+        query = apply_category_slug_filter(query, db, category_slug)
         if q and str(q).strip():
             term = f"%{str(q).strip()}%"
             query = (
@@ -715,16 +742,7 @@ class AdminService:
         )
         if not include_inactive:
             query = query.filter(models.Product.is_active == True)  # noqa: E712
-        if category_slug and str(category_slug).strip():
-            cat = (
-                db.query(models.Category)
-                .filter(models.Category.slug == str(category_slug).strip())
-                .first()
-            )
-            if cat:
-                query = query.filter(models.Product.category_id == cat.id)
-            else:
-                query = query.filter(models.Product.id == -1)
+        query = apply_category_slug_filter(query, db, category_slug)
         if q and str(q).strip():
             term = f"%{str(q).strip()}%"
             query = (
@@ -856,6 +874,7 @@ class AdminService:
                 selectinload(models.Product.images),
                 selectinload(models.Product.variants).selectinload(models.ProductVariant.images),
                 selectinload(models.Product.category),
+                selectinload(models.Product.product_categories).selectinload(models.ProductCategory.category),
                 selectinload(models.Product.combo_components).selectinload(models.ComboItem.component_variant),
             )
             .filter(models.Product.id == product_id)
@@ -868,19 +887,16 @@ class AdminService:
         if not product:
             return None
         data = dict(data)
-        # Luôn resolve category từ slug (ưu tiên); tự tạo danh mục "uu-dai-cuoi-mua" nếu chưa có
-        if "category" in data:
-            raw = data.pop("category")
-            slug = str(raw).strip() if raw and isinstance(raw, str) else None
-            if slug:
-                slug = str(slug).strip()
-                cat = db.query(models.Category).filter(models.Category.slug == slug).first()
-                if not cat:
-                    # Tự chuẩn hoá taxonomy trước khi resolve slug (đảm bảo luôn có 7 danh mục menu mới).
-                    AdminService._normalize_product_category_taxonomy(db)
-                    cat = db.query(models.Category).filter(models.Category.slug == slug).first()
-                if cat:
-                    data["category_id"] = cat.id
+        category_slugs = AdminService._extract_category_slugs(data)
+        if category_slugs is not None and category_slugs:
+            category_ids = resolve_category_ids_from_slugs(db, category_slugs)
+            if not category_ids:
+                AdminService._normalize_product_category_taxonomy(db)
+                category_ids = resolve_category_ids_from_slugs(db, category_slugs)
+            if category_ids:
+                data["category_id"] = category_ids[0]
+        elif category_slugs is not None and not category_slugs:
+            data.pop("category_id", None)
         if "category_id" in data and data["category_id"] is not None:
             try:
                 data["category_id"] = int(data["category_id"])
@@ -895,6 +911,9 @@ class AdminService:
             cid = data["category_id"]
             db.execute(text("UPDATE products SET category_id = :cid, updated_at = NOW() WHERE id = :pid"), {"cid": cid, "pid": product_id})
             db.expire(product, ["category"])
+        if category_slugs is not None:
+            category_ids = resolve_category_ids_from_slugs(db, category_slugs)
+            sync_product_categories(db, product_id, category_ids)
         db.commit()
         db.refresh(product)
         product = AdminService.get_product(db, product_id)
@@ -976,6 +995,8 @@ class AdminService:
         )
         db.add(new_product)
         db.flush()
+        if category_id:
+            ensure_product_category(db, new_product.id, int(category_id))
 
         # Move variants to new product and set size/color
         for v in all_variants:
@@ -1408,6 +1429,24 @@ class AdminService:
         if status == "review" and not getattr(blog, "reviewed_at", None):
             blog.reviewed_at = now
 
+    BLOG_SECTION_CATEGORY_ALIASES: dict[str, list[str]] = {
+        "tin-tuc": ["tin-tuc", "news", "tips", "share", "charity"],
+        "tram-sac-cua-me": ["tram-sac-cua-me"],
+        "cam-nang-me-be": ["cam-nang-me-be"],
+        "goc-nho-bat-mi": ["goc-nho-bat-mi"],
+        "intro": ["intro"],
+    }
+
+    @staticmethod
+    def _blog_categories_for_filter(category: str | None) -> list[str] | None:
+        if not category or not str(category).strip():
+            return None
+        cat = str(category).strip()
+        aliases = AdminService.BLOG_SECTION_CATEGORY_ALIASES.get(cat)
+        if aliases:
+            return aliases
+        return [cat]
+
     @staticmethod
     def list_blogs(
         db: Session,
@@ -1418,11 +1457,17 @@ class AdminService:
         date_to: str | None = None,
         published_only: bool = False,
         q: str | None = None,
+        exclude_intro: bool = False,
     ):
         AdminService._apply_scheduled_publication(db)
         query = db.query(models.Blog)
-        if category:
-            query = query.filter(models.Blog.category == category)
+        if exclude_intro:
+            query = query.filter(
+                or_(models.Blog.category.is_(None), models.Blog.category != "intro")
+            )
+        cats = AdminService._blog_categories_for_filter(category)
+        if cats:
+            query = query.filter(models.Blog.category.in_(cats))
         if status and str(status).strip():
             s = str(status).strip().lower()
             if s in ("draft", "review", "scheduled", "published"):
@@ -1471,12 +1516,18 @@ class AdminService:
         category: str | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        exclude_intro: bool = False,
     ):
         AdminService._apply_scheduled_publication(db)
 
         query = db.query(models.Blog)
-        if category and str(category).strip():
-            query = query.filter(models.Blog.category == str(category).strip())
+        if exclude_intro:
+            query = query.filter(
+                or_(models.Blog.category.is_(None), models.Blog.category != "intro")
+            )
+        cats = AdminService._blog_categories_for_filter(category)
+        if cats:
+            query = query.filter(models.Blog.category.in_(cats))
 
         effective_date_expr = func.coalesce(models.Blog.published_at, models.Blog.created_at)
         if date_from and str(date_from).strip():
@@ -1568,7 +1619,7 @@ class AdminService:
             n += 1
             slug = f"{base}-{n}"
 
-        category = (data.get("category") or "").strip() or None
+        category = (data.get("category") or "").strip() or "tin-tuc"
         blog = models.Blog(
             title=title,
             slug=slug,

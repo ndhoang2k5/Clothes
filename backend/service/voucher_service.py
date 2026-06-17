@@ -270,7 +270,7 @@ class VoucherService:
             if k in (
                 "code", "display_name", "image_url", "type", "value", "min_order_total", "max_order_total",
                 "max_discount", "usage_limit", "used_count", "valid_from", "valid_to", "is_active", "auto_apply",
-                "show_on_homepage", "homepage_sort_order", "card_theme", "card_icon", "benefits_json", "terms_text",
+                "show_on_homepage", "show_in_checkout", "homepage_sort_order", "card_theme", "card_icon", "benefits_json", "terms_text",
                 "order_condition_mode", "percent_value", "fixed_value", "gift_name", "gift_image_url", "gift_product_id",
             )
         }
@@ -313,7 +313,7 @@ class VoucherService:
         for k in (
             "code", "display_name", "image_url", "type", "value", "min_order_total", "max_order_total",
             "max_discount", "usage_limit", "used_count", "valid_from", "valid_to", "is_active", "auto_apply",
-            "show_on_homepage", "homepage_sort_order", "card_theme", "card_icon", "benefits_json", "terms_text",
+            "show_on_homepage", "show_in_checkout", "homepage_sort_order", "card_theme", "card_icon", "benefits_json", "terms_text",
             "order_condition_mode", "percent_value", "fixed_value", "gift_name", "gift_image_url", "gift_product_id",
         ):
             if k in data:
@@ -333,3 +333,12 @@ class VoucherService:
         db.commit()
         db.refresh(voucher)
         return voucher
+
+    @staticmethod
+    def delete(db: Session, voucher_id: int) -> bool:
+        voucher = db.query(models.Voucher).filter(models.Voucher.id == voucher_id).first()
+        if not voucher:
+            return False
+        db.delete(voucher)
+        db.commit()
+        return True

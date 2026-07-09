@@ -12,6 +12,7 @@ type Voucher = {
   percent_value?: number | null;
   fixed_value?: number | null;
   auto_apply?: boolean;
+  show_in_checkout?: boolean;
   type: 'percent' | 'fixed' | 'product' | 'combo';
   value: number;
   min_order_total: number;
@@ -66,6 +67,7 @@ const EMPTY_DRAFT: VoucherDraft = {
   is_active: true,
   auto_apply: false,
   show_on_homepage: false,
+  show_in_checkout: true,
   homepage_sort_order: 0,
   card_theme: 'amber',
   card_icon: 'gift',
@@ -92,6 +94,7 @@ const VoucherManagement: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [draftUploading, setDraftUploading] = useState(false);
   const [draft, setDraft] = useState<VoucherDraft>({ ...EMPTY_DRAFT });
+  const [editingVoucher, setEditingVoucher] = useState<Voucher | null>(null);
 
   const [promoEditor, setPromoEditor] = useState<Voucher | null>(null);
   const [promoForm, setPromoForm] = useState<PromoCardForm | null>(null);
@@ -138,7 +141,69 @@ const VoucherManagement: React.FC = () => {
     return () => window.clearTimeout(t);
   }, [q, activeOnly]);
 
-  const createVoucher = async () => {
+  const closeDraftEditor = () => {
+    setIsAdding(false);
+    setEditingVoucher(null);
+    setDraft({ ...EMPTY_DRAFT });
+  };
+
+  const openCreateEditor = () => {
+    setEditingVoucher(null);
+    setDraft({ ...EMPTY_DRAFT });
+    setIsAdding(true);
+  };
+
+  const openEditEditor = (v: Voucher) => {
+    const percentValue =
+      v.percent_value != null
+        ? Number(v.percent_value)
+        : v.type === 'percent'
+          ? Number(v.value || 0)
+          : 0;
+    const fixedValue =
+      v.fixed_value != null
+        ? Number(v.fixed_value)
+        : v.type === 'fixed' || v.type === 'combo'
+          ? Number(v.value || 0)
+          : 0;
+    const enableGift =
+      v.type === 'product' || v.type === 'combo' || Boolean(String(v.gift_name || v.display_name || '').trim());
+
+    setEditingVoucher(v);
+    setDraft({
+      ...EMPTY_DRAFT,
+      code: v.code,
+      display_name: v.display_name || '',
+      image_url: v.image_url || '',
+      gift_name: v.gift_name || v.display_name || '',
+      gift_image_url: v.gift_image_url || v.image_url || '',
+      gift_product_id: v.gift_product_id ?? null,
+      type: v.type,
+      value: Number(v.value || 0),
+      percent_value: percentValue > 0 ? percentValue : null,
+      fixed_value: fixedValue > 0 ? fixedValue : null,
+      min_order_total: Number(v.min_order_total || 0),
+      max_order_total: v.max_order_total == null ? null : Number(v.max_order_total),
+      max_discount: v.max_discount == null ? null : Number(v.max_discount),
+      usage_limit: v.usage_limit == null ? null : Number(v.usage_limit),
+      is_active: v.is_active !== false,
+      auto_apply: Boolean(v.auto_apply),
+      show_in_checkout: v.show_in_checkout !== false,
+      show_on_homepage: Boolean(v.show_on_homepage),
+      homepage_sort_order: Number(v.homepage_sort_order ?? 0),
+      card_theme: v.card_theme || 'amber',
+      card_icon: v.card_icon || 'gift',
+      benefits_lines: Array.isArray(v.benefits) ? v.benefits.join('\n') : '',
+      terms_text: v.terms_text || '',
+      order_condition_mode: v.order_condition_mode || 'from',
+      enable_percent: v.type === 'percent' || v.type === 'combo' || percentValue > 0,
+      enable_fixed: v.type === 'fixed' || v.type === 'combo' || fixedValue > 0,
+      enable_gift: enableGift,
+    });
+    setIsAdding(true);
+  };
+
+  const saveDraftVoucher = async () => {
     setError(null);
     try {
       const percentEnabled = Boolean(draft.enable_percent);
@@ -167,6 +232,7 @@ const VoucherManagement: React.FC = () => {
         gift_image_url: giftImage || null,
         gift_product_id: draft.gift_product_id ?? null,
         auto_apply: Boolean(draft.auto_apply),
+        show_in_checkout: draft.show_in_checkout !== false,
         type: inferredType,
         value: inferredType === 'percent' ? percentValue : inferredType === 'fixed' ? fixedValue : 0,
         percent_value: hasPercent ? percentValue : null,
@@ -194,12 +260,16 @@ const VoucherManagement: React.FC = () => {
         .map((s) => s.trim())
         .filter(Boolean);
       if (lines.length) payload.benefits = lines;
-      await api.adminCreateVoucher(payload);
-      setIsAdding(false);
-      setDraft({ ...EMPTY_DRAFT });
-      await load(1);
+
+      if (editingVoucher) {
+        await api.adminUpdateVoucher(editingVoucher.id, payload);
+      } else {
+        await api.adminCreateVoucher(payload);
+      }
+      closeDraftEditor();
+      await load(editingVoucher ? data.page || 1 : 1);
     } catch (e: any) {
-      setError(e?.message || 'Tạo voucher thất bại');
+      setError(e?.message || (editingVoucher ? 'Cập nhật voucher thất bại' : 'Tạo voucher thất bại'));
     }
   };
 
@@ -210,6 +280,21 @@ const VoucherManagement: React.FC = () => {
       await load(data.page || 1);
     } catch (e: any) {
       setError(e?.message || 'Cập nhật thất bại');
+    }
+  };
+
+  const deleteVoucher = async (voucher: Voucher) => {
+    const confirmed = window.confirm(`Xóa vĩnh viễn mã "${voucher.code}"? Hành động này không thể hoàn tác.`);
+    if (!confirmed) return;
+    setError(null);
+    try {
+      await api.adminDeleteVoucher(voucher.id);
+      const currentPage = Number(data.page || 1);
+      const currentCount = Array.isArray(data.items) ? data.items.length : 0;
+      const nextPage = currentPage > 1 && currentCount <= 1 ? currentPage - 1 : currentPage;
+      await load(nextPage);
+    } catch (e: any) {
+      setError(e?.message || 'Xóa voucher thất bại');
     }
   };
 
@@ -264,7 +349,10 @@ const VoucherManagement: React.FC = () => {
         </div>
         <button
           className="px-5 py-2.5 rounded-xl font-black text-white bg-pink-500 hover:bg-pink-600 shadow-lg shadow-pink-200"
-          onClick={() => setIsAdding((v) => !v)}
+          onClick={() => {
+            if (isAdding) closeDraftEditor();
+            else openCreateEditor();
+          }}
         >
           {isAdding ? 'Đóng' : 'Thêm mã mới'}
         </button>
@@ -295,7 +383,9 @@ const VoucherManagement: React.FC = () => {
 
       {isAdding && (
         <div className="bg-white border border-gray-100 rounded-[2rem] p-6 mb-6">
-          <div className="font-black text-gray-900 mb-4">Tạo mã giảm giá</div>
+          <div className="font-black text-gray-900 mb-4">
+            {editingVoucher ? `Chỉnh sửa mã giảm giá · ${editingVoucher.code}` : 'Tạo mã giảm giá'}
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <label className="text-sm font-bold text-gray-700">
               Mã giảm giá
@@ -414,6 +504,14 @@ const VoucherManagement: React.FC = () => {
                 onChange={(e) => setDraft((p) => ({ ...p, auto_apply: e.target.checked }))}
               />
               Tự động áp dụng (nếu khách không nhập mã)
+            </label>
+            <label className="text-sm font-bold text-gray-700 flex items-center gap-3">
+              <input
+                type="checkbox"
+                checked={draft.show_in_checkout !== false}
+                onChange={(e) => setDraft((p) => ({ ...p, show_in_checkout: e.target.checked }))}
+              />
+              Hiển thị đề xuất ở checkout
             </label>
           </div>
 
@@ -563,7 +661,7 @@ const VoucherManagement: React.FC = () => {
 
           <div className="mt-5 flex gap-3">
             <button
-              onClick={createVoucher}
+              onClick={saveDraftVoucher}
               className="px-6 py-3 rounded-2xl font-black text-white bg-pink-500 hover:bg-pink-600 shadow-lg shadow-pink-200"
               disabled={
                 !String(draft.code || '').trim()
@@ -572,10 +670,10 @@ const VoucherManagement: React.FC = () => {
                   && (!String(draft.gift_name || '').trim() || !String(draft.gift_image_url || draft.image_url || '').trim()))
               }
             >
-                Tạo mã
+                {editingVoucher ? 'Lưu chỉnh sửa' : 'Tạo mã'}
             </button>
             <button
-              onClick={() => setIsAdding(false)}
+              onClick={closeDraftEditor}
               className="px-6 py-3 rounded-2xl font-black bg-gray-100 text-gray-700 hover:bg-gray-200"
             >
               Hủy
@@ -672,10 +770,35 @@ const VoucherManagement: React.FC = () => {
                 <div className="flex flex-wrap gap-2 items-center">
                   <button
                     type="button"
+                    className="px-4 py-2 rounded-xl text-sm font-black bg-pink-50 text-pink-700 border border-pink-200 hover:bg-pink-100"
+                    onClick={() => openEditEditor(v)}
+                  >
+                    Chỉnh sửa chi tiết
+                  </button>
+                  <button
+                    type="button"
                     className="px-4 py-2 rounded-xl text-sm font-black bg-[#FFF7EC] text-[#7A4E2C] border border-[#E5D6C4] hover:bg-[#FFF0DC]"
                     onClick={() => openPromoEditor(v)}
                   >
                     Thẻ trang chủ
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-4 py-2 rounded-xl text-sm font-black border ${
+                      v.show_in_checkout !== false
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                    }`}
+                    onClick={() => updateVoucher(v.id, { show_in_checkout: !(v.show_in_checkout !== false) })}
+                  >
+                    {v.show_in_checkout !== false ? 'Đề xuất checkout: Bật' : 'Đề xuất checkout: Tắt'}
+                  </button>
+                  <button
+                    type="button"
+                    className="px-4 py-2 rounded-xl text-sm font-black bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                    onClick={() => { void deleteVoucher(v); }}
+                  >
+                    Xóa mã
                   </button>
                   <span className="text-xs text-gray-400">
                     Sửa hiển thị vé, lợi ích, điều kiện, màu &amp; icon

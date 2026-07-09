@@ -23,6 +23,7 @@ const ProductManagement: React.FC = () => {
     name: '',
     price: 0,
     category: 'so-sinh',
+    categories: ['so-sinh'],
     images: ['https://picsum.photos/400/500'],
     variants: [],
     isActive: true,
@@ -122,9 +123,23 @@ const ProductManagement: React.FC = () => {
 
   const handleSave = async () => {
     if (!newProduct.name || !newProduct.price) return;
+    const selectedCategories =
+      newProduct.categories?.length
+        ? newProduct.categories
+        : newProduct.category
+          ? [newProduct.category]
+          : [];
+    if (selectedCategories.length === 0) {
+      setError('Vui lòng chọn ít nhất một danh mục.');
+      return;
+    }
     setError(null);
     try {
-      await api.adminCreateProduct(newProduct as any);
+      await api.adminCreateProduct({
+        ...(newProduct as Product),
+        categories: selectedCategories,
+        category: selectedCategories[0],
+      });
       await reloadPage(1, search);
     } catch (e: any) {
       setError(e?.message || 'Lưu thất bại');
@@ -394,7 +409,11 @@ const ProductManagement: React.FC = () => {
                     </div>
                   </div>
                 </td>
-                <td className="py-4 px-4 text-gray-500">{categories.find((c) => c.slug === p.category)?.name ?? (p.category && p.category !== 'unknown' ? p.category : 'Chưa chọn')}</td>
+                <td className="py-4 px-4 text-gray-500">
+                  {(p.categories?.length ? p.categories : p.category ? [p.category] : [])
+                    .map((slug) => categories.find((c) => c.slug === slug)?.name ?? slug)
+                    .join(', ') || 'Chưa chọn'}
+                </td>
                 <td className="py-4 px-4">
                   <span className="font-bold text-pink-500">
                     {p.discountPrice
@@ -514,17 +533,44 @@ const ProductManagement: React.FC = () => {
                     onChange={e => setNewProduct({...newProduct, price: Number(e.target.value)})}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Danh mục</label>
-                  <select 
-                    className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-pink-500 outline-none"
-                    value={newProduct.category}
-                    onChange={e => setNewProduct({...newProduct, category: e.target.value})}
-                  >
-                    {categories.map(c => (
-                      <option key={c.id} value={c.slug}>{c.name}</option>
-                    ))}
-                  </select>
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">Danh mục</label>
+                <p className="text-xs text-gray-500 mb-2">Có thể chọn nhiều danh mục.</p>
+                <div className="border border-gray-200 rounded-xl p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+                  {categories.map((c) => {
+                    const selected =
+                      newProduct.categories?.length
+                        ? newProduct.categories
+                        : newProduct.category
+                          ? [newProduct.category]
+                          : [];
+                    const checked = selected.includes(c.slug);
+                    return (
+                      <label
+                        key={c.id}
+                        className={`flex items-center gap-2 text-sm font-medium rounded-lg px-2 py-1.5 cursor-pointer ${
+                          checked ? 'bg-pink-50 text-pink-700' : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...selected, c.slug]
+                              : selected.filter((slug) => slug !== c.slug);
+                            setNewProduct({
+                              ...newProduct,
+                              categories: next,
+                              category: next[0] || '',
+                            });
+                          }}
+                        />
+                        {c.name}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
               <div>

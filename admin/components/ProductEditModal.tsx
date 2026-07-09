@@ -80,6 +80,7 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
           price: fresh.price,
           discountPrice: fresh.discountPrice,
           category: fresh.category,
+          categories: fresh.categories?.length ? fresh.categories : fresh.category ? [fresh.category] : [],
           description: fresh.description,
           isActive: fresh.isActive ?? true,
           isHot: fresh.isHot,
@@ -148,6 +149,16 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
   const handleSave = async () => {
     if (!editing) return;
     if (!editingDraft.name || !editingDraft.price) return;
+    const selectedCategories =
+      editingDraft.categories?.length
+        ? editingDraft.categories
+        : editingDraft.category
+          ? [editingDraft.category]
+          : [];
+    if (selectedCategories.length === 0) {
+      setError('Vui lòng chọn ít nhất một danh mục.');
+      return;
+    }
 
     // tránh trùng size/màu (unique constraint)
     const seen = new Set<string>();
@@ -164,7 +175,11 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
     setSaving(true);
     setError(null);
     try {
-      await api.adminUpdateProduct(editing.id, editingDraft);
+      await api.adminUpdateProduct(editing.id, {
+        ...editingDraft,
+        categories: selectedCategories,
+        category: selectedCategories[0],
+      });
 
       // Ảnh: sync primary (nếu có)
       const primary = editingImages.find((x) => x.isPrimary);
@@ -285,17 +300,42 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
 
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Danh mục</label>
-                <select
-                  className="w-full border border-gray-200 rounded-xl px-4 py-3 focus:ring-2 focus:ring-pink-500 outline-none"
-                  value={editingDraft.category || ''}
-                  onChange={(e) => setEditingDraft({ ...editingDraft, category: e.target.value })}
-                >
-                  {categoryOptions.map((c) => (
-                    <option key={c.id} value={c.slug}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                <p className="text-xs text-gray-500 mb-2">Có thể chọn nhiều danh mục (vd: quần áo cho cả bé trai và bé gái).</p>
+                <div className="border border-gray-200 rounded-xl p-3 grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto">
+                  {categoryOptions.map((c) => {
+                    const selected =
+                      editingDraft.categories?.length
+                        ? editingDraft.categories
+                        : editingDraft.category
+                          ? [editingDraft.category]
+                          : [];
+                    const checked = selected.includes(c.slug);
+                    return (
+                      <label
+                        key={c.id}
+                        className={`flex items-center gap-2 text-sm font-medium rounded-lg px-2 py-1.5 cursor-pointer ${
+                          checked ? 'bg-pink-50 text-pink-700' : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? [...selected, c.slug]
+                              : selected.filter((slug) => slug !== c.slug);
+                            setEditingDraft({
+                              ...editingDraft,
+                              categories: next,
+                              category: next[0] || '',
+                            });
+                          }}
+                        />
+                        {c.name}
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
               <div>
@@ -377,7 +417,7 @@ const ProductEditModal: React.FC<Props> = ({ productId, categories, onClose, onS
                 ) : (
                   <span className="ml-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 font-bold">Thường</span>
                 )}
-                {(editingDraft.category || editing?.category) === 'uu-dai-cuoi-mua' && (
+                {(editingDraft.categories || (editingDraft.category ? [editingDraft.category] : [])).includes('uu-dai-cuoi-mua') && (
                   <span className="ml-2 px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-bold">Ưu đãi cuối mùa</span>
                 )}
               </div>

@@ -134,6 +134,12 @@ def update_voucher(voucher_id: int, data: dict = Body(...), db: Session = Depend
         raise HTTPException(status_code=404, detail="Voucher not found")
     return out
 
+@protected_router.delete("/vouchers/{voucher_id}")
+def delete_voucher(voucher_id: int, db: Session = Depends(get_db)):
+    if not AdminService.delete_voucher(db, voucher_id):
+        raise HTTPException(status_code=404, detail="Voucher not found")
+    return {"ok": True}
+
 @protected_router.get("/shipping-rules")
 def list_shipping_rules(active_only: bool | None = None, db: Session = Depends(get_db)):
     return AdminService.list_shipping_rules(db, active_only=active_only)
@@ -541,6 +547,7 @@ def list_blogs(
     date_from: str | None = None,
     date_to: str | None = None,
     q: str | None = None,
+    exclude_intro: bool = False,
     db: Session = Depends(get_db),
 ):
     return AdminService.list_blogs(
@@ -552,6 +559,7 @@ def list_blogs(
         date_to=date_to,
         published_only=False,
         q=q,
+        exclude_intro=exclude_intro,
     )
 
 
@@ -560,9 +568,16 @@ def get_blog_kpis(
     category: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    exclude_intro: bool = False,
     db: Session = Depends(get_db),
 ):
-    return AdminService.get_blog_kpis(db, category=category, date_from=date_from, date_to=date_to)
+    return AdminService.get_blog_kpis(
+        db,
+        category=category,
+        date_from=date_from,
+        date_to=date_to,
+        exclude_intro=exclude_intro,
+    )
 
 
 @protected_router.get("/blogs/editor-config")

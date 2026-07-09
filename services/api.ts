@@ -1,8 +1,9 @@
 
 import { Banner, AdminBanner } from '../types';
-import type { Product, Category, Order, Blog, Collection, BannerSlot } from '../types';
+import type { Product, Category, Order, Blog, Collection, BannerSlot, HomepagePromoCard } from '../types';
 import type { NewsletterSubscriber } from '../types';
 import { extractBlogPlainText } from '../user/utils/blogContent';
+import { normalizeBlogSectionSlug } from '../user/utils/blogCategories';
 
 // Mock Data initialization
 const INITIAL_PRODUCTS: Product[] = [
@@ -243,7 +244,12 @@ class ApiService {
       description: p.description || '',
       price: Number(p.base_price || 0),
       discountPrice: p.discount_price ?? undefined,
-      category: p.category_slug || 'unknown',
+      categories: Array.isArray(p.category_slugs)
+        ? p.category_slugs.filter(Boolean)
+        : p.category_slug
+          ? [p.category_slug]
+          : [],
+      category: p.category_slug || (Array.isArray(p.category_slugs) ? p.category_slugs[0] : 'unknown'),
       // `material` is not guaranteed to exist on the frontend `variants` objects,
       // so we read it from the raw backend payload first.
       material: p?.variants?.[0]?.material || p.material || '',
@@ -261,6 +267,77 @@ class ApiService {
     string,
     { items: Product[]; total: number; page: number; per_page: number; fetchedAt: number }
   >();
+  private productDetailCache = new Map<string, { product: Product; fetchedAt: number }>();
+  private productDetailInflight = new Map<string, Promise<Product>>();
+
+  private static readonly LIST_CACHE_TTL_MS = 2 * 60 * 1000;
+  private static readonly DETAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+
+  private buildProductsPageCacheKey(params?: {
+    category?: string | null;
+    q?: string | null;
+    page?: number;
+    per_page?: number;
+    sizes?: string[];
+    colors?: string[];
+    materials?: string[];
+    priceRange?: [number, number];
+    sort?: string;
+  }): string {
+    const category = params?.category ?? null;
+    const q = params?.q ?? null;
+    const page = params?.page ?? 1;
+    const per_page = params?.per_page ?? 24;
+    const sizes = params?.sizes ?? [];
+    const colors = params?.colors ?? [];
+    const materials = params?.materials ?? [];
+    const priceRange = params?.priceRange;
+    const sort = params?.sort ?? 'newest';
+    return `${category || 'all'}|${q || ''}|${page}|${per_page}|${sizes.join(',')}|${colors.join(',')}|${materials.join(',')}|${priceRange ? priceRange.join('-') : ''}|${sort}`;
+  }
+
+  peekProductsPage(params?: Parameters<ApiService['getProductsPage']>[0]) {
+    const key = this.buildProductsPageCacheKey(params);
+    const cached = this.productListCache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < ApiService.LIST_CACHE_TTL_MS) {
+      return { ...cached, fromCache: true as const };
+    }
+    return null;
+  }
+
+  findProductInListCaches(id: string): Product | null {
+    const target = String(id || '').trim();
+    if (!target) return null;
+    let newest: Product | null = null;
+    let newestAt = 0;
+    for (const entry of this.productListCache.values()) {
+      if (Date.now() - entry.fetchedAt >= ApiService.LIST_CACHE_TTL_MS) continue;
+      const found = entry.items.find((p) => String(p.id) === target);
+      if (found && entry.fetchedAt >= newestAt) {
+        newest = found;
+        newestAt = entry.fetchedAt;
+      }
+    }
+    return newest;
+  }
+
+  peekProductDetail(id: string): Product | null {
+    const target = String(id || '').trim();
+    if (!target) return null;
+    const cached = this.productDetailCache.get(target);
+    if (cached && Date.now() - cached.fetchedAt < ApiService.DETAIL_CACHE_TTL_MS) {
+      return cached.product;
+    }
+    return null;
+  }
+
+  prefetchProductDetail(id: string) {
+    const target = String(id || '').trim();
+    if (!target) return;
+    if (this.peekProductDetail(target)) return;
+    if (this.productDetailInflight.has(target)) return;
+    void this.getProductDetail(target).catch(() => undefined);
+  }
 
   async getCategories(): Promise<Category[]> {
     try {
@@ -301,13 +378,31 @@ class ApiService {
     const priceRange = params?.priceRange;
     const sort = params?.sort ?? 'newest';
 
-    const key = `${category || 'all'}|${q || ''}|${page}|${per_page}|${sizes.join(',')}|${colors.join(',')}|${materials.join(',')}|${priceRange ? priceRange.join('-') : ''}|${sort}`;
+    const key = this.buildProductsPageCacheKey({
+      category,
+      q,
+      page,
+      per_page,
+      sizes,
+      colors,
+      materials,
+      priceRange,
+      sort,
+    });
 
     if (useCache) {
-      const cached = this.productListCache.get(key);
-      if (cached && Date.now() - cached.fetchedAt < 2 * 60 * 1000) {
-        return { ...cached, fromCache: true as const };
-      }
+      const cached = this.peekProductsPage({
+        category,
+        q,
+        page,
+        per_page,
+        sizes,
+        colors,
+        materials,
+        priceRange,
+        sort,
+      });
+      if (cached) return cached;
     }
 
     const qs = new URLSearchParams();
@@ -346,33 +441,55 @@ class ApiService {
   }
 
   async getProductDetail(id: string): Promise<Product> {
-    try {
-      const res = await fetch(`${this.userBaseUrl}/products/${Number(id)}`);
-      if (res.status === 404) throw new Error('Product not found');
-      if (!res.ok) throw new Error('API Error');
-      const data: any = await res.json();
-      const product = this.mapBackendProductToFrontend(data);
-      // attach raw combo_items if present; detail page may enrich further
-      if (Array.isArray(data.combo_items)) {
-        product.comboItems = data.combo_items.map((ci: any) => ({
-          combo_product_id: ci.combo_product_id,
-          component_variant_id: ci.component_variant_id,
-          quantity: ci.quantity,
-        }));
-      }
-      return product;
-    } catch (e: any) {
-      // Only fallback to local mock data if backend is unreachable.
-      // If backend says 404, don't return stale localStorage product.
-      if (String(e?.message || '').toLowerCase().includes('not found')) {
-        throw e;
-      }
-      const fallback = this.products.find((p) => p.id === id);
-      if (!fallback) {
-        throw new Error('Product not found');
-      }
-      return fallback;
+    const target = String(id || '').trim();
+    if (!target) throw new Error('Product not found');
+
+    const cached = this.peekProductDetail(target);
+    const inflight = this.productDetailInflight.get(target);
+    if (inflight) {
+      return cached ?? inflight;
     }
+
+    const request = (async () => {
+      try {
+        const res = await fetch(`${this.userBaseUrl}/products/${Number(target)}`);
+        if (res.status === 404) throw new Error('Product not found');
+        if (!res.ok) throw new Error('API Error');
+        const data: any = await res.json();
+        const product = this.mapBackendProductToFrontend(data);
+        // attach raw combo_items if present; detail page may enrich further
+        if (Array.isArray(data.combo_items)) {
+          product.comboItems = data.combo_items.map((ci: any) => ({
+            combo_product_id: ci.combo_product_id,
+            component_variant_id: ci.component_variant_id,
+            quantity: ci.quantity,
+          }));
+        }
+        this.productDetailCache.set(target, { product, fetchedAt: Date.now() });
+        return product;
+      } catch (e: any) {
+        // Only fallback to local mock data if backend is unreachable.
+        // If backend says 404, don't return stale localStorage product.
+        if (String(e?.message || '').toLowerCase().includes('not found')) {
+          throw e;
+        }
+        if (cached) return cached;
+        const fallback = this.products.find((p) => p.id === target);
+        if (!fallback) {
+          throw new Error('Product not found');
+        }
+        return fallback;
+      } finally {
+        this.productDetailInflight.delete(target);
+      }
+    })();
+
+    this.productDetailInflight.set(target, request);
+    if (cached) {
+      void request.catch(() => undefined);
+      return cached;
+    }
+    return request;
   }
 
   async getComboItems(productId: string) {
@@ -536,10 +653,17 @@ class ApiService {
 
   async adminCreateProduct(frontendProduct: Omit<Product, 'id'> & { id?: string }): Promise<Product> {
     const categories = await this.adminListCategories(true);
-    const categoryId = categories.find((c) => c.slug === frontendProduct.category)?.id;
+    const selectedSlugs =
+      frontendProduct.categories?.length
+        ? frontendProduct.categories
+        : frontendProduct.category
+          ? [frontendProduct.category]
+          : [];
+    const categoryId = categories.find((c) => c.slug === selectedSlugs[0])?.id;
 
     const payload: any = {
       category_id: categoryId ? Number(categoryId) : null,
+      categories: selectedSlugs,
       name: frontendProduct.name,
       description: frontendProduct.description,
       base_price: frontendProduct.price,
@@ -576,9 +700,13 @@ class ApiService {
     if (patch.isHot !== undefined) payload.is_hot = patch.isHot;
     if (patch.isNew !== undefined) payload.is_new = patch.isNew;
     if (patch.isSale !== undefined) payload.is_sale = patch.isSale;
-    // category: gửi cả category_id và category (slug) để backend cập nhật chắc chắn
-    const patchAny = patch as { category_id?: number; category?: string };
-    if (patchAny.category !== undefined && patchAny.category !== null && String(patchAny.category).trim()) {
+    // category: gửi categories (nhiều danh mục) hoặc category (một danh mục, tương thích cũ)
+    const patchAny = patch as { category_id?: number; category?: string; categories?: string[] };
+    if (patchAny.categories !== undefined) {
+      payload.categories = Array.isArray(patchAny.categories)
+        ? patchAny.categories.filter(Boolean)
+        : [];
+    } else if (patchAny.category !== undefined && patchAny.category !== null && String(patchAny.category).trim()) {
       payload.category = String(patchAny.category).trim();
     }
     if (patchAny.category_id !== undefined && patchAny.category_id !== null) {
@@ -933,6 +1061,15 @@ class ApiService {
     return data;
   }
 
+  async adminDeleteVoucher(id: number) {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/vouchers/${Number(id)}`, {
+      method: 'DELETE',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any)?.detail || 'Xóa voucher thất bại');
+    return data;
+  }
+
   // --- Admin: Shipping rules ---
   async adminListShippingRules(params?: { active_only?: boolean }) {
     const qs = new URLSearchParams();
@@ -1116,13 +1253,16 @@ class ApiService {
     if (!res.ok) throw new Error('API Error');
   }
 
-  private mapBackendBlogToFrontend(b: any, fallbackCategory: Blog['category'] = 'tips'): Blog {
+  private mapBackendBlogToFrontend(b: any, fallbackCategory: Blog['category'] = 'tin-tuc'): Blog {
     const content = b?.content || '';
     const createdAt = b?.created_at || b?.published_at || '';
     const thumbnail = this.toAbsoluteUrl(b?.thumbnail || '');
     const excerpt = b?.excerpt
       ? String(b.excerpt)
       : extractBlogPlainText(content, 160);
+    const rawCategory = String(b?.category || '').trim();
+    const category: Blog['category'] =
+      rawCategory === 'intro' ? 'intro' : normalizeBlogSectionSlug(rawCategory || fallbackCategory);
     return {
       id: String(b?.id),
       title: b?.title || '',
@@ -1133,7 +1273,7 @@ class ApiService {
       author: b?.author || '',
       createdAt: createdAt || '',
       publishedAt: b?.published_at || createdAt || undefined,
-      category: (b?.category || fallbackCategory) as Blog['category'],
+      category,
       workflowStatus: (b?.status || (b?.is_published ? 'published' : 'draft')) as Blog['workflowStatus'],
       scheduledAt: b?.scheduled_at || undefined,
       reviewedAt: b?.reviewed_at || undefined,
@@ -1149,9 +1289,11 @@ class ApiService {
     author?: string;
     date_from?: string;
     date_to?: string;
+    exclude_intro?: boolean;
   }): Promise<Blog[]> {
     const qs = new URLSearchParams();
     if (params?.category) qs.set('category', params.category);
+    if (params?.exclude_intro) qs.set('exclude_intro', 'true');
     if (params?.status && params.status !== 'all') qs.set('status', params.status);
     if (params?.q && String(params.q).trim()) qs.set('q', String(params.q).trim());
     if (params?.author && String(params.author).trim()) qs.set('author', String(params.author).trim());
@@ -1161,7 +1303,7 @@ class ApiService {
     const res = await this.adminFetch(url);
     if (!res.ok) throw new Error('API Error');
     const data: any[] = await res.json();
-    return data.map((b) => this.mapBackendBlogToFrontend(b, 'tips'));
+    return data.map((b) => this.mapBackendBlogToFrontend(b, 'tin-tuc'));
   }
 
   async adminCreateBlog(payload: {
@@ -1182,7 +1324,7 @@ class ApiService {
     });
     if (!res.ok) throw new Error('API Error');
     const b: any = await res.json();
-    return this.mapBackendBlogToFrontend(b, 'tips');
+    return this.mapBackendBlogToFrontend(b, 'tin-tuc');
   }
 
   async adminUpdateBlog(
@@ -1206,7 +1348,7 @@ class ApiService {
     });
     if (!res.ok) throw new Error('API Error');
     const b: any = await res.json();
-    return this.mapBackendBlogToFrontend(b, 'tips');
+    return this.mapBackendBlogToFrontend(b, 'tin-tuc');
   }
 
   async adminDeleteBlog(id: number): Promise<void> {
@@ -1218,6 +1360,7 @@ class ApiService {
     category?: Blog['category'] | 'all';
     date_from?: string;
     date_to?: string;
+    exclude_intro?: boolean;
   }): Promise<{
     total_posts: number;
     visible_posts: number;
@@ -1230,6 +1373,7 @@ class ApiService {
     if (params?.category && params.category !== 'all') qs.set('category', String(params.category));
     if (params?.date_from && String(params.date_from).trim()) qs.set('date_from', String(params.date_from).trim());
     if (params?.date_to && String(params.date_to).trim()) qs.set('date_to', String(params.date_to).trim());
+    if (params?.exclude_intro) qs.set('exclude_intro', 'true');
     const res = await this.adminFetch(`${this.adminBaseUrl}/blogs/kpis${qs.toString() ? `?${qs.toString()}` : ''}`);
     if (!res.ok) throw new Error('API Error');
     return await res.json();
@@ -1253,11 +1397,11 @@ class ApiService {
 
   async getTips(limit: number = 3): Promise<Blog[]> {
     try {
-      const qs = new URLSearchParams({ category: 'tips', limit: String(limit) });
+      const qs = new URLSearchParams({ category: 'tram-sac-cua-me', limit: String(limit) });
       const res = await fetch(`${this.userBaseUrl}/blogs?${qs.toString()}`);
       if (!res.ok) throw new Error('API Error');
       const data: any[] = await res.json();
-      return data.map((b) => this.mapBackendBlogToFrontend(b, 'tips'));
+      return data.map((b) => this.mapBackendBlogToFrontend(b, 'tram-sac-cua-me'));
     } catch {
       return [];
     }
@@ -1282,7 +1426,7 @@ class ApiService {
       if (res.status === 404) return null;
       if (!res.ok) throw new Error('API Error');
       const b: any = await res.json();
-      return this.mapBackendBlogToFrontend(b, 'tips');
+      return this.mapBackendBlogToFrontend(b, 'tin-tuc');
     } catch {
       return null;
     }
@@ -1323,15 +1467,30 @@ class ApiService {
     return newOrder;
   }
 
+  async userGetHomepagePromoCards(): Promise<HomepagePromoCard[]> {
+    try {
+      const res = await fetch(`${this.userBaseUrl}/vouchers/homepage-promo-cards`);
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }
+
   async userGetAvailableVouchers(cart_total: number): Promise<Array<{
     code: string;
     type: string;
     value: number;
+    percent_value?: number | null;
+    fixed_value?: number | null;
     min_order_total: number;
     eligible: boolean;
     max_discount?: number | null;
     display_name?: string | null;
+    gift_name?: string | null;
     image_url?: string | null;
+    gift_image_url?: string | null;
   }>> {
     try {
       const res = await fetch(`${this.userBaseUrl}/vouchers/available?cart_total=${encodeURIComponent(cart_total)}`);
@@ -1340,6 +1499,7 @@ class ApiService {
       return Array.isArray(data) ? data.map((v: any) => ({
         ...v,
         image_url: v.image_url ? this.toAbsoluteUrl(v.image_url) : null,
+        gift_image_url: v.gift_image_url ? this.toAbsoluteUrl(v.gift_image_url) : null,
       })) : [];
     } catch {
       return [];

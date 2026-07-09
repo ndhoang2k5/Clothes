@@ -1,11 +1,11 @@
 export const CATEGORIES = [
-  { id: '1', name: 'Đồ sơ sinh', icon: '👶', slug: 'so-sinh' },
-  { id: '2', name: 'Quần áo bé trai', icon: '👕', slug: 'be-trai' },
-  { id: '3', name: 'Quần áo bé gái', icon: '👗', slug: 'be-gai' },
-  { id: '4', name: 'Body', icon: '🩱', slug: 'body' },
-  { id: '5', name: 'Phụ kiện', icon: '🧢', slug: 'phu-kien' },
-  { id: '6', name: 'Box quà tặng', icon: '🎁', slug: 'qua-tang' },
-  { id: '7', name: 'Combo đi sinh', icon: '👜', slug: 'di-sinh' },
+  { id: '1', name: 'Sơ sinh', icon: '👶', slug: 'so-sinh' },
+  { id: '2', name: 'Bé', icon: '🧒', slug: 'be' },
+  { id: '3', name: 'Nhộng chũn', icon: '🛌', slug: 'nhong-chun' },
+  { id: '4', name: 'Phụ kiện', icon: '🧢', slug: 'phu-kien' },
+  { id: '5', name: 'Đồ chip bé gái', icon: '🩲', slug: 'do-chip-be-gai' },
+  { id: '6', name: 'Combo đi sinh kèm quà', icon: '👜', slug: 'combo-di-sinh-kem-qua' },
+  { id: '7', name: 'Ưu đãi cuối mùa', icon: '🏷️', slug: 'uu-dai-cuoi-mua' },
 ];
 
 export const TRUST_FEATURES = [

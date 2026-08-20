@@ -187,3 +187,28 @@ export function extractBlogPlainText(content: string, maxLength?: number): strin
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength).trim()}...`;
 }
+
+// --- Link helpers (inline) ---
+// Supports markdown-style links inside text blocks: [label](https://example.com)
+export type InlineNode = string | { type: 'link'; label: string; url: string };
+
+export function parseInlineLinks(input: string): InlineNode[] {
+  const text = String(input || '');
+  const out: InlineNode[] = [];
+  const re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  let last = 0;
+  for (;;) {
+    const m = re.exec(text);
+    if (!m) break;
+    const start = m.index;
+    const end = re.lastIndex;
+    if (start > last) out.push(text.slice(last, start));
+    const label = String(m[1] || '').trim();
+    const url = String(m[2] || '').trim();
+    if (label && url) out.push({ type: 'link', label, url });
+    else out.push(text.slice(start, end));
+    last = end;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out.filter((n) => (typeof n === 'string' ? n.length > 0 : true));
+}

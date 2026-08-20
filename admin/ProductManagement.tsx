@@ -4,6 +4,34 @@ import { api } from '../services/api';
 import { Category, Product, ProductVariant } from '../types';
 import ProductEditModal from './components/ProductEditModal';
 
+/** Ẩn log kỹ thuật (SQL/traceback), chỉ hiện thông báo ngắn cho admin. */
+function formatUserFacingError(message: unknown, fallback = 'Đã xảy ra lỗi. Vui lòng thử lại.'): string {
+  const raw = String(message ?? '').trim();
+  if (!raw) return fallback;
+  const lower = raw.toLowerCase();
+  if (lower.includes('uq_product_variants_size_color') || (lower.includes('uniqueviolation') && lower.includes('size') && lower.includes('color'))) {
+    const sku = raw.match(/^([A-Za-z0-9_-]+)\s*:/)?.[1];
+    return sku
+      ? `Mã ${sku}: trùng size/màu với biến thể khác trên cùng sản phẩm.`
+      : 'Có biến thể trùng size/màu khi đồng bộ.';
+  }
+  if (lower.includes('uniqueviolation') || lower.includes('duplicate key')) {
+    const sku = raw.match(/^([A-Za-z0-9_-]+)\s*:/)?.[1];
+    return sku ? `Mã ${sku}: dữ liệu bị trùng, không thể lưu.` : 'Dữ liệu bị trùng, không thể lưu.';
+  }
+  if (
+    lower.includes('sqlalchemy') ||
+    lower.includes('psycopg2') ||
+    lower.includes('[sql:') ||
+    lower.includes('traceback') ||
+    lower.includes('detail:') ||
+    lower.includes('background on this error')
+  ) {
+    return 'Đồng bộ Salework gặp lỗi dữ liệu. Vui lòng thử lại.';
+  }
+  return raw.length > 180 ? `${raw.slice(0, 180)}…` : raw;
+}
+
 const ProductManagement: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
@@ -70,12 +98,21 @@ const ProductManagement: React.FC = () => {
         setCurrentPage(res.page);
         try {
           const status = await api.adminGetSaleworkStatus();
-          setSyncStatus(status);
+          setSyncStatus({
+            ...status,
+            last_error: status.last_error ? formatUserFacingError(status.last_error) : null,
+            last_result: status.last_result
+              ? {
+                  ...status.last_result,
+                  errors: (status.last_result.errors || []).map((e) => formatUserFacingError(e)),
+                }
+              : null,
+          });
         } catch {
           // ignore salework status failure
         }
       } catch (e: any) {
-        setError(e?.message || 'Không thể tải dữ liệu');
+        setError(formatUserFacingError(e?.message, 'Không thể tải dữ liệu'));
       } finally {
         setLoading(false);
       }
@@ -91,8 +128,8 @@ const ProductManagement: React.FC = () => {
       setProducts(res.items);
       setTotalProducts(res.total);
       setCurrentPage(res.page);
-    } catch (e: any) {
-      setError(e?.message || 'Không thể tải dữ liệu');
+      } catch (e: any) {
+      setError(formatUserFacingError(e?.message, 'Không thể tải dữ liệu'));
     } finally {
       setLoading(false);
     }
@@ -109,7 +146,16 @@ const ProductManagement: React.FC = () => {
     const loadStatus = async () => {
       try {
         const status = await api.adminGetSaleworkStatus();
-        setSyncStatus(status);
+        setSyncStatus({
+          ...status,
+          last_error: status.last_error ? formatUserFacingError(status.last_error) : null,
+          last_result: status.last_result
+            ? {
+                ...status.last_result,
+                errors: (status.last_result.errors || []).map((e) => formatUserFacingError(e)),
+              }
+            : null,
+        });
       } catch {
         // ignore
       }
@@ -265,7 +311,7 @@ const ProductManagement: React.FC = () => {
               <span className="font-bold text-gray-700">{syncStatus.last_result.updated_variants}</span> variants
               {syncStatus.last_result.errors?.length ? (
                 <div className="mt-2 rounded-lg border border-red-200 bg-red-50 p-2 text-red-700 whitespace-pre-wrap">
-                  {syncStatus.last_result.errors.join('\n')}
+                  {syncStatus.last_result.errors.map((e) => formatUserFacingError(e)).join('\n')}
                 </div>
               ) : null}
             </div>
@@ -282,7 +328,7 @@ const ProductManagement: React.FC = () => {
             </div>
             {syncStatus?.last_error && (
               <div className="text-[11px] text-red-700 mt-1">
-                Lỗi gần nhất: {syncStatus.last_error}
+                Lỗi gần nhất: {formatUserFacingError(syncStatus.last_error)}
               </div>
             )}
           </div>

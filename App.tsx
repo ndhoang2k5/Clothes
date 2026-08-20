@@ -5,8 +5,8 @@ import { CartProvider } from './user/CartContext';
 import { AuthProvider } from './user/AuthContext';
 import { api } from './services/api';
 import { PageLoadingFallback } from './user/components/PageLoadingFallback';
+import HomePage from './user/HomePage';
 
-const HomePage = lazy(() => import('./user/HomePage'));
 const ProductPage = lazy(() => import('./user/ProductPage'));
 const CollectionPage = lazy(() => import('./user/CollectionPage'));
 const ProductDetailPage = lazy(() => import('./user/ProductDetailPage'));
@@ -351,6 +351,9 @@ const App: React.FC = () => {
       window.scrollTo(0, 0);
     };
     window.addEventListener('popstate', handleRouteChange);
+
+    // Warm homepage product cache ASAP so first paint is smoother.
+    void api.getProductsPage({ page: 1, per_page: 20, useCache: true }).catch(() => undefined);
 
     // Backward-compat: convert old hash URLs to clean paths (best-effort).
     const hash = String(window.location.hash || '');

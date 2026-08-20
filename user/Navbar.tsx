@@ -3,6 +3,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useCart } from './CartContext';
 import { useAuth } from './AuthContext';
 import { api } from '../services/api';
+import { navigate as navigatePath } from '../App';
+import { buildProductPath } from './utils/urls';
+import { BLOG_NAV_SECTIONS, blogSectionPath } from './utils/blogCategories';
 
 type SearchSuggestion = {
   id: string;
@@ -30,18 +33,18 @@ const Navbar: React.FC = () => {
   const [searchSuggestions, setSearchSuggestions] = useState<SearchSuggestion[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number>(-1);
+  const [mobileProductMenuOpen, setMobileProductMenuOpen] = useState(false);
+  const [mobileProductOpenSection, setMobileProductOpenSection] = useState<string>('so-sinh');
   const dropdownRef = useRef<HTMLDivElement | null>(null);
   const closeMobile = () => setMobileOpen(false);
-  const navigate = (hash: string) => {
-    window.location.hash = hash;
+  const navigate = (path: string) => {
+    navigatePath(path);
     setMobileOpen(false);
   };
 
-  const getCatFromCurrentHash = (): string | null => {
+  const getCatFromCurrentUrl = (): string | null => {
     try {
-      const hash = String(window.location.hash || '');
-      const [, query] = hash.split('?');
-      const params = new URLSearchParams(query || '');
+      const params = new URLSearchParams(window.location.search || '');
       return params.get('cat');
     } catch {
       return null;
@@ -50,9 +53,7 @@ const Navbar: React.FC = () => {
 
   const openSearch = () => {
     try {
-      const hash = String(window.location.hash || '');
-      const [, query] = hash.split('?');
-      const params = new URLSearchParams(query || '');
+      const params = new URLSearchParams(window.location.search || '');
       setSearchText(params.get('q') || '');
     } catch {
       setSearchText('');
@@ -64,20 +65,67 @@ const Navbar: React.FC = () => {
   const submitSearch = (q: string) => {
     const trimmed = q.trim();
     const params = new URLSearchParams();
-    const cat = getCatFromCurrentHash();
+    const cat = getCatFromCurrentUrl();
     if (cat) params.set('cat', cat);
     if (trimmed) params.set('q', trimmed);
     const qs = params.toString();
-    navigate(`#/products${qs ? '?' + qs : ''}`);
+    navigate(`/products${qs ? '?' + qs : ''}`);
     setActiveSuggestionIndex(-1);
     setSearchOpen(false);
   };
 
   const openProductDetail = (productId: string) => {
-    navigate(`#/product/${productId}`);
+    navigate(buildProductPath({ id: productId }));
     setActiveSuggestionIndex(-1);
     setSearchOpen(false);
   };
+
+  const mobileProductSections: Array<{
+    key: string;
+    title: string;
+    items: Array<{ label: string; href: string }>;
+  }> = [
+    {
+      key: 'so-sinh',
+      title: 'Sơ sinh 0-12M',
+      items: [
+        { label: 'Nhộng chũn & túi ngủ', href: '/products?cat=nhong-chun' },
+        { label: 'Body & quần áo sơ sinh', href: '/products?cat=so-sinh&q=body' },
+        { label: 'Combo sơ sinh', href: '/products?cat=so-sinh&q=combo' },
+      ],
+    },
+    {
+      key: 'be-lon',
+      title: 'Bé 1Y-4Y',
+      items: [
+        { label: 'Quần áo thời trang', href: '/products?cat=be' },
+        { label: 'Đồ ngủ', href: '/products?cat=be&q=%C4%91%E1%BB%93%20ng%E1%BB%A7' },
+        { label: 'Set outfit', href: '/products?cat=be&q=set' },
+      ],
+    },
+    {
+      key: 'phu-kien',
+      title: 'Phụ kiện',
+      items: [
+        { label: 'Gối', href: '/products?cat=phu-kien&q=g%E1%BB%91i' },
+        { label: 'Chăn ủ', href: '/products?cat=phu-kien&q=ch%C4%83n%20%E1%BB%A7' },
+        { label: 'Khăn yếm', href: '/products?cat=phu-kien&q=kh%C4%83n%20y%E1%BA%BFm' },
+        { label: 'Túi mẹ bỉm sữa', href: '/products?cat=phu-kien&q=t%C3%BAi%20m%E1%BA%B9%20b%E1%BB%89m%20s%E1%BB%AFa' },
+        { label: 'Địu', href: '/products?cat=phu-kien&q=%C4%91%E1%BB%8Bu' },
+      ],
+    },
+    {
+      key: 'xem-them',
+      title: 'Xem thêm',
+      items: [
+        { label: 'Đồ chip bé gái', href: '/products?cat=do-chip-be-gai' },
+        { label: 'Best Seller', href: '/products?q=best' },
+        { label: 'Combo đi sinh', href: '/products?cat=combo-di-sinh-kem-qua' },
+        { label: 'Box quà cho mẹ', href: '/products?cat=combo-di-sinh-kem-qua' },
+        { label: 'Giảm giá', href: '/products?cat=giam-gia' },
+      ],
+    },
+  ];
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -110,13 +158,16 @@ const Navbar: React.FC = () => {
     const t = window.setTimeout(() => {
       setSearchLoading(true);
       void api
-        .getProductsPage({ q: keyword, page: 1, per_page: 6, useCache: false })
+        .getProductsPage({ q: keyword, page: 1, per_page: 6, useCache: true })
         .then((res) => {
           if (cancelled) return;
           const mapped: SearchSuggestion[] = (res.items || []).map((p: any) => ({
             id: String(p.id),
             name: String(p.name || ''),
-            image: (Array.isArray(p.images) && p.images[0]) ? String(p.images[0]) : 'https://picsum.photos/120/120?product',
+            image: api.toListThumbApiUrl(
+              (Array.isArray(p.images) && p.images[0]) ? String(p.images[0]) : '',
+              240,
+            ) || 'https://picsum.photos/120/120?product',
             price: Number(p.price || 0),
             discountPrice: p.discountPrice != null ? Number(p.discountPrice) : undefined,
           }));
@@ -141,62 +192,130 @@ const Navbar: React.FC = () => {
   return (
     <nav className="sticky top-0 z-50 bg-[#F8F3EC]/90 backdrop-blur-md border-b border-[#E5D6C4]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="flex justify-between h-20 items-center">
+        <div className="flex justify-between h-16 md:h-[72px] items-center">
           {/* Logo */}
-          <div className="flex-shrink-0 flex items-center cursor-pointer h-16 md:h-20 w-[136px] md:w-[170px] overflow-hidden" onClick={() => navigate('#/')}>
+          <div className="flex-shrink-0 flex items-center cursor-pointer h-14 md:h-[72px] w-[132px] md:w-[164px] overflow-hidden" onClick={() => navigate('/')}>
             <img
               src={getLogoUrl()}
               alt="Unbee"
-              className="h-full w-auto max-w-none object-contain object-left origin-left scale-[1.7] md:scale-[1.9]"
+              className="h-full w-auto max-w-none object-contain object-left origin-left scale-[1.65] md:scale-[1.8]"
               loading="eager"
               decoding="async"
             />
           </div>
 
           {/* Desktop Menu */}
-          <div className="hidden md:flex items-center space-x-8">
-            <a href="#/" className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
+          <div className="hidden md:flex items-center space-x-6">
+            <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
               Trang chủ
             </a>
             <div className="group relative">
-                <a href="#/products" className="text-[#6B5645] font-medium transition-all flex items-center hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
+                <a href="/products" onClick={(e) => { e.preventDefault(); navigate('/products'); }} className="text-[#6B5645] font-medium transition-all flex items-center hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
                     Sản phẩm
                     <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
                 </a>
-                {/* Mega menu simple */}
-                <div className="absolute top-full -left-4 w-48 bg-[#FFF9F1] shadow-xl rounded-xl py-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all border border-[#E5D6C4]">
-                    <a href="#/products?cat=so-sinh" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Đồ sơ sinh</a>
-                    <a href="#/products?cat=be-trai" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Bé trai</a>
-                    <a href="#/products?cat=be-gai" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Bé gái</a>
-                    <a href="#/products?cat=body" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Body</a>
-                    <a href="#/products?cat=phu-kien" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Phụ kiện</a>
-                    <a href="#/products?cat=uu-dai-cuoi-mua" className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">Ưu đãi cuối mùa</a>
+                {/* Mega menu (UI-first). Links reuse current cat/q filters; no DB changes. */}
+                <div className="absolute top-full mt-2 left-[58%] -translate-x-1/2 w-[900px] max-w-[calc(100vw-2rem)] bg-[#FFF9F1] shadow-2xl rounded-2xl p-5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all border border-[#E5D6C4]">
+                  <div className="grid grid-cols-12 gap-5">
+                    <div className="col-span-4">
+                      <div className="text-sm font-black text-[#4B3B32] mb-2.5">Sơ sinh 0-12M</div>
+                      <div className="space-y-1">
+                        <a href="/products?cat=nhong-chun" onClick={(e) => { e.preventDefault(); navigate('/products?cat=nhong-chun'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Nhộng chũn &amp; túi ngủ
+                        </a>
+                        <a href="/products?cat=so-sinh&q=body" onClick={(e) => { e.preventDefault(); navigate('/products?cat=so-sinh&q=body'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Body &amp; quần áo sơ sinh
+                        </a>
+                        <a href="/products?cat=so-sinh&q=combo" onClick={(e) => { e.preventDefault(); navigate('/products?cat=so-sinh&q=combo'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Combo sơ sinh
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="col-span-3">
+                      <div className="text-sm font-black text-[#4B3B32] mb-2.5">Bé 1Y-4Y</div>
+                      <div className="space-y-1">
+                        <a href="/products?cat=be" onClick={(e) => { e.preventDefault(); navigate('/products?cat=be'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Quần áo thời trang
+                        </a>
+                        <a href="/products?cat=be&q=%C4%91%E1%BB%93%20ng%E1%BB%A7" onClick={(e) => { e.preventDefault(); navigate('/products?cat=be&q=%C4%91%E1%BB%93%20ng%E1%BB%A7'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Đồ ngủ
+                        </a>
+                        <a href="/products?cat=be&q=set" onClick={(e) => { e.preventDefault(); navigate('/products?cat=be&q=set'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Set outfit
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="col-span-3">
+                      <div className="text-sm font-black text-[#4B3B32] mb-2.5">Phụ kiện</div>
+                      <div className="space-y-1">
+                        <a href="/products?cat=phu-kien&q=g%E1%BB%91i" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=g%E1%BB%91i'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Gối
+                        </a>
+                        <a href="/products?cat=phu-kien&q=ch%C4%83n%20%E1%BB%A7" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=ch%C4%83n%20%E1%BB%A7'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Chăn Ủ
+                        </a>
+                        <a href="/products?cat=phu-kien&q=kh%C4%83n%20y%E1%BA%BFm" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=kh%C4%83n%20y%E1%BA%BFm'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Khăn yếm
+                        </a>
+                        <a href="/products?cat=phu-kien&q=t%C3%BAi%20m%E1%BA%B9%20b%E1%BB%89m%20s%E1%BB%AFa" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=t%C3%BAi%20m%E1%BA%B9%20b%E1%BB%89m%20s%E1%BB%AFa'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Túi mẹ bỉm sữa
+                        </a>
+                        <a href="/products?cat=phu-kien&q=%C4%91%E1%BB%8Bu" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=%C4%91%E1%BB%8Bu'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Địu
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="col-span-2">
+                      <div className="text-sm font-black text-[#4B3B32] mb-2.5">Xem thêm</div>
+                      <div className="space-y-1">
+                        <a href="/products?cat=do-chip-be-gai" onClick={(e) => { e.preventDefault(); navigate('/products?cat=do-chip-be-gai'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Đồ chip bé gái
+                        </a>
+                        <a href="/products?q=best" onClick={(e) => { e.preventDefault(); navigate('/products?q=best'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Best Seller
+                        </a>
+                        <a href="/products?cat=combo-di-sinh-kem-qua" onClick={(e) => { e.preventDefault(); navigate('/products?cat=combo-di-sinh-kem-qua'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Combo đi sinh
+                        </a>
+                        <a href="/products?cat=combo-di-sinh-kem-qua" onClick={(e) => { e.preventDefault(); navigate('/products?cat=combo-di-sinh-kem-qua'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Box quà cho mẹ
+                        </a>
+                        <a href="/products?cat=giam-gia" onClick={(e) => { e.preventDefault(); navigate('/products?cat=giam-gia'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                          Giảm giá
+                        </a>
+                      </div>
+                    </div>
+                  </div>
                 </div>
             </div>
-            <a href="#/collections" className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
+            <a href="/collections" onClick={(e) => { e.preventDefault(); navigate('/collections'); }} className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
               Bộ sưu tập
             </a>
             <div className="group relative">
-              <a href="#/blog" className="text-[#6B5645] font-medium transition-all flex items-center hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
+              <a href={blogSectionPath('tin-tuc')} onClick={(e) => { e.preventDefault(); navigate(blogSectionPath('tin-tuc')); }} className="text-[#6B5645] font-medium transition-all flex items-center hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
                 Blog
                 <svg className="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
               </a>
-              <div className="absolute top-full -left-6 w-56 bg-[#FFF9F1] shadow-xl rounded-xl py-4 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all border border-[#E5D6C4]">
-                <a
-                  href="#/tips"
-                  className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]"
-                >
-                  Tips
-                </a>
-                <a
-                  href="#/blog?category=news"
-                  className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]"
-                >
-                  Blogs (News)
-                </a>
+              <div className="absolute top-full -left-6 w-64 bg-[#FFF9F1] shadow-xl rounded-xl py-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all border border-[#E5D6C4]">
+                {BLOG_NAV_SECTIONS.map((section) => (
+                  <a
+                    key={section.slug}
+                    href={blogSectionPath(section.slug)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate(blogSectionPath(section.slug));
+                    }}
+                    className="block px-4 py-2 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A] text-sm"
+                  >
+                    {section.label}
+                  </a>
+                ))}
               </div>
             </div>
-            <a href="#/about" className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
+            <a href="/about" onClick={(e) => { e.preventDefault(); navigate('/about'); }} className="text-[#6B5645] font-medium transition-all hover:text-[#B58A5A] hover:-translate-y-0.5 hover:scale-[1.02] hover:underline underline-offset-4 decoration-[#B58A5A]/60">
               Về Unbee
             </a>
           </div>
@@ -213,7 +332,7 @@ const Navbar: React.FC = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
               </svg>
             </button>
-            <a href="#/cart" className="relative p-2 text-[#8B7765] hover:text-[#B58A5A] transition-colors">
+            <a href="/cart" onClick={(e) => { e.preventDefault(); navigate('/cart'); }} className="relative p-2 text-[#8B7765] hover:text-[#B58A5A] transition-colors">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
               </svg>
@@ -224,7 +343,8 @@ const Navbar: React.FC = () => {
               )}
             </a>
             <a
-              href={customer ? '#/account' : '#/login'}
+              href={customer ? '/account' : '/login'}
+              onClick={(e) => { e.preventDefault(); navigate(customer ? '/account' : '/login'); }}
               className="hidden md:inline-flex items-center gap-2 px-4 py-2 rounded-full font-black text-white shadow-lg shadow-pink-200"
               style={{ backgroundColor: '#B58A5A' }}
             >
@@ -232,7 +352,7 @@ const Navbar: React.FC = () => {
             </a>
             {customer && (
               <button
-                onClick={() => { logout(); navigate('#/'); }}
+                onClick={() => { logout(); navigate('/'); }}
                 className="hidden md:inline-flex px-3 py-2 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-gray-200"
                 title="Đăng xuất"
               >
@@ -280,35 +400,94 @@ const Navbar: React.FC = () => {
             </div>
             <nav className="px-4 space-y-1 text-base font-medium text-[#6B5645]">
               <button
-                onClick={() => navigate(customer ? '#/account' : '#/login')}
+                onClick={() => navigate(customer ? '/account' : '/login')}
                 className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70 font-black"
               >
                 {customer ? 'Tài khoản' : 'Đăng nhập'}
               </button>
-              <button onClick={() => navigate('#/')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
+              <button onClick={() => navigate('/')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
                 Trang chủ
               </button>
-              <button onClick={() => navigate('#/products')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
+              <button onClick={() => navigate('/products')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
                 Sản phẩm
               </button>
-              <button onClick={() => navigate('#/collections')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
+              <div className="border-b border-[#E5D6C4]/70">
+                <button
+                  type="button"
+                  onClick={() => setMobileProductMenuOpen((v) => !v)}
+                  className="w-full py-2.5 flex items-center justify-between text-left font-semibold text-[#4B3B32]"
+                  aria-expanded={mobileProductMenuOpen}
+                >
+                  <span>Danh mục sản phẩm</span>
+                  <span className="text-xl leading-none text-[#9B7248]">
+                    {mobileProductMenuOpen ? '−' : '+'}
+                  </span>
+                </button>
+                {mobileProductMenuOpen && (
+                  <div className="pb-2 space-y-1">
+                    <button
+                      type="button"
+                      onClick={() => navigate('/products')}
+                      className="w-full text-left rounded-lg px-3 py-2 text-sm font-bold text-[#6B5645] bg-[#F7EFE4]"
+                    >
+                      Xem tất cả sản phẩm
+                    </button>
+                    {mobileProductSections.map((section) => {
+                      const expanded = mobileProductOpenSection === section.key;
+                      return (
+                        <div key={section.key} className="rounded-lg border border-[#EADACA] bg-[#FFF9F1]">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setMobileProductOpenSection((prev) => (prev === section.key ? '' : section.key))
+                            }
+                            className="w-full px-3 py-2 flex items-center justify-between text-left text-sm font-black text-[#4B3B32]"
+                            aria-expanded={expanded}
+                          >
+                            <span>{section.title}</span>
+                            <span className="text-lg leading-none text-[#9B7248]">{expanded ? '−' : '+'}</span>
+                          </button>
+                          {expanded && (
+                            <div className="pb-2 px-2 space-y-1">
+                              {section.items.map((item) => (
+                                <button
+                                  key={item.href}
+                                  type="button"
+                                  onClick={() => navigate(item.href)}
+                                  className="w-full text-left rounded-md px-2.5 py-1.5 text-sm text-[#6B5645] hover:bg-[#F2E3D4]"
+                                >
+                                  {item.label}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <button onClick={() => navigate('/collections')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
                 Bộ sưu tập
               </button>
-              <button onClick={() => navigate('#/tips')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
-                Tips
-              </button>
-              <button onClick={() => navigate('#/blog?category=news')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
-                Blogs
-              </button>
-              <button onClick={() => navigate('#/about')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
+              {BLOG_NAV_SECTIONS.map((section) => (
+                <button
+                  key={section.slug}
+                  onClick={() => navigate(blogSectionPath(section.slug))}
+                  className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70 pl-3"
+                >
+                  {section.label}
+                </button>
+              ))}
+              <button onClick={() => navigate('/about')} className="w-full text-left py-2.5 border-b border-[#E5D6C4]/70">
                 Về Unbee
               </button>
-              <button onClick={() => navigate('#/cart')} className="w-full text-left py-2.5">
+              <button onClick={() => navigate('/cart')} className="w-full text-left py-2.5">
                 Giỏ hàng {totalQuantity > 0 && <span className="ml-1 text-xs text-pink-600 font-bold">({totalQuantity})</span>}
               </button>
               {customer && (
                 <button
-                  onClick={() => { logout(); navigate('#/'); }}
+                  onClick={() => { logout(); navigate('/'); }}
                   className="w-full text-left py-2.5 text-red-600 font-black"
                 >
                   Đăng xuất
@@ -423,7 +602,13 @@ const Navbar: React.FC = () => {
                           idx === activeSuggestionIndex ? 'bg-[#FFF0DE]' : 'hover:bg-[#FFF7EC]'
                         }`}
                       >
-                        <img src={p.image} alt={p.name} className="w-10 h-10 rounded-lg object-cover bg-gray-100 border border-gray-100" />
+                        <img
+                          src={p.image}
+                          alt={p.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-10 h-10 rounded-lg object-cover bg-gray-100 border border-gray-100"
+                        />
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-bold text-gray-800 truncate">{p.name}</div>
                           <div className="text-xs text-gray-500">

@@ -4,7 +4,15 @@ import type { Product, ComboItem } from '../types';
 import ProductCard from '../components/ProductCard';
 import { useCart } from './CartContext';
 import { navigate } from '../App';
+import { uniqueSortedColors, uniqueSortedSizes } from './utils/sortVariantOptions';
+import {
+  pickVariantByColor,
+  pickVariantBySize,
+  variantHasColorStock,
+  variantHasSizeStock,
+} from './utils/variantSelection';
 import { buildProductPath } from './utils/urls';
+import { ProductImageLightbox } from './components/ProductImageLightbox';
 
 interface ProductDetailPageProps {
   productId: string;
@@ -18,6 +26,7 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const { addItem } = useCart();
   const [addedMessage, setAddedMessage] = useState<string | null>(null);
 
@@ -29,11 +38,26 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
       return;
     }
     let cancelled = false;
-    const load = async () => {
-      setLoading(true);
+    const cached =
+      api.peekProductDetail(productId) || api.findProductInListCaches(productId);
+    if (cached) {
+      setProduct(cached);
+      setLoading(false);
       setError(null);
-      setSelectedVariantId(null);
-      setQuantity(1);
+      setSelectedImageIndex(0);
+      const vars = cached.variants || [];
+      if (vars.length === 1) setSelectedVariantId(String(vars[0].id));
+    } else {
+      setLoading(true);
+      setProduct(null);
+    }
+
+    const load = async () => {
+      setError(null);
+      if (!cached) {
+        setSelectedVariantId(null);
+        setQuantity(1);
+      }
       try {
         const p = await api.getProductDetail(productId);
         if (cancelled) return;
@@ -54,7 +78,7 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
         }
       } catch (e: any) {
         if (!cancelled) setError(e?.message || 'Không tải được sản phẩm');
-        if (!cancelled) setProduct(null);
+        if (!cancelled && !cached) setProduct(null);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -82,11 +106,11 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
   );
   const isOutOfStock = totalStock <= 0;
   const uniqueSizes = useMemo(
-    () => [...new Set(variants.map((v) => (v && v.size) || '').filter(Boolean))],
+    () => uniqueSortedSizes(variants.map((v) => (v && v.size) || '')),
     [variants],
   );
   const uniqueColors = useMemo(
-    () => [...new Set(variants.map((v) => (v && v.color) || '').filter(Boolean))],
+    () => uniqueSortedColors(variants.map((v) => (v && v.color) || '')),
     [variants],
   );
   const actualPrice = product ? Number(product.discountPrice ?? product.price ?? 0) || 0 : 0;
@@ -112,6 +136,10 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
   React.useEffect(() => {
     setSelectedImageIndex(0);
   }, [selectedVariantId]);
+
+  React.useEffect(() => {
+    setLightboxOpen(false);
+  }, [productId]);
 
   const handleAddToCart = () => {
     if (!product) return;
@@ -175,39 +203,65 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
     );
   }
 
+  const galleryCount = galleryImages.length;
+
+  const openLightbox = () => {
+    setLightboxOpen(true);
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 py-12 bg-white min-h-[60vh]">
-      <nav className="text-sm text-gray-400 mb-6 flex items-center gap-2">
-        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="hover:text-pink-500">
+    <div className="max-w-7xl mx-auto px-4 py-12 bg-white min-h-[60vh] overflow-x-hidden">
+      <nav className="text-sm text-gray-400 mb-6 flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }} className="hover:text-pink-500 shrink-0">
           Trang chủ
         </a>
-        <span>/</span>
-        <a href="/products" onClick={(e) => { e.preventDefault(); navigate('/products'); }} className="hover:text-pink-500">
+        <span className="shrink-0">/</span>
+        <a href="/products" onClick={(e) => { e.preventDefault(); navigate('/products'); }} className="hover:text-pink-500 shrink-0">
           Sản phẩm
         </a>
-        <span>/</span>
-        <span className="text-gray-700 font-bold truncate max-w-[200px] md:max-w-[300px]">
+        <span className="shrink-0">/</span>
+        <span className="text-gray-700 font-bold truncate min-w-0 max-w-full">
           {product.name}
         </span>
       </nav>
 
-      <div className="grid md:grid-cols-2 gap-10 mb-16">
-        <div className="space-y-3">
+      <div className="grid md:grid-cols-2 gap-10 mb-16 min-w-0">
+        <div className="space-y-3 min-w-0">
           <div className="relative bg-white rounded-[1.75rem] overflow-hidden border border-gray-100">
             <div
-              className="w-full h-[420px] bg-gray-100 overflow-hidden"
+              className="w-full h-[420px] bg-gray-100 overflow-hidden cursor-zoom-in"
+              role="button"
+              tabIndex={0}
+              aria-label="Phóng to ảnh sản phẩm"
+              onClick={() => openLightbox()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openLightbox();
+                }
+              }}
             >
               <div
-                className="flex h-full w-full transition-transform duration-500 ease-in-out"
-                style={{ transform: `translateX(-${clampedImageIndex * 100}%)` }}
+                className="flex h-full transition-transform duration-500 ease-in-out"
+                style={{
+                  width: `${galleryCount * 100}%`,
+                  transform: `translateX(-${clampedImageIndex * (100 / galleryCount)}%)`,
+                }}
               >
                 {galleryImages.map((src, idx) => (
-                  <img
+                  <div
                     key={idx}
-                    src={src || 'https://picsum.photos/800/1000?product'}
-                    alt={`${product.name} - ảnh ${idx + 1}`}
-                    className="w-full h-full object-cover flex-shrink-0"
-                  />
+                    className="h-full flex-shrink-0"
+                    style={{ width: `${100 / galleryCount}%` }}
+                  >
+                    <img
+                      src={src || 'https://picsum.photos/800/1000?product'}
+                      alt={`${product.name} - ảnh ${idx + 1}`}
+                      loading={idx === 0 ? 'eager' : 'lazy'}
+                      decoding="async"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 ))}
               </div>
             </div>
@@ -215,24 +269,26 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
               <>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setSelectedImageIndex((i) =>
                       i <= 0 ? galleryImages.length - 1 : i - 1,
-                    )
-                  }
-                  className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 shadow-lg flex items-center justify-center text-gray-700 hover:bg-white active:scale-95 transition-all"
+                    );
+                  }}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 shadow-lg flex items-center justify-center text-gray-700 hover:bg-white active:scale-95 transition-all z-10"
                   aria-label="Ảnh trước"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                 </button>
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setSelectedImageIndex((i) =>
                       i >= galleryImages.length - 1 ? 0 : i + 1,
-                    )
-                  }
-                  className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 shadow-lg flex items-center justify-center text-gray-700 hover:bg-white active:scale-95 transition-all"
+                    );
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/95 shadow-lg flex items-center justify-center text-gray-700 hover:bg-white active:scale-95 transition-all z-10"
                   aria-label="Ảnh sau"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
@@ -244,7 +300,7 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
             )}
           </div>
           {galleryImages.length > 1 && (
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex gap-2 overflow-x-auto pb-1 max-w-full">
               {galleryImages.map((src, idx) => (
                 <button
                   key={idx}
@@ -254,15 +310,15 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
                     selectedImageIndex === idx ? 'border-pink-500 ring-2 ring-pink-200' : 'border-gray-200 hover:border-pink-300'
                   }`}
                 >
-                  <img src={src} alt="" className="w-full h-full object-cover" />
+                  <img src={src} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        <div className="space-y-4">
-          <h1 className="text-3xl font-black text-gray-900 flex items-center gap-2">
+        <div className="space-y-4 min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900 flex flex-wrap items-center gap-2 break-words">
             {product.name}
             {product.kind === 'combo' && (
               <span className="text-xs uppercase px-2 py-1 rounded-full bg-purple-50 text-purple-600 border border-purple-100">
@@ -270,21 +326,28 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
               </span>
             )}
           </h1>
-          <div className="flex items-baseline gap-3">
-            <span className="text-3xl font-black text-pink-600">
+          <div className="flex flex-wrap items-baseline gap-2">
+            <span className="text-3xl font-black text-red-500">
               {actualPrice.toLocaleString()}đ
             </span>
-            {product.discountPrice && (
-              <span className="text-gray-400 line-through font-semibold">
-                {product.price.toLocaleString()}đ
-              </span>
+            {product.discountPrice != null && product.discountPrice < product.price && (
+              <>
+                <span className="text-gray-800 line-through font-semibold text-lg">
+                  {product.price.toLocaleString()}đ
+                </span>
+                {product.salePercent != null && product.salePercent > 0 && (
+                  <span className="inline-flex items-center rounded bg-red-500 px-2 py-0.5 text-sm font-bold text-white">
+                    {Math.round(product.salePercent)}%
+                  </span>
+                )}
+              </>
             )}
           </div>
           {isOutOfStock && (
             <div className="text-sm font-bold text-red-500">Đã hết hàng</div>
           )}
           {product.description && (
-            <p className="text-gray-600 leading-relaxed whitespace-pre-line">{product.description}</p>
+            <p className="text-gray-600 leading-relaxed whitespace-pre-line break-words">{product.description}</p>
           )}
           <div className="flex flex-wrap gap-2 text-xs font-bold">
             {product.isNew && <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600">Hàng mới</span>}
@@ -302,18 +365,15 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
                       <span className="block text-xs font-bold text-gray-500 mb-1">Chọn size</span>
                       <div className="flex flex-wrap gap-2">
                         {uniqueSizes.map((size) => {
-                          const hasStock = variants.some(
-                            (v) => v.size === size && v.stock > 0 && (!selectedVariant?.color || v.color === selectedVariant.color),
-                          );
+                          const hasStock = variantHasSizeStock(variants, size);
                           const isSelected = selectedVariant?.size === size;
                           return (
                             <button
                               key={size}
                               type="button"
                               onClick={() => {
-                                const sameColor = selectedVariant?.color;
-                                const next = variants.find((v) => v.size === size && (sameColor ? v.color === sameColor : true));
-                                if (next && next.stock > 0) setSelectedVariantId(String(next.id));
+                                const next = pickVariantBySize(variants, size, selectedVariant);
+                                if (next) setSelectedVariantId(String(next.id));
                               }}
                               disabled={!hasStock}
                               className={`min-w-[3rem] px-4 py-2 rounded-xl text-sm font-bold border-2 transition-colors ${
@@ -336,18 +396,15 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
                       <span className="block text-xs font-bold text-gray-500 mb-1">Chọn màu</span>
                       <div className="flex flex-wrap gap-2">
                         {uniqueColors.map((color) => {
-                          const hasStock = variants.some(
-                            (v) => v.color === color && v.stock > 0 && (!selectedVariant?.size || v.size === selectedVariant.size),
-                          );
+                          const hasStock = variantHasColorStock(variants, color);
                           const isSelected = selectedVariant?.color === color;
                           return (
                             <button
                               key={color}
                               type="button"
                               onClick={() => {
-                                const sameSize = selectedVariant?.size;
-                                const next = variants.find((v) => v.color === color && (sameSize ? v.size === sameSize : true));
-                                if (next && next.stock > 0) setSelectedVariantId(String(next.id));
+                                const next = pickVariantByColor(variants, color, selectedVariant);
+                                if (next) setSelectedVariantId(String(next.id));
                               }}
                               disabled={!hasStock}
                               className={`min-w-[3rem] px-4 py-2 rounded-xl text-sm font-bold border-2 transition-colors ${
@@ -504,6 +561,15 @@ const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ productId }) => {
         {/* Ở đây mình dùng lại api.getProducts, lọc bỏ sản phẩm hiện tại */}
         <RelatedProducts currentId={product.id} />
       </section>
+
+      <ProductImageLightbox
+        isOpen={lightboxOpen}
+        onClose={() => setLightboxOpen(false)}
+        images={galleryImages}
+        index={clampedImageIndex}
+        onIndexChange={setSelectedImageIndex}
+        imageAlt={product.name}
+      />
     </div>
   );
 };

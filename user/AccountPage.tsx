@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import { COLORS } from './designTokens';
+import { navigate } from '../App';
 
 function formatDateIso(iso?: string | null) {
   if (!iso) return '';
@@ -33,7 +34,8 @@ const AccountPage: React.FC = () => {
         <h1 className="text-3xl font-black mb-2" style={{ color: COLORS.textMain }}>Tài khoản</h1>
         <p className="text-gray-600 mb-6">Bạn cần đăng nhập để xem thông tin tài khoản và lịch sử đơn hàng.</p>
         <a
-          href="#/login"
+          href="/login"
+          onClick={(e) => { e.preventDefault(); navigate('/login'); }}
           className="inline-flex px-8 py-3 rounded-full font-black text-white shadow-lg shadow-pink-200"
           style={{ backgroundColor: COLORS.ctaPrimary }}
         >
@@ -52,7 +54,7 @@ const AccountPage: React.FC = () => {
         </div>
         {customer && (
           <button
-            onClick={() => { logout(); window.location.hash = '#/'; }}
+            onClick={() => { logout(); navigate('/'); }}
             className="px-4 py-2 rounded-full bg-gray-100 text-gray-700 font-bold hover:bg-gray-200"
           >
             Đăng xuất

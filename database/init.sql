@@ -78,6 +78,14 @@ CREATE INDEX IF NOT EXISTS idx_products_flags ON products (is_active, is_hot, is
 CREATE INDEX IF NOT EXISTS gin_products_name_trgm ON products USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS gin_products_slug_trgm ON products USING gin (slug gin_trgm_ops);
 
+-- Product ↔ Category (many-to-many)
+CREATE TABLE IF NOT EXISTS product_categories (
+    product_id INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    category_id INT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    PRIMARY KEY (product_id, category_id)
+);
+CREATE INDEX IF NOT EXISTS idx_product_categories_category ON product_categories (category_id);
+
 -- 4) Product images (non-variant specific)
 CREATE TABLE IF NOT EXISTS product_images (
     id SERIAL PRIMARY KEY,
@@ -96,9 +104,9 @@ CREATE TABLE IF NOT EXISTS product_variants (
     product_id INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     sku VARCHAR(64) UNIQUE,
     external_sku_id TEXT,
-    size VARCHAR(50),
-    color VARCHAR(50),
-    material VARCHAR(80),
+    size VARCHAR(255),
+    color VARCHAR(255),
+    material VARCHAR(255),
     stock INT NOT NULL DEFAULT 0 CHECK (stock >= 0),
     price_override NUMERIC(12, 2),
     discount_price_override NUMERIC(12, 2),
@@ -263,6 +271,7 @@ CREATE TABLE IF NOT EXISTS vouchers (
     valid_from TIMESTAMPTZ,
     valid_to TIMESTAMPTZ,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    show_in_checkout BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

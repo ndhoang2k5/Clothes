@@ -7,7 +7,7 @@ import { getSearchParams } from './utils/urls';
 import { buildBlogPostPath } from './utils/urls';
 
 const AboutPage: React.FC = () => {
-  const categories = useMemo(() => ['intro', 'news', 'charity'] as Blog['category'][], []);
+  const categories = useMemo(() => ['intro', 'tin-tuc', 'goc-nho-bat-mi'] as Blog['category'][], []);
   const queryParams = useMemo(() => getSearchParams(), []);
   const initialCategory = (queryParams.get('category') as Blog['category'] | null) || 'intro';
   const [activeCategory, setActiveCategory] = useState<Blog['category']>(categories.includes(initialCategory) ? initialCategory : 'intro');
@@ -22,16 +22,16 @@ const AboutPage: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const [introBlogs, newsBlogs, charityBlogs] = await Promise.all([
+        const [introBlogs, newsBlogs, shareBlogs] = await Promise.all([
           api.getBlogs('intro', 5),
-          api.getBlogs('news', 5),
-          api.getBlogs('charity', 5),
+          api.getBlogs('tin-tuc', 5),
+          api.getBlogs('goc-nho-bat-mi', 5),
         ]);
         if (cancelled) return;
         setPostsByCategory({
           intro: introBlogs,
-          news: newsBlogs,
-          charity: charityBlogs,
+          'tin-tuc': newsBlogs,
+          'goc-nho-bat-mi': shareBlogs,
         });
       } catch (e: any) {
         if (!cancelled) setError(e?.message || 'Không tải được nội dung');
@@ -106,7 +106,7 @@ const AboutPage: React.FC = () => {
                 activeCategory === c ? 'bg-pink-50 text-pink-700 border-pink-100' : 'bg-white text-gray-600 border-gray-100 hover:bg-gray-50'
               }`}
             >
-              {c === 'intro' ? 'Intro' : c === 'news' ? 'News' : 'Charity'}
+              {c === 'intro' ? 'Intro' : c === 'tin-tuc' ? 'Tin tức' : 'Góc nhỏ bật mí'}
             </button>
           ))}
         </div>

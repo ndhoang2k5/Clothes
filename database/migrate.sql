@@ -55,7 +55,7 @@ END $$;
 
 ALTER TABLE product_variants
     ADD COLUMN IF NOT EXISTS sku VARCHAR(64),
-    ADD COLUMN IF NOT EXISTS material VARCHAR(80),
+    ADD COLUMN IF NOT EXISTS material VARCHAR(255),
     ADD COLUMN IF NOT EXISTS price_override NUMERIC(12, 2),
     ADD COLUMN IF NOT EXISTS discount_price_override NUMERIC(12, 2),
     ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -67,6 +67,11 @@ CREATE INDEX IF NOT EXISTS idx_product_variants_product ON product_variants (pro
 CREATE UNIQUE INDEX IF NOT EXISTS uq_product_variants_sku ON product_variants (sku);
 CREATE INDEX IF NOT EXISTS idx_product_variants_external_sku ON product_variants (external_sku_id) WHERE external_sku_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS gin_product_variants_sku_trgm ON product_variants USING gin (sku gin_trgm_ops);
+
+-- Widen variant text columns for long Salework names (color/size parsed from product name)
+ALTER TABLE product_variants ALTER COLUMN size TYPE VARCHAR(255);
+ALTER TABLE product_variants ALTER COLUMN color TYPE VARCHAR(255);
+ALTER TABLE product_variants ALTER COLUMN material TYPE VARCHAR(255);
 
 -- Bảng customers (Phase A.2) – tạo trước khi thêm FK từ orders
 CREATE TABLE IF NOT EXISTS customers (
@@ -213,6 +218,14 @@ SET status = CASE
 END
 WHERE status IS NULL OR status = '' OR (is_published = TRUE AND status <> 'published');
 
+-- Blog sections: legacy categories -> tin-tuc (intro giữ nguyên)
+UPDATE blogs
+SET category = 'tin-tuc'
+WHERE category IN ('news', 'tips', 'share', 'charity');
+UPDATE blogs
+SET category = 'tin-tuc'
+WHERE category IS NULL OR TRIM(category) = '';
+
 CREATE TABLE IF NOT EXISTS order_items (
     id SERIAL PRIMARY KEY,
     order_id INT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -244,6 +257,7 @@ CREATE TABLE IF NOT EXISTS vouchers (
     valid_from TIMESTAMPTZ,
     valid_to TIMESTAMPTZ,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    show_in_checkout BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -253,6 +267,7 @@ CREATE INDEX IF NOT EXISTS idx_vouchers_valid ON vouchers (valid_from, valid_to)
 CREATE INDEX IF NOT EXISTS idx_vouchers_auto_active ON vouchers (auto_apply, is_active);
 
 ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS auto_apply BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS show_in_checkout BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS display_name VARCHAR(255);
 ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS image_url TEXT;
 
@@ -330,6 +345,20 @@ VALUES
     ('Combo đi sinh kèm quà', 'combo-di-sinh-kem-qua', '👜', 6),
     ('Ưu đãi cuối mùa', 'uu-dai-cuoi-mua', '🏷️', 7)
 ON CONFLICT (slug) DO NOTHING;
+
+-- Product ↔ Category (many-to-many)
+CREATE TABLE IF NOT EXISTS product_categories (
+    product_id INT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    category_id INT NOT NULL REFERENCES categories(id) ON DELETE CASCADE,
+    PRIMARY KEY (product_id, category_id)
+);
+CREATE INDEX IF NOT EXISTS idx_product_categories_category ON product_categories (category_id);
+
+INSERT INTO product_categories (product_id, category_id)
+SELECT p.id, p.category_id
+FROM products p
+WHERE p.category_id IS NOT NULL
+ON CONFLICT DO NOTHING;
 
 COMMIT;
 

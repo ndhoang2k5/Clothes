@@ -101,16 +101,38 @@ def serialize_variant_list_item(variant) -> dict:
     }
 
 
-def serialize_product_list_item(product, omit_missing_upload_files: bool = False) -> dict:
+def _product_category_slugs(product) -> list[str]:
+    slugs: list[str] = []
+    pcs = getattr(product, "product_categories", None) or []
+    for pc in pcs:
+        cat = getattr(pc, "category", None)
+        slug = getattr(cat, "slug", None)
+        if slug:
+            slugs.append(str(slug))
+    if not slugs:
+        primary = getattr(getattr(product, "category", None), "slug", None)
+        if primary:
+            slugs = [str(primary)]
+    return slugs
+
+
+def serialize_product_list_item(
+    product,
+    omit_missing_upload_files: bool = False,
+    promo_percent: int | None = None,
+) -> dict:
     """Lightweight product for listing pages (small payload)."""
+    from .promotion_service import apply_promo_to_payload
+
     imgs = sorted(getattr(product, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
     if omit_missing_upload_files:
         imgs = [img for img in imgs if not _local_upload_file_missing(getattr(img, "image_url", None))]
     primary = next((i for i in imgs if getattr(i, "is_primary", False)), None) or (imgs[0] if imgs else None)
-    return {
+    payload = {
         "id": product.id,
         "category_id": product.category_id,
         "category_slug": getattr(getattr(product, "category", None), "slug", None),
+        "category_slugs": _product_category_slugs(product),
         "name": product.name,
         "slug": getattr(product, "slug", None),
         "base_price": _num(product.base_price),
@@ -123,22 +145,30 @@ def serialize_product_list_item(product, omit_missing_upload_files: bool = False
         "is_sale": getattr(product, "is_sale", False),
         "updated_at": _dt(getattr(product, "updated_at", None)),
         "primary_image_url": primary.image_url if primary else None,
-        # cung cấp thêm một ít ảnh cho hiệu ứng hover (tối đa 4 ảnh)
-        "image_urls": [img.image_url for img in imgs[:4]],
+        # Chỉ 2 ảnh cho list/card (primary + 1 hover) để giảm payload & bandwidth
+        "image_urls": [img.image_url for img in imgs[:2]],
         "variants": [serialize_variant_list_item(v) for v in getattr(product, "variants", [])],
     }
+    return apply_promo_to_payload(payload, promo_percent)
 
 
-def serialize_product(product, omit_missing_upload_files: bool = False) -> dict:
+def serialize_product(
+    product,
+    omit_missing_upload_files: bool = False,
+    promo_percent: int | None = None,
+) -> dict:
+    from .promotion_service import apply_promo_to_payload
+
     imgs = sorted(getattr(product, "images", []) or [], key=lambda x: (getattr(x, "sort_order", 0), x.id))
     if omit_missing_upload_files:
         imgs = [img for img in imgs if not _local_upload_file_missing(getattr(img, "image_url", None))]
     primary = next((i for i in imgs if getattr(i, "is_primary", False)), None) or (imgs[0] if imgs else None)
 
-    return {
+    payload = {
         "id": product.id,
         "category_id": product.category_id,
         "category_slug": getattr(getattr(product, "category", None), "slug", None),
+        "category_slugs": _product_category_slugs(product),
         "name": product.name,
         "slug": getattr(product, "slug", None),
         "description": product.description,
@@ -176,6 +206,7 @@ def serialize_product(product, omit_missing_upload_files: bool = False) -> dict:
             for ci in getattr(product, "combo_components", []) or []
         ],
     }
+    return apply_promo_to_payload(payload, promo_percent)
 
 
 def serialize_customer(customer) -> dict:
@@ -388,6 +419,7 @@ def serialize_voucher(voucher) -> dict:
         "valid_to": _dt(getattr(voucher, "valid_to", None)),
         "is_active": getattr(voucher, "is_active", True),
         "show_on_homepage": bool(getattr(voucher, "show_on_homepage", False)),
+        "show_in_checkout": bool(getattr(voucher, "show_in_checkout", True)),
         "homepage_sort_order": int(getattr(voucher, "homepage_sort_order", 0) or 0),
         "card_theme": getattr(voucher, "card_theme", None) or "amber",
         "card_icon": getattr(voucher, "card_icon", None) or "gift",

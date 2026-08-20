@@ -1,7 +1,32 @@
-
+# Dependencies & build output (rebuilt inside image)
 node_modules
-npm-debug.log
+frontend_admin/node_modules
 dist
+frontend_admin/dist
+npm-debug.log
+
+# Git / IDE
 .git
+.gitignore
 .DS_Store
 *.local
+.cursor
+.agent-transcripts
+
+# Upload ảnh admin — mount volume lúc chạy, KHÔNG đóng gói vào image
+backend/static/uploads
+
+# Python cache
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.mypy_cache
+
+# Tài liệu / dữ liệu tạm / file Excel lớn
+docs
+assets
+*.xlsx
+*.xls
+
+# Dev compose không dùng khi build prod image
+docker-compose.dev.yml

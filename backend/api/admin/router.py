@@ -527,16 +527,34 @@ def upload_image(file: UploadFile = File(...)):
     upload_dir = backend_dir / "static" / "uploads"
     upload_dir.mkdir(parents=True, exist_ok=True)
 
-    ext = Path(file.filename or "").suffix.lower()
-    if ext not in [".png", ".jpg", ".jpeg", ".webp", ".gif"]:
-        ext = ".png"
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty file")
 
-    name = f"{uuid.uuid4().hex}{ext}"
+    # Nén + giới hạn cạnh dài ~2000px — tránh lưu ảnh máy ảnh 10–17MB.
+    from ...service.image_optimize import optimize_image_bytes
+
+    try:
+        optimized, out_ext = optimize_image_bytes(
+            raw,
+            source_name=file.filename or "upload.jpg",
+            max_edge=2000,
+            jpeg_quality=85,
+            prefer_webp=False,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid image: {e}") from e
+
+    name = f"{uuid.uuid4().hex}{out_ext}"
     dst = upload_dir / name
     with dst.open("wb") as f:
-        f.write(file.file.read())
+        f.write(optimized)
 
-    return {"url": f"/static/uploads/{name}"}
+    return {
+        "url": f"/static/uploads/{name}",
+        "bytes": len(optimized),
+        "original_bytes": len(raw),
+    }
 
 
 @protected_router.get("/blogs")
@@ -618,6 +636,56 @@ def delete_blog(blog_id: int, db: Session = Depends(get_db)):
     ok = AdminService.delete_blog(db, blog_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Blog not found")
+    return {"ok": True}
+
+
+@protected_router.get("/promotions")
+def list_promotions(db: Session = Depends(get_db)):
+    from ...service.promotion_service import PromotionService
+
+    return PromotionService.list_promotions(db)
+
+
+@protected_router.get("/promotions/{promotion_id}")
+def get_promotion(promotion_id: int, db: Session = Depends(get_db)):
+    from ...service.promotion_service import PromotionService
+
+    row = PromotionService.get_promotion(db, promotion_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Promotion not found")
+    return row
+
+
+@protected_router.post("/promotions")
+def create_promotion(data: dict = Body(...), db: Session = Depends(get_db)):
+    from ...service.promotion_service import PromotionService
+
+    try:
+        return PromotionService.create_promotion(db, data or {})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@protected_router.put("/promotions/{promotion_id}")
+def update_promotion(promotion_id: int, data: dict = Body(default={}), db: Session = Depends(get_db)):
+    from ...service.promotion_service import PromotionService
+
+    try:
+        updated = PromotionService.update_promotion(db, promotion_id, data or {})
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    if not updated:
+        raise HTTPException(status_code=404, detail="Promotion not found")
+    return updated
+
+
+@protected_router.delete("/promotions/{promotion_id}")
+def delete_promotion(promotion_id: int, db: Session = Depends(get_db)):
+    from ...service.promotion_service import PromotionService
+
+    ok = PromotionService.delete_promotion(db, promotion_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Promotion not found")
     return {"ok": True}
 
 

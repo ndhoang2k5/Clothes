@@ -60,6 +60,9 @@ export function HeroBannerCarousel(props: {
               <img
                 src={slide.image_url}
                 alt={slide.title || 'Unbee'}
+                loading={i === 0 ? 'eager' : 'lazy'}
+                decoding={i === 0 ? 'sync' : 'async'}
+                fetchPriority={i === index ? 'high' : 'low'}
                 className="absolute inset-0 w-full h-full object-cover"
               />
             </picture>

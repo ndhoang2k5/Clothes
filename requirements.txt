@@ -1,0 +1,16 @@
+# Gói hệ thống cần cài trước khi build frontend (Ubuntu/Debian)
+# Cài: sudo apt update && xargs -a requirements.txt sudo apt install -y
+#
+# Sau khi cài nodejs + npm:
+#   npm install
+#   npm run build
+#   npm run build:admin
+#
+# Hoặc build Docker (đã có Node trong image):
+#   docker compose build web && docker compose up -d web
+#
+# Python backend (riêng):
+#   pip install -r backend/requirements.txt
+
+nodejs
+npm

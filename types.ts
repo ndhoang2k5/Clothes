@@ -6,12 +6,15 @@ export interface Product {
   price: number;
   discountPrice?: number;
   category: string;
+  categories?: string[];
   material: string;
   images: string[];
   isActive?: boolean;
   isHot: boolean;
   isNew: boolean;
   isSale: boolean;
+  /** % khuyến mãi từ admin (tính trên base_price) */
+  salePercent?: number;
   variants: ProductVariant[];
   kind?: 'single' | 'combo';
   comboItems?: ComboItem[];
@@ -114,7 +117,7 @@ export interface Blog {
   thumbnail: string;
   author: string;
   createdAt: string;
-  category: 'news' | 'tips' | 'share' | 'charity' | 'intro';
+  category: 'tin-tuc' | 'tram-sac-cua-me' | 'cam-nang-me-be' | 'goc-nho-bat-mi' | 'intro';
   workflowStatus?: 'draft' | 'review' | 'scheduled' | 'published';
   scheduledAt?: string;
   reviewedAt?: string;

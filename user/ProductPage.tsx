@@ -9,6 +9,7 @@ import { CATEGORIES } from '../constants';
 import { QuickAddToCartModal } from './QuickAddToCartModal';
 import { navigate } from '../App';
 import { getSearchParams } from './utils/urls';
+import { uniqueSortedColors, uniqueSortedSizes } from './utils/sortVariantOptions';
 
 const SERVER_PER_PAGE = 24;
 
@@ -41,19 +42,28 @@ const ProductPage: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      setLoading(true);
+      const requestParams = {
+        category: activeCategory,
+        q: activeQ && activeQ.trim() ? activeQ.trim() : undefined,
+        page: currentPage,
+        per_page: SERVER_PER_PAGE,
+        useCache: true,
+        sizes: filters.sizes,
+        colors: filters.colors,
+        priceRange: filters.priceRange,
+        sort: filters.sort as any,
+      } as const;
+      const cached = api.peekProductsPage(requestParams);
+      if (cached) {
+        setProducts(cached.items);
+        setServerTotal(cached.total);
+        setLoading(false);
+      } else {
+        // Soft refresh: keep previous products visible; skeleton only when grid is empty.
+        setLoading(true);
+      }
       try {
-        const r = await api.getProductsPage({
-          category: activeCategory,
-          q: activeQ && activeQ.trim() ? activeQ.trim() : undefined,
-          page: currentPage,
-          per_page: SERVER_PER_PAGE,
-          useCache: true,
-          sizes: filters.sizes,
-          colors: filters.colors,
-          priceRange: filters.priceRange,
-          sort: filters.sort as any,
-        });
+        const r = await api.getProductsPage(requestParams);
         if (cancelled) return;
         setProducts(r.items);
         setServerTotal(r.total);
@@ -72,7 +82,7 @@ const ProductPage: React.FC = () => {
     };
   }, [activeCategory, activeQ, currentPage, filters]);
 
-  // Load full product list ONCE per category to build facet options
+  // Facets: derive from current page first; full list deferred so search images aren't starved.
   useEffect(() => {
     let cancelled = false;
     const loadAllForFacets = async () => {
@@ -80,7 +90,7 @@ const ProductPage: React.FC = () => {
         const r = await api.getProductsPage({
           category: activeCategory,
           page: 1,
-          per_page: 0,
+          per_page: 120,
           useCache: true,
         });
         if (cancelled) return;
@@ -89,9 +99,22 @@ const ProductPage: React.FC = () => {
         if (!cancelled) setFacetSourceProducts([]);
       }
     };
-    void loadAllForFacets();
+    const useIdle =
+      typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function';
+    const idleId = useIdle
+      ? window.requestIdleCallback(() => {
+          void loadAllForFacets();
+        }, { timeout: 5000 })
+      : window.setTimeout(() => {
+          void loadAllForFacets();
+        }, 1800);
     return () => {
       cancelled = true;
+      if (useIdle) {
+        window.cancelIdleCallback(idleId as number);
+      } else {
+        clearTimeout(idleId);
+      }
     };
   }, [activeCategory]);
 
@@ -120,8 +143,8 @@ const ProductPage: React.FC = () => {
     });
 
     return {
-      sizes: Array.from(sizes).sort(),
-      colors: Array.from(colors).sort()
+      sizes: uniqueSortedSizes(sizes),
+      colors: uniqueSortedColors(colors),
     };
   }, [facetSourceProducts, products]);
 
@@ -265,7 +288,7 @@ const ProductPage: React.FC = () => {
 
           {/* Product Grid */}
           <div className="flex-1 min-w-0">
-            {loading ? (
+            {loading && products.length === 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6">
                 {[1, 2, 3, 4, 5, 6].map(i => (
                   <div key={i} className="bg-white rounded-2xl h-[260px] md:h-[320px] animate-pulse border border-gray-100"></div>
@@ -273,11 +296,12 @@ const ProductPage: React.FC = () => {
               </div>
             ) : products.length > 0 ? (
               <>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  {products.map(product => (
+                <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 md:gap-6 ${loading ? 'opacity-70' : ''}`}>
+                  {products.map((product, idx) => (
                     <ProductCard
                       key={product.id}
                       product={product}
+                      priority={idx < 10}
                       onAddToCart={() => setQuickAddProductId(String(product.id))}
                     />
                   ))}

@@ -3,6 +3,13 @@ import { api } from '../services/api';
 import type { Product } from '../types';
 import { useCart } from './CartContext';
 import { COLORS } from './designTokens';
+import { uniqueSortedColors, uniqueSortedSizes } from './utils/sortVariantOptions';
+import {
+  pickVariantByColor,
+  pickVariantBySize,
+  variantHasColorStock,
+  variantHasSizeStock,
+} from './utils/variantSelection';
 
 interface QuickAddToCartModalProps {
   productId: string;
@@ -65,11 +72,11 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
   const isOutOfStock = totalStock <= 0;
 
   const uniqueSizes = useMemo(
-    () => [...new Set(variants.map((v: any) => (v && v.size) || '').filter(Boolean))],
+    () => uniqueSortedSizes(variants.map((v: any) => (v && v.size) || '')),
     [variants],
   );
   const uniqueColors = useMemo(
-    () => [...new Set(variants.map((v: any) => (v && v.color) || '').filter(Boolean))],
+    () => uniqueSortedColors(variants.map((v: any) => (v && v.color) || '')),
     [variants],
   );
 
@@ -137,14 +144,21 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
                 <h3 className="font-black text-lg" style={{ color: COLORS.textMain }}>
                   {product.name}
                 </h3>
-                <div className="flex items-baseline gap-3">
-                  <span className="text-xl font-black text-pink-600">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className="text-xl font-black text-red-500">
                     {actualPrice.toLocaleString()}đ
                   </span>
-                  {product.discountPrice && (
-                    <span className="text-gray-400 line-through text-sm font-medium">
-                      {product.price.toLocaleString()}đ
-                    </span>
+                  {product.discountPrice != null && product.discountPrice < product.price && (
+                    <>
+                      <span className="text-gray-800 line-through text-sm font-medium">
+                        {product.price.toLocaleString()}đ
+                      </span>
+                      {product.salePercent != null && product.salePercent > 0 && (
+                        <span className="inline-flex items-center rounded bg-red-500 px-1.5 py-0.5 text-xs font-bold text-white">
+                          {Math.round(product.salePercent)}%
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
                 <p className="text-xs text-gray-500">
@@ -161,12 +175,7 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
                       <span className="block text-xs font-bold text-gray-500 mb-1">Chọn size</span>
                       <div className="flex flex-wrap gap-2">
                         {uniqueSizes.map((size) => {
-                          const hasStock = variants.some(
-                            (v: any) =>
-                              v.size === size &&
-                              v.stock > 0 &&
-                              (!selectedVariant?.color || v.color === selectedVariant.color),
-                          );
+                          const hasStock = variantHasSizeStock(variants, size);
                           const isSelected = selectedVariant?.size === size;
                           return (
                             <button
@@ -174,13 +183,7 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
                               type="button"
                               disabled={!hasStock}
                               onClick={() => {
-                                const sameColor = selectedVariant?.color;
-                                const next = variants.find(
-                                  (v: any) =>
-                                    v.size === size &&
-                                    v.stock > 0 &&
-                                    (sameColor ? v.color === sameColor : true),
-                                );
+                                const next = pickVariantBySize(variants, size, selectedVariant);
                                 if (next) setSelectedVariantId(String(next.id));
                               }}
                               className={`min-w-[3rem] px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-colors ${
@@ -203,12 +206,7 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
                       <span className="block text-xs font-bold text-gray-500 mb-1">Chọn màu</span>
                       <div className="flex flex-wrap gap-2">
                         {uniqueColors.map((color) => {
-                          const hasStock = variants.some(
-                            (v: any) =>
-                              v.color === color &&
-                              v.stock > 0 &&
-                              (!selectedVariant?.size || v.size === selectedVariant.size),
-                          );
+                          const hasStock = variantHasColorStock(variants, color);
                           const isSelected = selectedVariant?.color === color;
                           return (
                             <button
@@ -216,13 +214,7 @@ export const QuickAddToCartModal: React.FC<QuickAddToCartModalProps> = ({
                               type="button"
                               disabled={!hasStock}
                               onClick={() => {
-                                const sameSize = selectedVariant?.size;
-                                const next = variants.find(
-                                  (v: any) =>
-                                    v.color === color &&
-                                    v.stock > 0 &&
-                                    (sameSize ? v.size === sameSize : true),
-                                );
+                                const next = pickVariantByColor(variants, color, selectedVariant);
                                 if (next) setSelectedVariantId(String(next.id));
                               }}
                               className={`min-w-[3rem] px-3 py-1.5 rounded-xl text-xs font-bold border-2 transition-colors ${

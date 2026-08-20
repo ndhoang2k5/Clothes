@@ -33,6 +33,9 @@ export function CategoryFeatureBanners(props: {
             <div className="h-44 bg-gray-50 overflow-hidden">
               <img
                 src={b.image_url}
+                alt={b.title || ''}
+                loading="lazy"
+                decoding="async"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
             </div>

@@ -258,6 +258,7 @@ class ApiService {
       isHot: !!p.is_hot,
       isNew: !!p.is_new,
       isSale: !!p.is_sale,
+      salePercent: p.sale_percent != null ? Number(p.sale_percent) : undefined,
       variants,
       kind: p.kind as 'single' | 'combo' | undefined,
     };
@@ -874,6 +875,51 @@ class ApiService {
     return this.toAbsoluteUrl(String(pathOrUrl).trim());
   }
 
+  private normalizeListThumbWidth(width: number): number {
+    const allowed = new Set([240, 320, 480, 640, 800, 960]);
+    return allowed.has(width) ? width : 480;
+  }
+
+  private parseUploadsRel(pathOrUrl: string | null | undefined): string | null {
+    const abs = this.getImageUrl(pathOrUrl);
+    if (!abs) return null;
+    try {
+      const parsed = new URL(abs, typeof window !== 'undefined' ? window.location.origin : 'https://unbee.vn');
+      const match = parsed.pathname.match(/\/static\/(uploads\/.+)$/i);
+      return match ? match[1] : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * On-demand resize API — luôn tạo thumb nếu chưa có (chậm lần đầu với ảnh gốc lớn).
+   */
+  toListThumbApiUrl(pathOrUrl: string | null | undefined, width: number = 480): string {
+    const abs = this.getImageUrl(pathOrUrl);
+    if (!abs) return '';
+    const rel = this.parseUploadsRel(pathOrUrl);
+    if (!rel) return abs;
+    const w = this.normalizeListThumbWidth(width);
+    return `${this.userBaseUrl}/thumbs?path=${encodeURIComponent(rel)}&w=${w}`;
+  }
+
+  /**
+   * Ảnh nhỏ (WebP) cho lưới/thẻ sản phẩm — ưu tiên file cache tĩnh đã warm
+   * (`/static/cache/thumbs/{w}/uploads/...webp`) để nginx/browser cache nhanh.
+   * ProductCard sẽ fallback sang API thumbs rồi ảnh gốc nếu 404.
+   */
+  toListImageUrl(pathOrUrl: string | null | undefined, width: number = 480): string {
+    const abs = this.getImageUrl(pathOrUrl);
+    if (!abs) return '';
+    const rel = this.parseUploadsRel(pathOrUrl);
+    if (!rel) return abs;
+    const w = this.normalizeListThumbWidth(width);
+    const stem = rel.replace(/\.[^.]+$/i, '');
+    const origin = this.getBackendOrigin();
+    return `${origin}/static/cache/thumbs/${w}/${stem}.webp`;
+  }
+
   async getBanners(): Promise<Banner[]> {
     // User-facing: fetch active home hero banners from backend, fallback to localstorage mock.
     try {
@@ -1016,6 +1062,57 @@ class ApiService {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data as any)?.detail || 'Xóa email đăng ký thất bại');
+  }
+
+  // --- Admin: Product percent promotions ---
+  async adminListPromotions(): Promise<any[]> {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/promotions`);
+    if (!res.ok) throw new Error('Không thể tải danh sách khuyến mãi');
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
+  }
+
+  async adminCreatePromotion(payload: {
+    name?: string;
+    percent_off: number;
+    product_ids: Array<number | string>;
+    is_active?: boolean;
+  }): Promise<any> {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/promotions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any)?.detail || 'Tạo khuyến mãi thất bại');
+    return data;
+  }
+
+  async adminUpdatePromotion(
+    id: number | string,
+    payload: {
+      name?: string;
+      percent_off?: number;
+      product_ids?: Array<number | string>;
+      is_active?: boolean;
+    },
+  ): Promise<any> {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/promotions/${Number(id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any)?.detail || 'Cập nhật khuyến mãi thất bại');
+    return data;
+  }
+
+  async adminDeletePromotion(id: number | string): Promise<void> {
+    const res = await this.adminFetch(`${this.adminBaseUrl}/promotions/${Number(id)}`, {
+      method: 'DELETE',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any)?.detail || 'Xóa khuyến mãi thất bại');
   }
 
   async adminUploadImage(file: File): Promise<string> {

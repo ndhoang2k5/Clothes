@@ -26,6 +26,16 @@ class Category(Base):
     parent = relationship("Category", remote_side=[id])
     products = relationship("Product", back_populates="category")
 
+
+class ProductCategory(Base):
+    __tablename__ = "product_categories"
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), primary_key=True)
+    category_id = Column(Integer, ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True)
+
+    product = relationship("Product", back_populates="product_categories")
+    category = relationship("Category")
+
+
 class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True, index=True)
@@ -47,6 +57,11 @@ class Product(Base):
     updated_at = Column(DateTime, default=datetime.datetime.utcnow)
 
     category = relationship("Category", back_populates="products")
+    product_categories = relationship(
+        "ProductCategory",
+        back_populates="product",
+        cascade="all, delete-orphan",
+    )
     variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
     images = relationship("ProductImage", back_populates="product", cascade="all, delete-orphan")
     combo_components = relationship(
@@ -56,15 +71,42 @@ class Product(Base):
         cascade="all, delete-orphan",
     )
 
+
+class ProductPromotion(Base):
+    """Nhóm khuyến mãi theo % (vd: giảm 20% cho nhiều SP)."""
+    __tablename__ = "product_promotions"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    percent_off = Column(Integer, nullable=False)  # 1..99
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    items = relationship(
+        "ProductPromotionItem",
+        back_populates="promotion",
+        cascade="all, delete-orphan",
+    )
+
+
+class ProductPromotionItem(Base):
+    __tablename__ = "product_promotion_items"
+    promotion_id = Column(Integer, ForeignKey("product_promotions.id", ondelete="CASCADE"), primary_key=True)
+    product_id = Column(Integer, ForeignKey("products.id", ondelete="CASCADE"), primary_key=True, index=True)
+
+    promotion = relationship("ProductPromotion", back_populates="items")
+    product = relationship("Product")
+
+
 class ProductVariant(Base):
     __tablename__ = "product_variants"
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(Integer, ForeignKey("products.id"))
     sku = Column(String(64), unique=True, index=True)
     external_sku_id = Column(String(128))  # Salework _id for sync
-    size = Column(String(50))
-    color = Column(String(50))
-    material = Column(String(80))
+    size = Column(String(255))
+    color = Column(String(255))
+    material = Column(String(255))
     stock = Column(Integer, default=0)
     price_override = Column(Numeric(12, 2))
     discount_price_override = Column(Numeric(12, 2))
@@ -256,6 +298,7 @@ class Voucher(Base):
     is_active = Column(Boolean, default=True)
     auto_apply = Column(Boolean, default=False)
     show_on_homepage = Column(Boolean, nullable=False, default=False)
+    show_in_checkout = Column(Boolean, nullable=False, default=True)
     homepage_sort_order = Column(Integer, nullable=False, default=0)
     card_theme = Column(String(32), nullable=False, default="amber")
     card_icon = Column(String(32), nullable=False, default="gift")

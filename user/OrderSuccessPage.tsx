@@ -1,8 +1,9 @@
 import React from 'react';
 import { COLORS } from './designTokens';
+import { navigate } from '../App';
 
 const OrderSuccessPage: React.FC = () => {
-  const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.hash.split('?')[1] || '' : '');
+  const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search || '' : '');
   const code = params.get('code') || '';
   const total = params.get('total') || '0';
   const date = params.get('date') || '';
@@ -17,7 +18,7 @@ const OrderSuccessPage: React.FC = () => {
   }) : '';
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-20 text-center">
+    <div className="max-w-2xl mx-auto px-4 py-14 text-center">
       <div className="inline-flex w-16 h-16 rounded-full items-center justify-center text-3xl mb-6" style={{ backgroundColor: 'rgba(181, 138, 90, 0.2)' }}>
         ✓
       </div>
@@ -48,7 +49,8 @@ const OrderSuccessPage: React.FC = () => {
       </div>
 
       <a
-        href="#/products"
+        href="/products"
+        onClick={(e) => { e.preventDefault(); navigate('/products'); }}
         className="inline-flex px-8 py-3 rounded-full font-black text-white shadow-lg"
         style={{ backgroundColor: COLORS.ctaPrimary }}
       >

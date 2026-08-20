@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from './AuthContext';
 import { COLORS } from './designTokens';
+import { navigate } from '../App';
 
 const LoginPage: React.FC = () => {
   const { login, register } = useAuth();
@@ -25,7 +26,7 @@ const LoginPage: React.FC = () => {
       } else {
         await register({ name: name.trim() || undefined, email: email.trim(), phone: phone.trim() || undefined, password });
       }
-      window.location.hash = '#/';
+      navigate('/');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Thao tác thất bại');
     } finally {

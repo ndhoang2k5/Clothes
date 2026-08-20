@@ -9,6 +9,7 @@ import BannerManagement from './pages/BannerManagement';
 import VoucherManagement from './pages/VoucherManagement';
 import ShippingRulesManagement from './pages/ShippingRulesManagement';
 import ClearanceManagement from './pages/ClearanceManagement';
+import PromotionManagement from './pages/PromotionManagement';
 import BlogsManagement from './pages/BlogsManagement';
 import NewsletterManagement from './pages/NewsletterManagement';
 import AdminLoginPage from './pages/AdminLoginPage';
@@ -63,6 +64,7 @@ const AdminApp: React.FC = () => {
   const renderRoute = () => {
     switch (path) {
       case '#/admin/products': return <ProductManagement />;
+      case '#/admin/promotions': return <PromotionManagement />;
       case '#/admin/clearance': return <ClearanceManagement />;
       case '#/admin/orders': return <OrderManagement />;
       case '#/admin/collections': return <CollectionManagement />;

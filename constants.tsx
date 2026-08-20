@@ -113,6 +113,16 @@ export const CATEGORIES = [
       </div>
     ),
   },
+  {
+    id: '8',
+    name: 'Giảm giá',
+    slug: 'giam-gia',
+    icon: (
+      <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-red-100 to-rose-100 flex items-center justify-center">
+        <span className="text-lg font-black text-red-500">%</span>
+      </div>
+    ),
+  },
 ];
 
 export const TRUST_FEATURES = [

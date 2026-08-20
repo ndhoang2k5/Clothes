@@ -6,6 +6,7 @@ import type { BlogBlock } from './utils/blogContent';
 import { parseInlineLinks } from './utils/blogContent';
 import { navigate } from '../App';
 import { buildBlogPostPath } from './utils/urls';
+import { getBlogSectionLabel, normalizeBlogSectionSlug } from './utils/blogCategories';
 
 type Props = {
   blogId: string;
@@ -142,7 +143,7 @@ const BlogPostPage: React.FC<Props> = ({ blogId }) => {
         <>
           <div className="mb-8">
             <div className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-widest">
-              {post.category === 'share' ? 'Chia sẻ' : post.category}
+              {post.category === 'intro' ? 'Intro' : getBlogSectionLabel(normalizeBlogSectionSlug(post.category))}
               {post.publishedAt ? ` • ${new Date(post.publishedAt).toLocaleDateString('vi-VN')}` : ''}
             </div>
             <h1 className={`text-3xl md:text-4xl font-black leading-tight mb-3 ${titleAlignClass} ${titleColorClass}`}>{post.title}</h1>

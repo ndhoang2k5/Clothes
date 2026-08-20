@@ -123,9 +123,15 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     from ...service.serializers import serialize_product
+    from ...service.promotion_service import PromotionService
 
+    promo_map = PromotionService.active_percent_by_product_id(db)
     # Bỏ URL ảnh upload đã mất file (DB còn path) để shop không hiển thị link hỏng.
-    return serialize_product(product, omit_missing_upload_files=True)
+    return serialize_product(
+        product,
+        omit_missing_upload_files=True,
+        promo_percent=promo_map.get(int(product.id)),
+    )
 
 
 @router.get("/products/{product_id}/combo-items")
@@ -215,6 +221,7 @@ def get_available_vouchers(
         db.query(models.Voucher)
         .filter(
             models.Voucher.is_active == True,  # noqa: E712
+            models.Voucher.show_in_checkout == True,  # noqa: E712
         )
         .filter((models.Voucher.valid_from.is_(None)) | (models.Voucher.valid_from <= now))
         .filter((models.Voucher.valid_to.is_(None)) | (models.Voucher.valid_to >= now))
@@ -480,6 +487,18 @@ def login(body: dict = Body(...), db: Session = Depends(get_db)):
 
     token = create_access_token(customer.id)
     return {"token": token, "customer": serialize_customer(customer)}
+
+
+@router.get("/thumbs")
+def get_image_thumb(path: str, w: int = 480):
+    """
+    On-demand resized WebP for product cards / grids.
+    path: relative under uploads/, e.g. uploads/abc.jpg
+    w: one of 240,320,480,640,800,960
+    """
+    from ...service.image_thumb import thumb_response
+
+    return thumb_response(path, w)
 
 
 @router.get("/me")

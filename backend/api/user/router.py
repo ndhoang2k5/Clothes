@@ -7,7 +7,7 @@ from ...service.admin.admin_service import AdminService
 from ...service.voucher_service import VoucherService
 from ...service.shipping_service import ShippingService
 from ...service.order_service import OrderService
-from ...service.serializers import _dt, serialize_blog, serialize_homepage_promo_voucher
+from ...service.serializers import _dt, serialize_blog, serialize_blog_summary, serialize_homepage_promo_voucher
 from ...service.order_notification_service import OrderNotificationService
 from ...service.newsletter_service import NewsletterService
 from ...service.auth_service import (
@@ -117,6 +117,19 @@ def get_products(
         q=q,
     )
 
+
+@router.get("/products/facets")
+def get_product_facets(
+    category: str | None = None,
+    db: Session = Depends(get_db),
+):
+    key = f"user:product-facets:category={category or ''}"
+    return _PUBLIC_TTL_CACHE.get_or_set(
+        key,
+        lambda: UserProductService.get_active_product_facets(db, category),
+        ttl_seconds=30.0,
+    )
+
 @router.get("/products/{product_id}")
 def get_product(product_id: int, db: Session = Depends(get_db)):
     product = UserProductService.get_active_product(db, product_id)
@@ -191,9 +204,10 @@ def get_blogs(
         lambda: AdminService.list_blogs(db, category=category, published_only=True, q=q),
         ttl_seconds=20.0,
     )
+    summaries = [serialize_blog_summary(item) for item in items]
     if limit and limit > 0:
-        return items[: limit]
-    return items
+        return summaries[: limit]
+    return summaries
 
 
 @router.get("/blogs/{blog_id}")

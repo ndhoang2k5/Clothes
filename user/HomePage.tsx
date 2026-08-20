@@ -263,7 +263,7 @@ const HomePage: React.FC = () => {
               img: 'new_image/combodisinh.png',
               href: '/products?cat=combo-di-sinh-kem-qua',
             },
-          ].map((cat) => (
+          ].map((cat, index) => (
             <a 
               key={cat.id}
               href={cat.href}
@@ -279,9 +279,9 @@ const HomePage: React.FC = () => {
                       ? 'w-10 h-10 md:w-[3.25rem] md:h-[3.25rem] contrast-125 saturate-125 brightness-95'
                       : 'w-10 h-10 md:w-12 md:h-12'
                   }`}
-                  loading="eager"
+                  loading={index < 2 ? 'eager' : 'lazy'}
                   decoding="async"
-                  fetchPriority="high"
+                  fetchPriority={index < 2 ? 'high' : 'low'}
                 />
               </div>
               <span className="text-[11px] leading-4 md:text-sm font-bold text-[#4B3B32] line-clamp-2">

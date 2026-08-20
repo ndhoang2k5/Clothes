@@ -270,6 +270,7 @@ class ApiService {
   >();
   private productDetailCache = new Map<string, { product: Product; fetchedAt: number }>();
   private productDetailInflight = new Map<string, Promise<Product>>();
+  private productFacetCache = new Map<string, { sizes: string[]; colors: string[]; materials: string[]; fetchedAt: number }>();
 
   private static readonly LIST_CACHE_TTL_MS = 2 * 60 * 1000;
   private static readonly DETAIL_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -429,6 +430,27 @@ class ApiService {
     const payload = { items, total: Number(data.total || 0), page: Number(data.page || page), per_page: Number(data.per_page || per_page), fetchedAt: Date.now() };
     this.productListCache.set(key, payload);
     return { ...payload, fromCache: false as const };
+  }
+
+  async getProductFacets(category?: string | null): Promise<{ sizes: string[]; colors: string[]; materials: string[] }> {
+    const key = String(category || 'all');
+    const cached = this.productFacetCache.get(key);
+    if (cached && Date.now() - cached.fetchedAt < ApiService.LIST_CACHE_TTL_MS) {
+      return cached;
+    }
+    const qs = new URLSearchParams();
+    if (category) qs.set('category', category);
+    const res = await fetch(`${this.userBaseUrl}/products/facets?${qs.toString()}`);
+    if (!res.ok) throw new Error('API Error');
+    const data: any = await res.json();
+    const payload = {
+      sizes: Array.isArray(data?.sizes) ? data.sizes.map(String) : [],
+      colors: Array.isArray(data?.colors) ? data.colors.map(String) : [],
+      materials: Array.isArray(data?.materials) ? data.materials.map(String) : [],
+      fetchedAt: Date.now(),
+    };
+    this.productFacetCache.set(key, payload);
+    return payload;
   }
 
   /** Backward-compat: returns first page only (fast). */
@@ -1537,7 +1559,7 @@ class ApiService {
       const data: any[] = await res.json();
       const b = data[0];
       if (!b) return null;
-      return this.mapBackendBlogToFrontend(b, 'intro');
+      return await this.getBlogById(b.id);
     } catch {
       return null;
     }

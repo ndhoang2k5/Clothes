@@ -10,6 +10,47 @@ PROMO_LIST_SLUG = "giam-gia"
 
 class UserProductService:
     @staticmethod
+    def get_active_product_facets(db: Session, category_slug: str | None = None):
+        """Facet gọn cho bộ lọc; không serialize/tải toàn bộ catalog về client."""
+        query = (
+            db.query(
+                models.ProductVariant.size,
+                models.ProductVariant.color,
+                models.ProductVariant.material,
+            )
+            .join(models.Product, models.Product.id == models.ProductVariant.product_id)
+            .filter(
+                models.Product.is_active.is_(True),
+                models.ProductVariant.is_active.is_(True),
+            )
+        )
+
+        slug = (category_slug or "").strip()
+        if slug == PROMO_LIST_SLUG:
+            promo_ids = PromotionService.active_product_ids(db)
+            if not promo_ids:
+                return {"sizes": [], "colors": [], "materials": []}
+            query = query.filter(models.Product.id.in_(promo_ids))
+        else:
+            query = apply_category_slug_filter(query, db, category_slug)
+
+        rows = query.distinct().all()
+
+        def _values(index: int) -> list[str]:
+            values = {
+                str(row[index]).strip()
+                for row in rows
+                if row[index] is not None and str(row[index]).strip()
+            }
+            return sorted(values, key=lambda value: value.casefold())
+
+        return {
+            "sizes": _values(0),
+            "colors": _values(1),
+            "materials": _values(2),
+        }
+
+    @staticmethod
     def get_active_products(
         db: Session,
         category_slug: str | None = None,

@@ -352,9 +352,6 @@ const App: React.FC = () => {
     };
     window.addEventListener('popstate', handleRouteChange);
 
-    // Warm homepage product cache ASAP so first paint is smoother.
-    void api.getProductsPage({ page: 1, per_page: 20, useCache: true }).catch(() => undefined);
-
     // Backward-compat: convert old hash URLs to clean paths (best-effort).
     const hash = String(window.location.hash || '');
     if (hash && hash.startsWith('#/')) {

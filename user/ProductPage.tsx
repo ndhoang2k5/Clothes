@@ -16,7 +16,7 @@ const PRODUCT_SORTS = new Set(['newest', 'price-asc', 'price-desc', 'bestseller'
 
 const ProductPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
-  const [facetSourceProducts, setFacetSourceProducts] = useState<Product[]>([]);
+  const [facetOptions, setFacetOptions] = useState<{ sizes: string[]; colors: string[] }>({ sizes: [], colors: [] });
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -89,32 +89,30 @@ const ProductPage: React.FC = () => {
     };
   }, [activeCategory, activeQ, currentPage, filters]);
 
-  // Facets: derive from current page first; full list deferred so search images aren't starved.
+  // Facets: API gọn chỉ trả các giá trị distinct, không tải 120 sản phẩm + variants/images.
   useEffect(() => {
     let cancelled = false;
-    const loadAllForFacets = async () => {
+    const loadFacets = async () => {
       try {
-        const r = await api.getProductsPage({
-          category: activeCategory,
-          page: 1,
-          per_page: 120,
-          useCache: true,
-        });
+        const r = await api.getProductFacets(activeCategory);
         if (cancelled) return;
-        setFacetSourceProducts(r.items);
+        setFacetOptions({
+          sizes: uniqueSortedSizes(r.sizes),
+          colors: uniqueSortedColors(r.colors),
+        });
       } catch {
-        if (!cancelled) setFacetSourceProducts([]);
+        if (!cancelled) setFacetOptions({ sizes: [], colors: [] });
       }
     };
     const useIdle =
       typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function';
     const idleId = useIdle
       ? window.requestIdleCallback(() => {
-          void loadAllForFacets();
-        }, { timeout: 5000 })
+          void loadFacets();
+        }, { timeout: 2000 })
       : window.setTimeout(() => {
-          void loadAllForFacets();
-        }, 1800);
+          void loadFacets();
+        }, 500);
     return () => {
       cancelled = true;
       if (useIdle) {
@@ -137,23 +135,12 @@ const ProductPage: React.FC = () => {
     }
   }, [filters, activeCategory, activeQ]);
 
-  // Compute available filter options from ALL products in category (facetSourceProducts)
-  const availableOptions = useMemo(() => {
-    const sizes = new Set<string>();
-    const colors = new Set<string>();
-
-    (facetSourceProducts.length > 0 ? facetSourceProducts : products).forEach(p => {
-      (p.variants || []).forEach(v => {
-        if (v.size && String(v.size).trim()) sizes.add(String(v.size).trim());
-        if (v.color && String(v.color).trim()) colors.add(String(v.color).trim());
-      });
-    });
-
-    return {
-      sizes: uniqueSortedSizes(sizes),
-      colors: uniqueSortedColors(colors),
-    };
-  }, [facetSourceProducts, products]);
+  const availableOptions = facetOptions.sizes.length || facetOptions.colors.length
+    ? facetOptions
+    : {
+        sizes: uniqueSortedSizes(new Set(products.flatMap((p) => (p.variants || []).map((v) => String(v.size || '')).filter(Boolean)))),
+        colors: uniqueSortedColors(new Set(products.flatMap((p) => (p.variants || []).map((v) => String(v.color || '')).filter(Boolean)))),
+      };
 
   const totalPages = useMemo(() => {
     if (serverTotal == null) return 1;

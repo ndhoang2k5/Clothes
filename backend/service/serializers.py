@@ -531,3 +531,35 @@ def serialize_blog(blog) -> dict:
         "updated_at": _dt(getattr(blog, "updated_at", None)),
     }
 
+
+def serialize_blog_summary(blog) -> dict:
+    """Payload nhẹ cho danh sách blog; nội dung đầy đủ chỉ trả ở API detail."""
+    import json
+
+    is_mapping = isinstance(blog, dict)
+    content = str((blog.get("content") if is_mapping else getattr(blog, "content", "")) or "")
+    pieces: list[str] = []
+    try:
+        document = json.loads(content)
+        if isinstance(document, dict) and isinstance(document.get("blocks"), list):
+            for block in document["blocks"]:
+                if not isinstance(block, dict):
+                    continue
+                text_value = block.get("text")
+                if text_value:
+                    pieces.append(str(text_value))
+                items = block.get("items")
+                if isinstance(items, list):
+                    pieces.extend(str(item) for item in items if item)
+    except (TypeError, ValueError):
+        pieces.append(content)
+
+    excerpt = " ".join(pieces).replace("\n", " ")
+    excerpt = " ".join(excerpt.split())
+    if len(excerpt) > 180:
+        excerpt = excerpt[:177].rstrip() + "..."
+
+    payload = dict(blog) if is_mapping else serialize_blog(blog)
+    payload["content"] = ""
+    payload["excerpt"] = excerpt
+    return payload

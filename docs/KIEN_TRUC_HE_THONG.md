@@ -100,6 +100,7 @@ JWT:
 |--------|------|--------|
 | GET | `/categories` | Danh mục active, cache TTL ~30s |
 | GET | `/products` | SP active, phân trang, filter size/màu/chất liệu/giá/sort/`q`; `category=giam-gia` = SP đang KM % |
+| GET | `/products/facets` | Danh sách size/màu/chất liệu distinct theo category, dùng cho bộ lọc mà không tải toàn catalog |
 | GET | `/products/{id}` | Chi tiết; bỏ URL ảnh file đã mất; áp % KM |
 | GET | `/products/{id}/combo-items` | Thành phần combo |
 | GET | `/banners?slot=` | Banner active theo slot |
@@ -282,7 +283,7 @@ Token: `unbee_admin_token`. `services/api.ts` (root) dùng chung shop + admin.
 
 Env: `SALEWORK_BASE_URL`, `SALEWORK_CLIENT_ID`, `SALEWORK_TOKEN`.
 
-- Auto-sync ~60s (`SALEWORK_AUTO_SYNC_*`)
+- Auto-sync ~60s (`SALEWORK_AUTO_SYNC_*`), chạy ngoài event loop để không chặn request web
 - Map `product_variants.sku` ↔ mã Salework; `external_sku_id`
 - Parse size/màu từ tên SKU (kể cả combo “Hồng - Trắng sz 0-3m”)
 - SP **mới tạo** từ sync: `is_active=false` (Off) — bật tay trên admin

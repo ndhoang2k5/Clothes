@@ -129,15 +129,21 @@ async def _warm_homepage_thumbs_once():
 async def _salework_auto_sync_loop():
     await asyncio.sleep(_AUTO_SYNC_START_DELAY_SECONDS)
     while True:
-        db = SessionLocal()
         try:
-            result = run_salework_sync(db, trigger="auto")
+            # Salework dùng HTTP/SQL đồng bộ. Chạy trực tiếp ở đây sẽ khóa event loop
+            # và làm toàn bộ API đứng trong suốt lượt sync.
+            def _sync_in_worker():
+                db = SessionLocal()
+                try:
+                    return run_salework_sync(db, trigger="auto")
+                finally:
+                    db.close()
+
+            result = await asyncio.to_thread(_sync_in_worker)
             if not result.get("success") and result.get("errors"):
                 _logger.warning("Salework auto sync failed: %s", result["errors"][0])
         except Exception as e:
             _logger.exception("Salework auto sync crashed: %s", e)
-        finally:
-            db.close()
         await asyncio.sleep(_AUTO_SYNC_INTERVAL_SECONDS)
 
 

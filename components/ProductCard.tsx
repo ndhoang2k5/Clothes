@@ -23,6 +23,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   priorityRank = 0,
 }) => {
   const cardRef = useRef<HTMLAnchorElement | null>(null);
+  const prefetchTimerRef = useRef<number | null>(null);
   const [hovered, setHovered] = useState(false);
   const [imageIndex, setImageIndex] = useState(0);
   const [imageReady, setImageReady] = useState(false);
@@ -103,6 +104,23 @@ const ProductCard: React.FC<ProductCardProps> = ({
     api.prefetchProductDetail(String(product.id));
   };
 
+  const cancelPrefetch = () => {
+    if (prefetchTimerRef.current !== null) {
+      window.clearTimeout(prefetchTimerRef.current);
+      prefetchTimerRef.current = null;
+    }
+  };
+
+  const schedulePrefetch = () => {
+    cancelPrefetch();
+    prefetchTimerRef.current = window.setTimeout(() => {
+      prefetchTimerRef.current = null;
+      prefetchDetail();
+    }, 220);
+  };
+
+  useEffect(() => () => cancelPrefetch(), [product.id]);
+
   const fetchPriority: 'high' | 'low' | 'auto' = priority
     ? priorityRank < 4
       ? 'high'
@@ -120,11 +138,12 @@ const ProductCard: React.FC<ProductCardProps> = ({
       className="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden flex flex-col h-full border border-gray-100"
       onMouseEnter={() => {
         setHovered(true);
-        prefetchDetail();
+        schedulePrefetch();
       }}
-      onTouchStart={prefetchDetail}
-      onFocus={prefetchDetail}
+      onFocus={schedulePrefetch}
+      onBlur={cancelPrefetch}
       onMouseLeave={() => {
+        cancelPrefetch();
         setHovered(false);
         setImageIndex(0);
       }}

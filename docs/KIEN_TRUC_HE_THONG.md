@@ -66,7 +66,6 @@ Thay đổi SQL schema trên DB đã có: chạy file trong `database/` thủ c�
 |------|---------|
 | `App.tsx`, `user/`, `components/`, `services/api.ts` | **Shop production** (Vite root) |
 | `frontend_admin/`, `admin/` | CMS: wrapper Vite + màn hình nghiệp vụ |
-| `frontend/` | Bản shop cũ / stub, **không** được Docker build |
 | `backend/` | FastAPI, model, service, script |
 | `database/` | `init.sql` + các migrate SQL |
 | `deploy/nginx/` | Dockerfile + `nginx.conf` |
@@ -353,7 +352,7 @@ Admin `POST /upload-image` → optimize → `/static/uploads/{uuid}.jpg`. Thumb 
 
 ## 13. Điểm dễ nhầm
 
-1. Thư mục `frontend/` không phải shop đang chạy — sửa `user/` + `App.tsx`.
+1. Shop production nằm ở root: sửa `user/`, `components/`, `services/` và `App.tsx`.
 2. `giam-gia` không có row category; `uu-dai-cuoi-mua` thì có.
 3. Giá trên card có thể đến từ **promo %**, không chỉ field `discount_price` gõ tay.
 4. Giỏ tin localStorage; **đơn luôn tính lại trên server**.
@@ -378,4 +377,3 @@ Admin `POST /upload-image` → optimize → `/static/uploads/{uuid}.jpg`. Thumb 
 | Menu | `user/Navbar.tsx` |
 | Admin shell | `frontend_admin/AdminApp.tsx`, `admin/AdminLayout.tsx` |
 | Compose | `docker-compose.yml`, `docker-compose.override.yml` |
-)

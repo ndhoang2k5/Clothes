@@ -12,6 +12,7 @@ import { getSearchParams } from './utils/urls';
 import { uniqueSortedColors, uniqueSortedSizes } from './utils/sortVariantOptions';
 
 const SERVER_PER_PAGE = 24;
+const PRODUCT_SORTS = new Set(['newest', 'price-asc', 'price-desc', 'bestseller']);
 
 const ProductPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -21,22 +22,28 @@ const ProductPage: React.FC = () => {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [quickAddProductId, setQuickAddProductId] = useState<string | null>(null);
   const [serverTotal, setServerTotal] = useState<number | null>(null);
+  const queryParams = getSearchParams();
+  const activeCategory = queryParams.get('cat');
+  const activeQ = queryParams.get('q') || '';
+  const requestedSort = queryParams.get('sort') || 'newest';
+  const activeSort = PRODUCT_SORTS.has(requestedSort) ? requestedSort : 'newest';
+
   const [filters, setFilters] = useState({
     sizes: [] as string[],
     colors: [] as string[],
     priceRange: [0, 1000000] as [number, number],
-    sort: 'newest'
+    sort: activeSort
   });
 
-  // Get active category from URL
-  const queryParams = getSearchParams();
-  const activeCategory = queryParams.get('cat');
-  const activeQ = queryParams.get('q') || '';
   const [searchText, setSearchText] = useState(activeQ);
 
   useEffect(() => {
     setSearchText(activeQ);
   }, [activeQ]);
+
+  useEffect(() => {
+    setFilters((current) => current.sort === activeSort ? current : { ...current, sort: activeSort });
+  }, [activeSort]);
 
   // Load current page with filters (server-side filtering)
   useEffect(() => {
@@ -160,6 +167,7 @@ const ProductPage: React.FC = () => {
     const params = new URLSearchParams();
     if (activeCategory) params.set('cat', activeCategory);
     if (trimmed) params.set('q', trimmed);
+    if (filters.sort !== 'newest') params.set('sort', filters.sort);
     const qs = params.toString();
     navigate(`/products${qs ? '?' + qs : ''}`);
   };

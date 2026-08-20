@@ -91,7 +91,7 @@ const Navbar: React.FC = () => {
       items: [
         { label: 'Nhộng chũn & túi ngủ', href: '/products?cat=nhong-chun' },
         { label: 'Body & quần áo sơ sinh', href: '/products?cat=so-sinh&q=body' },
-        { label: 'Combo sơ sinh', href: '/products?cat=so-sinh&q=combo' },
+        { label: 'Combo sơ sinh', href: '/products?cat=combo-di-sinh-kem-qua' },
       ],
     },
     {
@@ -99,7 +99,7 @@ const Navbar: React.FC = () => {
       title: 'Bé 1Y-4Y',
       items: [
         { label: 'Quần áo thời trang', href: '/products?cat=be' },
-        { label: 'Đồ ngủ', href: '/products?cat=be&q=%C4%91%E1%BB%93%20ng%E1%BB%A7' },
+        { label: 'Đồ ngủ', href: '/products?cat=be&q=m%E1%BA%B7c%20nh%C3%A0' },
         { label: 'Set outfit', href: '/products?cat=be&q=set' },
       ],
     },
@@ -108,9 +108,9 @@ const Navbar: React.FC = () => {
       title: 'Phụ kiện',
       items: [
         { label: 'Gối', href: '/products?cat=phu-kien&q=g%E1%BB%91i' },
-        { label: 'Chăn ủ', href: '/products?cat=phu-kien&q=ch%C4%83n%20%E1%BB%A7' },
+        { label: 'Chăn ủ', href: '/products?cat=phu-kien&q=ch%C4%83n' },
         { label: 'Khăn yếm', href: '/products?cat=phu-kien&q=kh%C4%83n%20y%E1%BA%BFm' },
-        { label: 'Túi mẹ bỉm sữa', href: '/products?cat=phu-kien&q=t%C3%BAi%20m%E1%BA%B9%20b%E1%BB%89m%20s%E1%BB%AFa' },
+        { label: 'Túi mẹ bỉm sữa', href: '/products?q=t%C3%BAi%20b%E1%BB%89m' },
         { label: 'Địu', href: '/products?cat=phu-kien&q=%C4%91%E1%BB%8Bu' },
       ],
     },
@@ -119,7 +119,7 @@ const Navbar: React.FC = () => {
       title: 'Xem thêm',
       items: [
         { label: 'Đồ chip bé gái', href: '/products?cat=do-chip-be-gai' },
-        { label: 'Best Seller', href: '/products?q=best' },
+        { label: 'Best Seller', href: '/products?sort=bestseller' },
         { label: 'Combo đi sinh', href: '/products?cat=combo-di-sinh-kem-qua' },
         { label: 'Box quà cho mẹ', href: '/products?cat=combo-di-sinh-kem-qua' },
         { label: 'Giảm giá', href: '/products?cat=giam-gia' },
@@ -226,7 +226,7 @@ const Navbar: React.FC = () => {
                         <a href="/products?cat=so-sinh&q=body" onClick={(e) => { e.preventDefault(); navigate('/products?cat=so-sinh&q=body'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Body &amp; quần áo sơ sinh
                         </a>
-                        <a href="/products?cat=so-sinh&q=combo" onClick={(e) => { e.preventDefault(); navigate('/products?cat=so-sinh&q=combo'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                        <a href="/products?cat=combo-di-sinh-kem-qua" onClick={(e) => { e.preventDefault(); navigate('/products?cat=combo-di-sinh-kem-qua'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Combo sơ sinh
                         </a>
                       </div>
@@ -238,7 +238,7 @@ const Navbar: React.FC = () => {
                         <a href="/products?cat=be" onClick={(e) => { e.preventDefault(); navigate('/products?cat=be'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Quần áo thời trang
                         </a>
-                        <a href="/products?cat=be&q=%C4%91%E1%BB%93%20ng%E1%BB%A7" onClick={(e) => { e.preventDefault(); navigate('/products?cat=be&q=%C4%91%E1%BB%93%20ng%E1%BB%A7'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                        <a href="/products?cat=be&q=m%E1%BA%B7c%20nh%C3%A0" onClick={(e) => { e.preventDefault(); navigate('/products?cat=be&q=m%E1%BA%B7c%20nh%C3%A0'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Đồ ngủ
                         </a>
                         <a href="/products?cat=be&q=set" onClick={(e) => { e.preventDefault(); navigate('/products?cat=be&q=set'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
@@ -253,13 +253,13 @@ const Navbar: React.FC = () => {
                         <a href="/products?cat=phu-kien&q=g%E1%BB%91i" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=g%E1%BB%91i'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Gối
                         </a>
-                        <a href="/products?cat=phu-kien&q=ch%C4%83n%20%E1%BB%A7" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=ch%C4%83n%20%E1%BB%A7'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                        <a href="/products?cat=phu-kien&q=ch%C4%83n" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=ch%C4%83n'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Chăn Ủ
                         </a>
                         <a href="/products?cat=phu-kien&q=kh%C4%83n%20y%E1%BA%BFm" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=kh%C4%83n%20y%E1%BA%BFm'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Khăn yếm
                         </a>
-                        <a href="/products?cat=phu-kien&q=t%C3%BAi%20m%E1%BA%B9%20b%E1%BB%89m%20s%E1%BB%AFa" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=t%C3%BAi%20m%E1%BA%B9%20b%E1%BB%89m%20s%E1%BB%AFa'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                        <a href="/products?q=t%C3%BAi%20b%E1%BB%89m" onClick={(e) => { e.preventDefault(); navigate('/products?q=t%C3%BAi%20b%E1%BB%89m'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Túi mẹ bỉm sữa
                         </a>
                         <a href="/products?cat=phu-kien&q=%C4%91%E1%BB%8Bu" onClick={(e) => { e.preventDefault(); navigate('/products?cat=phu-kien&q=%C4%91%E1%BB%8Bu'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
@@ -274,7 +274,7 @@ const Navbar: React.FC = () => {
                         <a href="/products?cat=do-chip-be-gai" onClick={(e) => { e.preventDefault(); navigate('/products?cat=do-chip-be-gai'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Đồ chip bé gái
                         </a>
-                        <a href="/products?q=best" onClick={(e) => { e.preventDefault(); navigate('/products?q=best'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
+                        <a href="/products?sort=bestseller" onClick={(e) => { e.preventDefault(); navigate('/products?sort=bestseller'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">
                           Best Seller
                         </a>
                         <a href="/products?cat=combo-di-sinh-kem-qua" onClick={(e) => { e.preventDefault(); navigate('/products?cat=combo-di-sinh-kem-qua'); }} className="block rounded-xl px-3 py-1.5 text-[#6B5645] hover:bg-[#F2E3D4] hover:text-[#B58A5A]">

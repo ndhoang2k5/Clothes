@@ -30,8 +30,8 @@ const HomePage: React.FC = () => {
   const [collections, setCollections] = useState<Collection[]>([]);
   const [blogHighlights, setBlogHighlights] = useState<Blog[]>([]);
   const [heroIndex, setHeroIndex] = useState(0);
-  const [activeFeaturedTab, setActiveFeaturedTab] = useState<'new' | 'hot' | 'clearance' | 'all'>('new');
-  const [clearanceProducts, setClearanceProducts] = useState<Product[]>([]);
+  const [activeFeaturedTab, setActiveFeaturedTab] = useState<'new' | 'hot' | 'sale' | 'all'>('new');
+  const [promotionProducts, setPromotionProducts] = useState<Product[]>([]);
   const [quickAddProductId, setQuickAddProductId] = useState<string | null>(null);
   const [homeLoading, setHomeLoading] = useState(true);
   const blogTrackRef = useRef<HTMLDivElement | null>(null);
@@ -78,7 +78,7 @@ const HomePage: React.FC = () => {
       }
 
       try {
-        const [homepagePromos, colRes, blogRes, clearanceRes] = await Promise.all([
+        const [homepagePromos, colRes, blogRes, promotionRes] = await Promise.all([
           api.userGetHomepagePromoCards().catch(() => []),
           api.getCollections().catch(() => []),
           Promise.all([
@@ -86,7 +86,7 @@ const HomePage: React.FC = () => {
             api.getBlogs('tin-tuc', 12).catch(() => []),
           ]),
           api
-            .getProductsPage({ category: 'uu-dai-cuoi-mua', page: 1, per_page: 8, useCache: true })
+            .getProductsPage({ category: 'giam-gia', page: 1, per_page: 16, useCache: true })
             .catch(() => ({ items: [] as Product[] })),
         ]);
 
@@ -108,7 +108,7 @@ const HomePage: React.FC = () => {
           uniqueBlogs.push(b);
         });
         setBlogHighlights(uniqueBlogs.slice(0, 12));
-        setClearanceProducts(((clearanceRes as any).items ?? []) as Product[]);
+        setPromotionProducts(((promotionRes as any).items ?? []) as Product[]);
       } catch {
         // secondary sections optional
       }
@@ -366,9 +366,9 @@ const HomePage: React.FC = () => {
               Hot sales
             </button>
             <button
-              onClick={() => setActiveFeaturedTab('clearance')}
+              onClick={() => setActiveFeaturedTab('sale')}
               className={`px-4 py-2 rounded-full transition-colors ${
-                activeFeaturedTab === 'clearance' ? 'text-pink-600' : 'hover:text-pink-500'
+                activeFeaturedTab === 'sale' ? 'text-pink-600' : 'hover:text-pink-500'
               }`}
             >
               Ưu đãi
@@ -391,13 +391,13 @@ const HomePage: React.FC = () => {
             list = products.filter((p) => p.isNew);
           } else if (activeFeaturedTab === 'hot') {
             list = products.filter((p) => p.isHot);
-          } else if (activeFeaturedTab === 'clearance') {
-            list = clearanceProducts.length > 0
-              ? clearanceProducts
-              : products.filter((p) =>
-                  (p.categories?.length ? p.categories : [p.category]).includes('uu-dai-cuoi-mua'),
+          } else if (activeFeaturedTab === 'sale') {
+            list = promotionProducts.length > 0
+              ? promotionProducts
+              : products.filter(
+                  (p) => p.isSale || (p.discountPrice != null && p.discountPrice < p.price),
                 );
-            featuredViewAllHref = '/products?cat=uu-dai-cuoi-mua';
+            featuredViewAllHref = '/products?cat=giam-gia';
           }
 
           return (

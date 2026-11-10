@@ -10,18 +10,43 @@ from sqlalchemy.orm import Session
 from ..entities import models
 from .voucher_service import VoucherService
 from .shipping_service import ShippingService
+from .promotion_service import PromotionService, promo_sale_price
 
 
-def _get_unit_price(product, variant=None):
-    """Đơn giá bán tại thời điểm: ưu tiên variant override, else product."""
-    if variant is not None:
-        p = variant.discount_price_override if getattr(variant, "discount_price_override", None) is not None else variant.price_override
-        if p is not None:
-            return float(p)
-    # from product
-    if getattr(product, "discount_price", None) is not None:
-        return float(product.discount_price)
-    return float(product.base_price or 0)
+def _get_unit_price(product, variant=None, promo_percent=None):
+    """
+    Đơn giá bán tại thời điểm đặt hàng.
+    - variant.price_override chỉ là GIÁ GỐC của biến thể (Salework sync ghi vào), không phải giá sale.
+    - Khuyến mãi % đang bật (promo_percent) là nguồn chuẩn — giống storefront
+      (serializers.apply_promo_to_payload) — áp lên giá gốc biến thể (hoặc base_price).
+    - Không có KM %: dùng discount_price_override của biến thể, hoặc product.discount_price
+      (áp cùng tỉ lệ giảm lên giá biến thể nếu biến thể có giá riêng).
+    """
+    base = float(product.base_price or 0)
+    variant_base = None
+    if variant is not None and getattr(variant, "price_override", None) is not None:
+        variant_base = float(variant.price_override)
+
+    if promo_percent:
+        return promo_sale_price(variant_base if variant_base is not None else base, promo_percent)
+
+    if variant is not None and getattr(variant, "discount_price_override", None) is not None:
+        return float(variant.discount_price_override)
+
+    sale = getattr(product, "discount_price", None)
+    sale = float(sale) if sale is not None else None
+    on_sale = sale is not None and base > 0 and 0 < sale < base
+
+    if variant_base is not None:
+        if not on_sale:
+            return variant_base
+        if variant_base == base:
+            return sale
+        return float(int(round(variant_base * sale / base)))
+
+    if sale is not None:
+        return sale
+    return base
 
 
 def _variant_label(variant):
@@ -70,6 +95,7 @@ class OrderService:
 
         resolved_items = []
         subtotal = Decimal("0")
+        promo_map = PromotionService.active_percent_by_product_id(db)
 
         for raw in raw_items:
             product_id = raw.get("productId")
@@ -98,7 +124,7 @@ class OrderService:
                 if not variant:
                     raise ValueError(f"Biến thể id {variant_id} không tồn tại hoặc không thuộc sản phẩm")
 
-            unit_price = _get_unit_price(product, variant)
+            unit_price = _get_unit_price(product, variant, promo_map.get(int(product.id)))
             line_total = Decimal(str(unit_price)) * qty
             product_name = product.name or f"#{product.id}"
             variant_label = _variant_label(variant)

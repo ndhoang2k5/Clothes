@@ -52,7 +52,32 @@ const AboutPage: React.FC = () => {
   }, [activeCategory, categories]);
 
   const posts = postsByCategory[activeCategory] || [];
-  const mainPost = posts[0] || null;
+  const listPost = posts[0] || null;
+
+  // API danh sách blog chỉ trả bản tóm tắt (content rỗng) để giảm payload,
+  // nên phải tải chi tiết bài chính để có nội dung đầy đủ.
+  const [fullPostsById, setFullPostsById] = useState<Record<string, Blog>>({});
+  const [loadingContent, setLoadingContent] = useState(false);
+  const listPostId = listPost?.id;
+  useEffect(() => {
+    if (!listPostId || fullPostsById[listPostId]) return;
+    let cancelled = false;
+    setLoadingContent(true);
+    api
+      .getBlogById(listPostId)
+      .then((full) => {
+        if (!cancelled && full) setFullPostsById((prev) => ({ ...prev, [listPostId]: full }));
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingContent(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [listPostId, fullPostsById]);
+
+  const fullPost = listPostId ? fullPostsById[listPostId] : undefined;
+  const mainPost = listPost ? { ...listPost, ...(fullPost || {}), category: listPost.category } : null;
   const blocks = useMemo(() => parseBlogContent(mainPost?.content || ''), [mainPost?.content]);
   const renderMeta = useMemo(() => parseBlogRenderMeta(mainPost?.content || ''), [mainPost?.content]);
   const titleAlignClass = 'text-center';
@@ -130,8 +155,15 @@ const AboutPage: React.FC = () => {
           </figure>
 
           <div className="prose prose-pink max-w-none text-gray-700 leading-relaxed md:pr-1">
-            {blocks.length === 0 ? (
-              <div className="whitespace-pre-line">{mainPost.content}</div>
+            {!fullPost && loadingContent ? (
+              <div className="animate-pulse space-y-3">
+                <div className="h-4 bg-gray-200 rounded-full w-11/12" />
+                <div className="h-4 bg-gray-200 rounded-full w-5/6" />
+                <div className="h-4 bg-gray-200 rounded-full w-3/4" />
+                <div className="h-4 bg-gray-200 rounded-full w-4/5" />
+              </div>
+            ) : blocks.length === 0 ? (
+              <div className="whitespace-pre-line">{mainPost.content || mainPost.excerpt}</div>
             ) : (
               blocks.map((b, idx) => {
                 if (b.type === 'heading') {

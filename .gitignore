@@ -27,3 +27,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Internal spreadsheets (SKU mapping etc.) — keep out of the public repo
+*.xlsx
